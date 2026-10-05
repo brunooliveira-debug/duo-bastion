@@ -117,7 +117,11 @@ export function lobbyScreen(session: Session, leave: () => void) {
   const root = h('div', { class: 'screen' });
   const link = `${location.origin}${import.meta.env.BASE_URL}?join=${session.code}`;
   let myReady = false;
+  let lastKey = '';
   const render = (l: LobbyState) => {
+    const key = JSON.stringify(l) + session.canStart();
+    if (key === lastKey) return; // avoid replacing buttons under a finger every 2 s
+    lastKey = key;
     clear(root);
     const me = l.players.find(p => p.uid === session.uid);
     myReady = !!me?.ready;
