@@ -20,17 +20,18 @@
 - UI mobile paysage, PWA, audio procédural, statistiques de fin + titres + record du duo.
 
 ## EN COURS
-- Publication : le workflow GitHub Actions est en file d'attente à cause d'une **panne majeure GitHub Actions** (githubstatus.com) le 2026-10-05. Il se lancera tout seul au rétablissement.
+- (rien) — en ligne et testé publiquement le 2026-10-05 : lobby HPEHY créé dans Chrome, rejoint depuis un 2e navigateur en format téléphone via le lien d'invitation, PRÊT ×2, partie démarrée des deux côtés.
 
 ## À FAIRE
-- Test du lien public sur 2 sessions une fois en ligne.
 - APK Android (Capacitor), 30 unités / 10 Raiders, mode Duel, cosmétiques.
 
 ## BUGS CONNUS
+- Si l'hôte met le jeu en arrière-plan (autre appli / écran éteint), la simulation se met en pause pour les deux : l'hôte doit garder le jeu au premier plan.
+- Menu principal légèrement trop haut sur les très petits écrans paysage (défilement nécessaire).
 - Mineur : le service worker ne s'enregistre pas dans le navigateur intégré de l'app (sans impact sur Chrome/Safari).
 
 ## SÉCURITÉ — ACTION UTILISATEUR
 - Une clé secrète Supabase (`sb_secret_…`) a été collée dans le chat : à **révoquer** dans Supabase → Project Settings → API Keys → Secret keys. Le jeu ne l'utilise pas.
 
 ## PROCHAINE ÉTAPE
-Vérifier le lien public dès que GitHub Actions est rétabli, retester à deux, livrer.
+Retours de vraies parties à deux → équilibrage ; puis APK Android (Capacitor) et contenu (30 unités, 10 Raiders).
