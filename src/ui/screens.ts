@@ -93,6 +93,7 @@ export function duoScreen(mode: GameMode, onCreate: () => void, onJoin: (code: s
   const scr = h('div', { class: 'screen' },
     h('h2', {}, mode === 'survival' ? '♾️ SURVIE À DEUX' : '👥 JOUER À DEUX'),
     h('div', { class: 'menu' },
+      h('div', { class: 'row' }, h('span', { style: 'font-size:26px' }, save.profile.avatar), nameField()),
       h('button', { class: 'btn primary', onclick: () => { if (!needName()) onCreate(); } }, '✨ Créer une partie'),
       h('div', { class: 'card col', style: 'margin-top:6px' },
         h('div', { class: 'muted center' }, 'ou rejoindre avec le code de ton partenaire :'),

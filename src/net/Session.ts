@@ -65,6 +65,7 @@ export class Session {
   private guestUid = '';
   private aiTakeover = false;
   private lastPhaseKey = '';
+  private gameShown = false;
 
   constructor(role: 'host' | 'guest' | 'solo', code: string, uid: string, private ev: SessionEvents) {
     this.role = role; this.code = code; this.uid = uid;
@@ -247,11 +248,12 @@ export class Session {
         }
         case 'reject': if (m.to === this.uid) this.ev.kicked(String(m.msg)); break;
         case 'closed': this.ev.kicked('L\'hôte a quitté la partie.'); break;
-        case 'rematch': this.lobby.started = false; this.view.meta = null; this.view.clearFrames(); this.ev.rematch(); break;
+        case 'rematch': this.lobby.started = false; this.gameShown = false; this.view.meta = null; this.view.clearFrames(); this.ev.rematch(); break;
         case 'start': {
           const pids = m.pids as Record<string, number>;
           if (pids[this.uid] === undefined) return;
-          const wasStarted = this.lobby.started && this.view.meta;
+          const wasStarted = this.gameShown;
+          this.gameShown = true;
           this.myPid = pids[this.uid];
           this.lobby.started = true;
           if (!wasStarted) { save.setActive({ code: this.code, role: 'guest', ts: Date.now() }); this.ev.start(); }
