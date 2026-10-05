@@ -47,7 +47,7 @@ function teardown() {
 
 function goMenu() {
   teardown();
-  history.replaceState(null, '', '/');
+  history.replaceState(null, '', import.meta.env.BASE_URL);
   show(menuScreen(actions));
 }
 
@@ -77,7 +77,7 @@ async function createDuo(mode: GameMode) {
     session.lobby.settings.mode = mode;
     session.lobby.settings.totalWaves = mode === 'survival' ? 9999 : 10;
     await session.open();
-    history.replaceState(null, '', `/join/${code}`);
+    history.replaceState(null, '', `${import.meta.env.BASE_URL}?join=${code}`);
     lobbyRender = lobbyScreen(session, leaveLobby);
   } catch (e) {
     log('Supabase error', e);
@@ -220,7 +220,7 @@ function boot() {
 
 // PWA
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); (window as unknown as { __installEvt: unknown }).__installEvt = e; });
-if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') audio.unlock(); });
 
 if (DEBUG) (window as unknown as { __db: unknown }).__db = { get session() { return session; }, step, drainEvents };

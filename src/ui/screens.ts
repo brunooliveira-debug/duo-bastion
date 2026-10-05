@@ -114,7 +114,7 @@ export function errorScreen(text: string, back: () => void) {
 export function lobbyScreen(session: Session, leave: () => void) {
   const host = session.role === 'host';
   const root = h('div', { class: 'screen' });
-  const link = `${location.origin}/join/${session.code}`;
+  const link = `${location.origin}${import.meta.env.BASE_URL}?join=${session.code}`;
   let myReady = false;
   const render = (l: LobbyState) => {
     clear(root);
