@@ -1,0 +1,38 @@
+// End-to-end check against the real Supabase project: 2 anonymous users, lobby RPCs, realtime broadcast + presence.
+import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+const env = Object.fromEntries(fs.readFileSync('.env.production', 'utf8').trim().split('\n').map(l => l.split('=')));
+const mk = () => createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+const A = mk(), B = mk();
+const a = await A.auth.signInAnonymously(); const b = await B.auth.signInAnonymously();
+console.log('anon A', !!a.data.user, a.error?.message ?? '', '| anon B', !!b.data.user, b.error?.message ?? '');
+const code = await A.rpc('create_lobby', { p_mode: 'vsai', p_settings: {}, p_pseudo: 'Bruno' });
+console.log('create_lobby', code.data, code.error?.message ?? '');
+const j = await B.rpc('join_lobby', { p_code: code.data, p_pseudo: 'Partenaire' });
+console.log('join_lobby', JSON.stringify(j.data), j.error?.message ?? '');
+const bad = await B.rpc('join_lobby', { p_code: 'ZZZZZ', p_pseudo: 'x' });
+console.log('bad code ->', bad.error?.message);
+const C = mk(); await C.auth.signInAnonymously();
+const full = await C.rpc('join_lobby', { p_code: code.data, p_pseudo: 'x' });
+console.log('third player ->', full.error?.message);
+const rls = await C.from('lobbies').select('*').eq('code', code.data);
+console.log('RLS non-member sees lobby rows:', rls.data?.length);
+const upd = await B.from('lobbies').update({ status: 'ended' }).eq('code', code.data).select();
+console.log('RLS guest cannot update lobby rows:', upd.data?.length ?? 0);
+// realtime
+const got = [];
+const chA = A.channel('duo:' + code.data, { config: { broadcast: { self: false }, presence: { key: 'A' } } });
+const chB = B.channel('duo:' + code.data, { config: { broadcast: { self: false }, presence: { key: 'B' } } });
+chA.on('broadcast', { event: 'm' }, p => got.push(p.payload));
+let peers = [];
+chA.on('presence', { event: 'sync' }, () => { peers = Object.keys(chA.presenceState()); });
+await new Promise(r => chA.subscribe(s => s === 'SUBSCRIBED' && r()));
+await chA.track({ t: 1 });
+await new Promise(r => chB.subscribe(s => s === 'SUBSCRIBED' && r()));
+await chB.track({ t: 1 });
+await new Promise(r => setTimeout(r, 1500));
+await chB.send({ type: 'broadcast', event: 'm', payload: { k: 'join', uid: 'B' } });
+await new Promise(r => setTimeout(r, 1500));
+console.log('presence peers seen by A:', peers.sort().join(','), '| broadcast received:', JSON.stringify(got));
+await A.from('lobbies').delete().eq('code', code.data);
+process.exit(0);
