@@ -94,6 +94,9 @@ export class AudioSystem {
       case 'victory': [523, 659, 784, 1046, 784, 1046].forEach((f, i) => this.tone(f, 0.35, 'triangle', 0.18, i * 0.14)); break;
       case 'defeat': [392, 349, 311, 262].forEach((f, i) => this.tone(f, 0.5, 'triangle', 0.18, i * 0.22)); break;
       case 'ready': this.tone(660, 0.1, 'triangle', 0.15); this.tone(990, 0.15, 'triangle', 0.15, 0.08); break;
+      case 'tick': this.tone(1200, 0.06, 'square', 0.1); this.tone(600, 0.1, 'triangle', 0.08, 0.02); break;
+      case 'crit': this.noiseHit(0.08, 0.2, 3000, 0, 1.5); this.tone(1800, 0.08, 'square', 0.06, 0.01, 0.6); break;
+      case 'boom': this.noiseHit(0.5, 0.45, 180, 0, 0.6); this.tone(70, 0.4, 'sine', 0.35, 0, 0.5); break;
     }
   }
 

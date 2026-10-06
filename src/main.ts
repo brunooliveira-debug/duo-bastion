@@ -8,7 +8,7 @@ import { ensureAuth, createLobby, joinLobby, friendly, upsertProfile, recordMatc
 import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions } from './ui/screens';
 import { log, ONLINE, DEBUG } from './config';
 import { step, drainEvents } from './sim/game';
-import type { Difficulty, GameMode } from './sim/state';
+import type { Difficulty, FactionChoice, GameMode } from './sim/state';
 import { h } from './ui/dom';
 
 let session: Session | null = null;
@@ -55,12 +55,12 @@ const actions: MenuActions = {
   duo: (mode: GameMode) => duoScreen(mode, () => createDuo(mode), code => joinDuo(code), goMenu),
   solo: (mode: GameMode, waves: number, diff: Difficulty) => {
     teardown();
-    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur' }] }, events);
+    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice }] }, events);
     enterGame();
   },
   tutorial: () => {
     teardown();
-    session = Session.solo({ mode: 'vsai', totalWaves: 10, difficulty: 'initiation', humans: [{ name: save.profile.name || 'Recrue' }], tutorial: true }, events);
+    session = Session.solo({ mode: 'vsai', totalWaves: 10, difficulty: 'initiation', humans: [{ name: save.profile.name || 'Recrue', faction: 'rouages' }], tutorial: true }, events);
     enterGame();
   },
   resume: () => resumeActive(),
@@ -137,7 +137,7 @@ function enterGame() {
   document.body.prepend(canvas);
   renderer = new Renderer(canvas, save.prefs.quality);
   const meta = session.view.meta;
-  const nTeams = meta ? meta.teams.length : session.state ? session.state.teams.length : session.lobby.settings.mode === 'vsai' ? 2 : 1;
+  const nTeams = meta ? meta.teams.length : session.state ? session.state.teams.length : session.lobby.settings.mode !== 'survival' ? 2 : 1;
   renderer.buildArenas(nTeams);
   const resize = () => renderer?.resize(window.innerWidth, window.innerHeight);
   resize();
@@ -223,5 +223,5 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); (windo
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') audio.unlock(); });
 
-if (DEBUG) (window as unknown as { __db: unknown }).__db = { get session() { return session; }, get renderer() { return renderer; }, step, drainEvents };
+if (DEBUG) (window as unknown as { __db: unknown }).__db = { get session() { return session; }, get renderer() { return renderer; }, get hud() { return hud; }, step, drainEvents };
 boot();

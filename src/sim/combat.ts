@@ -10,6 +10,9 @@ import { buildBonuses } from './synergy';
 import { rand } from './rng';
 
 const AGGRO = 4.5; // enemy notices units within this distance (+ own range)
+/** Units hold their ground: they only engage enemies this close to their own cell while their lane is busy,
+ *  so the fight happens inside the towers' range and placement (front / back line) really matters. */
+const LEASH = 3.5;
 const RETARGET = 0.5;
 const BIG_HP = 900;
 const BASE_CRIT = 0.07, CRIT_MUL = 1.8;
@@ -72,6 +75,7 @@ export function spawnUnits(s: GameState) {
       e.x = e.hx = c.x; e.z = e.hz = c.z;
       e.radius = 0.35 * def.model.scale;
       e.crit = BASE_CRIT + (def.roles.includes('assassin') ? 0.15 : 0);
+      if (def.tower) { e.moveSpeed = 0; e.range += 0.5; e.radius = 0.48; } // garrisoned: fires from its tower
       const bb = bonus.get(b.bid)!;
       e.back = bb.zone === 'back';
       if (bb.zoneActive && bb.zone === 'front') { e.maxHp *= 1.15; }
@@ -378,11 +382,18 @@ function chooseTarget(s: GameState, e: Ent, arenaEnts: Ent[], range: number) {
     for (const o of arenaEnts) if (o.enemy && !o.dead && o.owner === p.pid && inLaneRegion(o)) { own = true; break; }
     let best = -1, bd = Infinity;
     const immobile = e.moveSpeed <= 0;
+    const leash = own && !e.summon ? (LEASH + e.range) ** 2 : Infinity;
+    const assist = own && !e.summon ? (LEASH * 2.2 + e.range) ** 2 : Infinity; // help allies already in melee
     for (const o of arenaEnts) {
       if (!o.enemy || o.dead) continue;
       if (own && !(o.owner === p.pid && inLaneRegion(o))) continue;
       const d = dist2(o, e);
       if (immobile && d > (range + o.radius + e.radius) ** 2) continue;
+      // hold the line — but always answer an enemy that is attacking this unit (e.g. archers out of reach)
+      if (!immobile && o.target !== e.id) {
+        const dh = dist2(o, { x: e.hx, z: e.hz });
+        if (dh > (o.target >= 0 ? assist : leash)) continue;
+      }
       if (d < bd) { bd = d; best = o.id; }
     }
     e.target = best;
@@ -721,7 +732,7 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
   const hurt = (t: Ent, dmg: number, o: DmgOpts = {}) => applyDamage(s, caster, t, dmg, o);
   const strongest = (n: number) => foes.slice().sort((a, b) => b.hp - a.hp).slice(0, n);
   switch (def.id) {
-    case 'freeze': for (const e of foes) stun(s, e, 2); break;
+    case 'freeze': for (const e of foes) stun(s, e, 1.6); break;
     case 'starfall':
       for (const e of strongest(5)) { hurt(e, 45 * m); e.slowUntil = s.time + 3; e.slowPct = Math.max(e.slowPct, 0.5); s.events.push({ t: 'pulse', arena: p.team, x: e.x, z: e.z, r: 1, fx: 'starfall' }); }
       break;
@@ -754,14 +765,14 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
     case 'tide': {
       const d = laneDir(p.slot);
       for (const e of foes) {
-        if (!e.leaked) e.x = Math.max(-LANE.spawnX, Math.min(LANE.spawnX, e.x - d * 4));
-        e.slowUntil = s.time + 4; e.slowPct = Math.max(e.slowPct, 0.5);
+        if (!e.leaked) e.x = Math.max(-LANE.spawnX, Math.min(LANE.spawnX, e.x - d * 4.5));
+        e.slowUntil = s.time + 4; e.slowPct = Math.max(e.slowPct, 0.55);
       }
       break;
     }
     case 'krakenCall': { const c = cellCenter(p.slot, 0, 3); spawnToken(s, p, 'tentacule', c.x, f.z * 0.6, m, 12); break; }
     case 'fervor': for (const u of mine) { u.hasteUntil = s.combatTime + 6; u.hastePct = Math.max(u.hastePct, 0.4); u.buffUntil = s.combatTime + 6; u.buffDmg = 0.2 * POWER_LEVEL_FX[p.powerLv[slot]]; } break;
-    case 'eruption': for (const e of foes) burnOn(s, caster, e, 7 * m, 5); break;
+    case 'eruption': for (const e of foes) burnOn(s, caster, e, 6 * m, 5); break;
     case 'sunstrike': {
       const t = strongest(1)[0];
       if (t) {
@@ -775,7 +786,7 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
     case 'veil': for (const u of mine) { u.veilUntil = s.combatTime + 5; u.ambush = Math.max(u.ambush, 0.5); } break;
     case 'harvest': {
       const c = cellCenter(p.slot, 2, 3);
-      for (let i = 0; i < 4; i++) spawnToken(s, p, 'squelette', c.x, (i - 1.5) * 1.5, m);
+      for (let i = 0; i < 5; i++) spawnToken(s, p, 'squelette', c.x, (i - 2) * 1.3, m);
       for (const u of mine) { u.lsUntil = s.combatTime + 8; u.lsPct = 0.3; }
       break;
     }

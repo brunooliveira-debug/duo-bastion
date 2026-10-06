@@ -28,7 +28,7 @@ export const POWER_LEVEL_CD = [0, 1, 0.88, 0.76];
 
 export const FACTION_POWERS: Record<FactionId, [FactionPower, FactionPower, FactionPower]> = {
   astreens: [
-    { id: 'freeze', name: 'Gel Stellaire', icon: 'snow', text: 'Gèle tous les ennemis de ta voie pendant 2 s.', cooldown: 30, unlockWave: 1 },
+    { id: 'freeze', name: 'Gel Stellaire', icon: 'snow', text: 'Gèle tous les ennemis de ta voie pendant 1,6 s.', cooldown: 35, unlockWave: 1 },
     { id: 'starfall', name: 'Pluie d\'Étoiles', icon: 'star', text: 'Frappe les 5 ennemis les plus robustes et les ralentit de 50 % (3 s).', cooldown: 45, unlockWave: 3 },
     { id: 'comet', name: 'Comète', icon: 'comet', text: 'Une comète s\'écrase sur le plus gros groupe ennemi.', cooldown: 75, unlockWave: 6 },
   ],
@@ -54,7 +54,7 @@ export const FACTION_POWERS: Record<FactionId, [FactionPower, FactionPower, Fact
   ],
   necrose: [
     { id: 'veil', name: 'Voile d\'Ombre', icon: 'eye', text: 'Camoufle tes unités 5 s : leurs prochains coups sont des embuscades.', cooldown: 30, unlockWave: 1 },
-    { id: 'harvest', name: 'Moisson des Ombres', icon: 'skull', text: 'Relève 4 squelettes et donne 30 % de vol de vie (8 s).', cooldown: 45, unlockWave: 3 },
+    { id: 'harvest', name: 'Moisson des Ombres', icon: 'skull', text: 'Relève 5 squelettes et donne 30 % de vol de vie (8 s).', cooldown: 45, unlockWave: 3 },
     { id: 'doom', name: 'Sentence', icon: 'scythe', text: 'Les ennemis sous 25 % PV meurent, les autres perdent 12 % de leurs PV.', cooldown: 75, unlockWave: 6 },
   ],
 };

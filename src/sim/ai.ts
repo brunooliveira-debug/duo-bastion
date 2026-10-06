@@ -40,13 +40,13 @@ export function difficultyOf(s: GameState, p: PlayerState): Difficulty {
 /** Preferred column band by category: tanks in front, shooters in the back line. */
 function prefCol(id: string): number {
   const u = UNITS[id];
+  // towers just behind the front line, further back the longer their reach
+  if (u.tower) return Math.max(3, Math.min(8, 1 + Math.floor(u.range - 1.5)));
   switch (u.category) {
     case 'defense': case 'lourde': return 2;
     case 'rapide': return 3;
     case 'soutien': return 4;
-    case 'zone': return u.range > 2 ? 6 : 4;
-    case 'portee': case 'antiblindage': return u.range > 2 ? 9 : 3;
-    default: return u.range > 2 ? 8 : 3;
+    default: return 2; // brawlers and specials without a tower fight up front
   }
 }
 const RUNE_FIT: Record<RuneKind, (id: string) => boolean> = {

@@ -1,49 +1,49 @@
 # Rapport d'équilibrage DUO BASTION
-_Généré automatiquement le 2026-10-06 20:14_
+_Généré automatiquement le 2026-10-06 21:11_
 
 ## 1. Efficacité des unités (modèle analytique)
 Force = √(DPS × PV effectifs) ÷ or investi. Écart par rapport à la médiane de toutes les unités au même niveau.
 
 | Armée | Unité | Catégorie | Coût | N1 | N3 | N5-A | N5-B |
 |---|---|---|---|---|---|---|---|
-| Ordre Astral | Gardien Stellaire | Défense | 70 | +3 % | +12 % | +16 % | +0 % |
-| Ordre Astral | Loup Astral | Rapide | 65 | +11 % | +19 % | +8 % | +5 % |
-| Ordre Astral | Tireuse d'Étoiles | Longue portée | 90 | -30 % | -25 % | -34 % | -36 % |
-| Ordre Astral | Lancière d'Éclair | Anti-blindage | 110 | -31 % | -27 % | -27 % | -41 % |
-| Ordre Astral | Harmoniste Astral | Soutien | 100 | +13 % | -10 % | -23 % | -28 % |
-| Ordre Astral | Astromancienne | Zone | 135 | -45 % | -41 % | -47 % | -47 % |
-| Concordat des Rouages | Sentinelle Ferraille | Défense | 60 | +23 % | +31 % | +14 % | +57 % |
-| Concordat des Rouages | Foreuse Rouage | Anti-blindage | 90 | +5 % | +13 % | +0 % | +8 % |
-| Concordat des Rouages | Bombardière | Longue portée | 125 | -39 % | -35 % | -49 % | -55 % |
-| Concordat des Rouages | Colosse de Forge | Lourde | 150 | +40 % | +50 % | +35 % | +21 % |
-| Concordat des Rouages | Mécanicienne | Soutien | 95 | -7 % | +0 % | +16 % | +25 % |
-| Concordat des Rouages | Exarque Prisme | Spéciale | 270 | +2 % | +10 % | +6 % | -13 % |
-| Les Ronces | Gardien d'Écorce | Défense | 70 | +19 % | +23 % | +12 % | +9 % |
-| Les Ronces | Lame-Ronce | Rapide | 75 | +21 % | +29 % | +7 % | +5 % |
-| Les Ronces | Rôdeuse des Fourrés | Spéciale | 95 | -19 % | -13 % | -24 % | -8 % |
-| Les Ronces | Semeuse de Spores | Zone | 105 | -23 % | -18 % | -13 % | -29 % |
-| Les Ronces | Druidesse | Soutien | 95 | -30 % | -25 % | -27 % | -26 % |
-| Les Ronces | Ancien des Racines | Lourde | 160 | +46 % | +36 % | +17 % | +48 % |
-| Marée Abyssale | Carapace des Abysses | Lourde | 140 | +17 % | +26 % | +26 % | +26 % |
-| Marée Abyssale | Ondin Lame-Courant | Rapide | 75 | +0 % | +7 % | +4 % | -12 % |
-| Marée Abyssale | Harponneuse | Longue portée | 105 | -37 % | -33 % | -37 % | -40 % |
-| Marée Abyssale | Méduse Abyssale | Zone | 120 | -41 % | -36 % | -39 % | -38 % |
-| Marée Abyssale | Prêtresse des Marées | Soutien | 105 | -8 % | -4 % | -2 % | +1 % |
-| Marée Abyssale | Rejeton du Kraken | Spéciale | 220 | -8 % | -1 % | -8 % | +7 % |
-| Brasier Solaire | Paladine de l'Aube | Défense | 95 | +10 % | +19 % | +14 % | +30 % |
-| Brasier Solaire | Danse-Flamme | Rapide | 80 | -1 % | +4 % | +1 % | +2 % |
-| Brasier Solaire | Arbalétrière Solaire | Anti-blindage | 100 | -29 % | -25 % | -34 % | -30 % |
-| Brasier Solaire | Oracle de Braise | Zone | 140 | -34 % | -30 % | -34 % | -40 % |
-| Brasier Solaire | Vestale du Feu Sacré | Soutien | 95 | -7 % | -20 % | -41 % | -24 % |
-| Brasier Solaire | Élémentaire Solaire | Spéciale | 200 | +10 % | +17 % | +17 % | +17 % |
-| Voile Nécrose | Garde d'Os | Défense | 65 | +22 % | +31 % | +31 % | +22 % |
-| Voile Nécrose | Spectre Vif | Rapide | 85 | +23 % | +30 % | +9 % | +20 % |
-| Voile Nécrose | Archère des Cendres | Longue portée | 95 | -34 % | -29 % | -40 % | -38 % |
-| Voile Nécrose | Pestiféré | Zone | 110 | -14 % | -7 % | -3 % | -24 % |
-| Voile Nécrose | Invocatrice du Voile | Spéciale | 130 | +22 % | -11 % | -36 % | -16 % |
-| Voile Nécrose | Abomination Cousue | Lourde | 145 | +21 % | +21 % | +18 % | +52 % |
+| Ordre Astral | Gardien Stellaire | Défense | 70 | +0 % | +7 % | +14 % | -2 % |
+| Ordre Astral | Loup Astral | Rapide | 65 | +0 % | +6 % | -1 % | -3 % |
+| Ordre Astral | Tireuse d'Étoiles | Longue portée | 90 | -34 % | -30 % | -36 % | -39 % |
+| Ordre Astral | Lancière d'Éclair | Anti-blindage | 110 | -33 % | -31 % | -28 % | -42 % |
+| Ordre Astral | Harmoniste Astral | Soutien | 100 | +9 % | -14 % | -25 % | -30 % |
+| Ordre Astral | Astromancienne | Zone | 135 | -47 % | -44 % | -47 % | -48 % |
+| Concordat des Rouages | Sentinelle Ferraille | Défense | 65 | +10 % | +16 % | +4 % | +44 % |
+| Concordat des Rouages | Foreuse Rouage | Anti-blindage | 90 | +2 % | +7 % | -2 % | +6 % |
+| Concordat des Rouages | Bombardière | Longue portée | 130 | -43 % | -41 % | -52 % | -57 % |
+| Concordat des Rouages | Colosse de Forge | Lourde | 155 | +31 % | +36 % | +28 % | +14 % |
+| Concordat des Rouages | Mécanicienne | Soutien | 100 | -14 % | -11 % | +8 % | +16 % |
+| Concordat des Rouages | Exarque Prisme | Spéciale | 280 | -5 % | -1 % | +0 % | -18 % |
+| Les Ronces | Gardien d'Écorce | Défense | 70 | +16 % | +17 % | +10 % | +7 % |
+| Les Ronces | Lame-Ronce | Rapide | 75 | +17 % | +23 % | +5 % | +3 % |
+| Les Ronces | Rôdeuse des Fourrés | Spéciale | 95 | -22 % | -18 % | -25 % | -10 % |
+| Les Ronces | Semeuse de Spores | Zone | 105 | -29 % | -25 % | -14 % | -33 % |
+| Les Ronces | Druidesse | Soutien | 95 | -32 % | -28 % | -28 % | -27 % |
+| Les Ronces | Ancien des Racines | Lourde | 160 | +35 % | +23 % | +9 % | +39 % |
+| Marée Abyssale | Carapace des Abysses | Lourde | 125 | +37 % | +44 % | +46 % | +51 % |
+| Marée Abyssale | Ondin Lame-Courant | Rapide | 65 | +19 % | +25 % | +26 % | +7 % |
+| Marée Abyssale | Harponneuse | Longue portée | 95 | -28 % | -23 % | -27 % | -30 % |
+| Marée Abyssale | Méduse Abyssale | Zone | 110 | -28 % | -25 % | -28 % | -27 % |
+| Marée Abyssale | Prêtresse des Marées | Soutien | 95 | +5 % | +10 % | +7 % | +18 % |
+| Marée Abyssale | Rejeton du Kraken | Spéciale | 190 | +13 % | +18 % | +14 % | +33 % |
+| Brasier Solaire | Paladine de l'Aube | Défense | 105 | -3 % | +0 % | +1 % | +14 % |
+| Brasier Solaire | Danse-Flamme | Rapide | 90 | -16 % | -11 % | -11 % | -9 % |
+| Brasier Solaire | Arbalétrière Solaire | Anti-blindage | 105 | -35 % | -33 % | -39 % | -35 % |
+| Brasier Solaire | Oracle de Braise | Zone | 150 | -42 % | -39 % | -40 % | -46 % |
+| Brasier Solaire | Vestale du Feu Sacré | Soutien | 100 | -18 % | -30 % | -45 % | -30 % |
+| Brasier Solaire | Élémentaire Solaire | Spéciale | 220 | -8 % | -4 % | +5 % | +0 % |
+| Voile Nécrose | Garde d'Os | Défense | 60 | +43 % | +48 % | +54 % | +44 % |
+| Voile Nécrose | Spectre Vif | Rapide | 75 | +43 % | +50 % | +28 % | +42 % |
+| Voile Nécrose | Archère des Cendres | Longue portée | 90 | -28 % | -24 % | -33 % | -30 % |
+| Voile Nécrose | Pestiféré | Zone | 90 | +18 % | +27 % | +22 % | +8 % |
+| Voile Nécrose | Invocatrice du Voile | Spéciale | 115 | +74 % | +15 % | -27 % | +4 % |
+| Voile Nécrose | Abomination Cousue | Lourde | 140 | +34 % | +31 % | +32 % | +71 % |
 
-**Écarts > 35 % (à surveiller, souvent compensés par le rôle : soutien, contrôle…)** : Tireuse d'Étoiles N5B -36 %, Lancière d'Éclair N5B -41 %, Astromancienne N1 -45 %, Astromancienne N3 -41 %, Astromancienne N5A -47 %, Astromancienne N5B -47 %, Sentinelle Ferraille N5B +57 %, Bombardière N1 -39 %, Bombardière N5A -49 %, Bombardière N5B -55 %, Colosse de Forge N1 +40 %, Colosse de Forge N3 +50 %, Ancien des Racines N1 +46 %, Ancien des Racines N3 +36 %, Ancien des Racines N5B +48 %, Harponneuse N1 -37 %, Harponneuse N5A -37 %, Harponneuse N5B -40 %, Méduse Abyssale N1 -41 %, Méduse Abyssale N3 -36 %, Méduse Abyssale N5A -39 %, Méduse Abyssale N5B -38 %, Oracle de Braise N5B -40 %, Vestale du Feu Sacré N5A -41 %, Archère des Cendres N5A -40 %, Archère des Cendres N5B -38 %, Invocatrice du Voile N5A -36 %, Abomination Cousue N5B +52 %
+**Écarts > 35 % (à surveiller, souvent compensés par le rôle : soutien, contrôle…)** : Tireuse d'Étoiles N5A -36 %, Tireuse d'Étoiles N5B -39 %, Lancière d'Éclair N5B -42 %, Astromancienne N1 -47 %, Astromancienne N3 -44 %, Astromancienne N5A -47 %, Astromancienne N5B -48 %, Sentinelle Ferraille N5B +44 %, Bombardière N1 -43 %, Bombardière N3 -41 %, Bombardière N5A -52 %, Bombardière N5B -57 %, Colosse de Forge N3 +36 %, Ancien des Racines N5B +39 %, Carapace des Abysses N1 +37 %, Carapace des Abysses N3 +44 %, Carapace des Abysses N5A +46 %, Carapace des Abysses N5B +51 %, Arbalétrière Solaire N5A -39 %, Arbalétrière Solaire N5B -35 %, Oracle de Braise N1 -42 %, Oracle de Braise N3 -39 %, Oracle de Braise N5A -40 %, Oracle de Braise N5B -46 %, Vestale du Feu Sacré N5A -45 %, Garde d'Os N1 +43 %, Garde d'Os N3 +48 %, Garde d'Os N5A +54 %, Garde d'Os N5B +44 %, Spectre Vif N1 +43 %, Spectre Vif N3 +50 %, Spectre Vif N5B +42 %, Invocatrice du Voile N1 +74 %, Abomination Cousue N5B +71 %
 
 ## 2. Banc d'essai par voie (même budget, sans envois)
 Dégâts subis par le Core (2 voies, budget ≈ or attendu × 0,85). 0 = vague tenue sans fuite.
@@ -51,80 +51,80 @@ Dégâts subis par le Core (2 voies, budget ≈ or attendu × 0,85). 0 = vague t
 | Vague | Ordre Astral | Concordat des Rouages | Les Ronces | Marée Abyssale | Brasier Solaire | Voile Nécrose | Moyenne |
 |---|---|---|---|---|---|---|---|
 | 1  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 2  | 0 | 0 | 0 | 0 | 0 | 85 | 14 |
-| 3 ⚠ | 0 | 0 | 368 | 0 | 0 | 18 | 64 |
-| 4  | 0 | 0 | 0 | 0 | 182 | 0 | 30 |
-| 5 ⚠ | 0 | 0 | 0 | 18 | 468 | 0 | 81 |
+| 2  | 248 | 0 | 0 | 0 | 120 | 8 | 63 |
+| 3 ⚠ | 0 | 0 | 403 | 18 | 824 | 0 | 207 |
+| 4  | 52 | 0 | 0 | 0 | 0 | 0 | 9 |
+| 5 ⚠ | 0 | 0 | 234 | 18 | 468 | 0 | 120 |
 | 6  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 7  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 8 ⚠ | 0 | 702 | 0 | 468 | 468 | 0 | 273 |
-| 9  | 0 | 0 | 0 | 0 | 55 | 0 | 9 |
-| 10 ⚠ | 0 | 734 | 0 | 0 | 245 | 0 | 163 |
-| 11  | 0 | 0 | 0 | 0 | 0 | 52 | 9 |
-| 12 ⚠ | 0 | 0 | 0 | 1120 | 0 | 0 | 187 |
-| 13  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 14 ⚠ | 0 | 0 | 0 | 349 | 0 | 0 | 58 |
-| 15 ⚠ | 0 | 1011 | 0 | 506 | 506 | 0 | 337 |
-| 16  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 17 ⚠ | 0 | 998 | 0 | 2500 | 0 | 461 | 660 |
-| 18  | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 19 ⚠ | 0 | 0 | 519 | 173 | 0 | 1730 | 404 |
-| 20  | 287 | 0 | 0 | 295 | 0 | 0 | 97 |
-| 21 ⚠ | 0 | 0 | 0 | 2087 | 0 | 837 | 487 |
+| 8 ⚠ | 0 | 702 | 0 | 234 | 468 | 0 | 234 |
+| 9  | 0 | 0 | 0 | 0 | 248 | 0 | 41 |
+| 10 ⚠ | 922 | 692 | 0 | 0 | 461 | 461 | 423 |
+| 11  | 322 | 0 | 0 | 0 | 0 | 56 | 63 |
+| 12 ⚠ | 666 | 0 | 222 | 444 | 0 | 222 | 259 |
+| 13  | 0 | 153 | 0 | 763 | 0 | 0 | 153 |
+| 14 ⚠ | 0 | 0 | 0 | 873 | 0 | 0 | 145 |
+| 15 ⚠ | 0 | 836 | 0 | 0 | 0 | 0 | 139 |
+| 16  | 0 | 0 | 0 | 0 | 0 | 110 | 18 |
+| 17 ⚠ | 1193 | 593 | 0 | 0 | 0 | 0 | 298 |
+| 18  | 0 | 749 | 0 | 0 | 0 | 0 | 125 |
+| 19 ⚠ | 1760 | 0 | 0 | 160 | 0 | 1440 | 560 |
+| 20  | 2030 | 0 | 0 | 1383 | 0 | 0 | 569 |
+| 21 ⚠ | 1886 | 0 | 1250 | 0 | 0 | 0 | 523 |
 
 Total par armée (plus bas = plus solide face aux vagues) :
-- Ordre Astral : 287 dégâts au Core, combat moyen 34.2 s
-- Les Ronces : 887 dégâts au Core, combat moyen 29.0 s
-- Brasier Solaire : 1923 dégâts au Core, combat moyen 38.6 s
-- Voile Nécrose : 3182 dégâts au Core, combat moyen 30.2 s
-- Concordat des Rouages : 3444 dégâts au Core, combat moyen 41.9 s
-- Marée Abyssale : 7515 dégâts au Core, combat moyen 51.5 s
+- Les Ronces : 2109 dégâts au Core, combat moyen 35.5 s
+- Voile Nécrose : 2296 dégâts au Core, combat moyen 29.3 s
+- Brasier Solaire : 2588 dégâts au Core, combat moyen 32.7 s
+- Concordat des Rouages : 3724 dégâts au Core, combat moyen 42.5 s
+- Marée Abyssale : 3891 dégâts au Core, combat moyen 47.1 s
+- Ordre Astral : 9078 dégâts au Core, combat moyen 52.3 s
 
 ### Budget minimum pour tenir chaque vague (fraction de l'or attendu)
 Objectif : ≈ 0,75 pour une vague normale, ≈ 0,9 pour un boss — le reste sert à l'économie et aux envois.
 
 | Vague | Ordre Astral | Concordat des Rouages | Les Ronces | Marée Abyssale | Brasier Solaire | Voile Nécrose | Médiane |
 |---|---|---|---|---|---|---|---|
-| 1  | 0.67 | 0.59 | 0.59 | 0.57 | 0.61 | 0.76 | 0.61 |
-| 2  | 0.57 | 0.49 | 0.74 | 0.45 | 0.72 | 1.11 | 0.72 |
-| 3 ⚠ | 0.78 | 0.55 | 0.90 | 0.78 | 0.80 | 0.72 | 0.78 |
-| 4  | 0.69 | 0.44 | 0.71 | 0.63 | 0.88 | 0.57 | 0.69 |
-| 5 ⚠ | 0.59 | 0.65 | 0.74 | 0.84 | 0.94 | 0.74 | 0.74 |
-| 6  | 0.45 | 0.76 | 0.36 | 0.72 | 0.49 | 0.63 | 0.63 |
-| 7  | 0.57 | 0.69 | 0.45 | 0.63 | 0.57 | 0.63 | 0.63 |
-| 8 ⚠ | 0.71 | 0.99 | 0.49 | 1.05 | 0.98 | 0.69 | 0.98 |
-| 9  | 0.47 | 0.69 | 0.30 | 0.67 | 0.59 | 0.71 | 0.67 |
-| 10 ⚠ | 0.78 | 0.94 | 0.45 | 0.76 | 0.78 | 0.63 | 0.78 |
-| 11  | 0.49 | 0.40 | 0.05 | 0.05 | 0.42 | 1.46 | 0.42 |
-| 12 ⚠ | 0.61 | 0.82 | 0.84 | 0.98 | 0.76 | 0.55 | 0.82 |
-| 13  | 0.42 | 0.65 | 0.28 | 0.67 | 0.82 | 0.40 | 0.65 |
-| 14 ⚠ | 0.63 | 0.67 | 0.53 | 0.90 | 0.67 | 0.65 | 0.67 |
-| 15 ⚠ | 0.51 | 0.63 | 0.74 | 0.82 | 0.92 | 0.63 | 0.74 |
-| 16  | 0.42 | 0.44 | 0.05 | 0.05 | 0.61 | 1.63 | 0.44 |
-| 17 ⚠ | 0.65 | 0.88 | 0.72 | 1.32 | 0.80 | 0.86 | 0.86 |
-| 18  | 0.63 | 0.74 | 0.24 | 0.63 | 0.57 | 0.53 | 0.63 |
-| 19 ⚠ | 0.63 | 0.80 | 0.96 | 0.86 | 0.78 | 0.90 | 0.86 |
-| 20  | 0.86 | 0.72 | 0.49 | 0.86 | 0.49 | 0.67 | 0.72 |
-| 21 ⚠ | 0.57 | 0.76 | 0.78 | 0.98 | 0.80 | 1.01 | 0.80 |
+| 1  | 0.67 | 0.63 | 0.59 | 0.51 | 0.69 | 0.71 | 0.67 |
+| 2  | 0.86 | 0.49 | 0.74 | 0.40 | 1.11 | 0.69 | 0.74 |
+| 3 ⚠ | 0.78 | 0.57 | 0.72 | 0.69 | 0.90 | 0.30 | 0.72 |
+| 4  | 1.30 | 0.53 | 0.71 | 0.55 | 0.82 | 0.38 | 0.71 |
+| 5 ⚠ | 0.76 | 0.67 | 0.74 | 0.76 | 1.03 | 0.59 | 0.76 |
+| 6  | 0.36 | 0.80 | 0.72 | 0.65 | 0.55 | 0.26 | 0.65 |
+| 7  | 0.71 | 0.71 | 0.45 | 0.57 | 0.55 | 0.57 | 0.57 |
+| 8 ⚠ | 0.71 | 0.98 | 0.57 | 0.94 | 0.94 | 0.32 | 0.94 |
+| 9  | 0.63 | 0.69 | 0.36 | 0.44 | 0.86 | 0.22 | 0.63 |
+| 10 ⚠ | 2.42 | 0.99 | 0.84 | 2.50 | 0.78 | 1.26 | 1.26 |
+| 11  | 0.78 | 0.57 | 0.05 | 0.20 | 0.55 | 0.45 | 0.55 |
+| 12 ⚠ | 1.28 | 0.69 | 0.98 | 0.71 | 0.51 | 0.45 | 0.71 |
+| 13  | 0.47 | 0.69 | 0.49 | 0.63 | 0.80 | 0.44 | 0.63 |
+| 14 ⚠ | 0.84 | 0.65 | 0.53 | 0.96 | 0.74 | 0.63 | 0.74 |
+| 15 ⚠ | 0.78 | 1.57 | 0.61 | 0.99 | 0.74 | 0.42 | 0.78 |
+| 16  | 0.47 | 0.69 | 0.05 | 0.15 | 0.69 | 1.07 | 0.69 |
+| 17 ⚠ | 1.07 | 1.21 | 0.53 | 0.71 | 0.55 | 0.32 | 0.71 |
+| 18  | 0.63 | 0.88 | 0.24 | 0.51 | 0.71 | 0.36 | 0.63 |
+| 19 ⚠ | 2.50 | 0.61 | 0.69 | 0.84 | 0.63 | 1.26 | 0.84 |
+| 20  | 1.61 | 0.78 | 0.55 | 1.09 | 0.78 | 0.59 | 0.78 |
+| 21 ⚠ | 2.50 | 0.63 | 1.19 | 0.90 | 0.55 | 0.57 | 0.90 |
 
 Moyenne par armée (plus bas = plus efficace contre les vagues) :
-- Ordre Astral : 0.60
-- Concordat des Rouages : 0.68
-- Les Ronces : 0.54
-- Marée Abyssale : 0.72
-- Brasier Solaire : 0.71
-- Voile Nécrose : 0.78
+- Ordre Astral : 1.05
+- Concordat des Rouages : 0.76
+- Les Ronces : 0.59
+- Marée Abyssale : 0.75
+- Brasier Solaire : 0.74
+- Voile Nécrose : 0.56
 
-## 3. Ligue de duels IA (60 parties, armées aléatoires, difficulté normale des deux côtés)
+## 3. Ligue de duels IA (300 parties, armées aléatoires, difficulté normale des deux côtés)
 
 | Armée | Parties | Victoires | Taux |
 |---|---|---|---|
-| Les Ronces | 42 | 25 | 60 % |
-| Brasier Solaire | 51 | 30 | 59 % |
-| Ordre Astral | 36 | 20 | 56 % |
-| Concordat des Rouages | 27 | 14 | 52 % |
-| Marée Abyssale | 43 | 21 | 49 % |
-| Voile Nécrose | 41 | 10 | 24 % |
+| Concordat des Rouages | 191 | 116 | 61 % |
+| Ordre Astral | 207 | 112 | 54 % |
+| Les Ronces | 205 | 102 | 50 % |
+| Voile Nécrose | 189 | 90 | 48 % |
+| Brasier Solaire | 224 | 102 | 46 % |
+| Marée Abyssale | 184 | 78 | 42 % |
 
-Parties décidées avant la vague 21 : 28 % · durée moyenne 19.5 vagues
-Par joueur et par partie : 22.1 envois, 38.5 pouvoirs, 24.4 améliorations, 0.4 fusions.
+Parties décidées avant la vague 21 : 48 % · durée moyenne 17.5 vagues
+Par joueur et par partie : 22.6 envois, 35.5 pouvoirs, 19.4 améliorations, 0.4 fusions.

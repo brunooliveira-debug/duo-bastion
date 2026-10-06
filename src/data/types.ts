@@ -95,6 +95,9 @@ export interface BranchDef {
   color?: number; accent?: number;
 }
 
+/** Garrisoned units fire from a tower on their cell (static in combat, +range from height). */
+export type TowerStyle = 'archer' | 'mage' | 'cannon' | 'shrine' | 'spire' | 'ice' | 'fire' | 'poison' | 'dark';
+
 export interface UnitDef extends CombatStats {
   id: string;
   name: string;
@@ -109,6 +112,7 @@ export interface UnitDef extends CombatStats {
   pros: string;
   cons: string;
   branches?: [BranchDef, BranchDef];
+  tower?: TowerStyle;
   /** summoned minion: never drafted, never built */
   token?: boolean;
   model: ModelDef;

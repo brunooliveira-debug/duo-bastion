@@ -4,7 +4,11 @@ import { save } from '../save/SaveSystem';
 import { audio } from '../audio/AudioSystem';
 import { GAME_NAME, VERSION, ONLINE } from '../config';
 import type { LobbyState, Session } from '../net/Session';
-import type { Difficulty, GameMode } from '../sim/state';
+import type { Difficulty, FactionChoice, GameMode } from '../sim/state';
+import { FACTIONS, FACTION_IDS, UNITS, CATEGORY_NAMES, CATEGORY_COLORS } from '../data/units';
+import { FACTION_POWERS } from '../data/powers';
+import { ECONOMY } from '../data/economy';
+import { icon, categoryIcon } from './icons';
 
 let current: HTMLElement | null = null;
 export function show(el: HTMLElement) {
@@ -66,7 +70,7 @@ export function menuScreen(a: MenuActions) {
     h('div', { class: 'menu' },
       h('div', { class: 'row' }, h('button', { class: 'iconbtn', style: 'font-size:26px;width:52px;min-height:52px', onclick: () => optionsScreen(() => show(menuScreen(a))) }, p.avatar), nameField()),
       active ? h('button', { class: 'btn gold', onclick: () => a.resume() }, `↻ Reprendre la partie ${active.code}`) : null,
-      h('button', { class: 'btn primary', onclick: () => { audio.unlock(); if (!needName()) a.duo('vsai'); } }, '👥 Jouer à deux'),
+      h('button', { class: 'btn primary', onclick: () => { audio.unlock(); if (!needName()) a.duo('vsai'); } }, '👥 Jouer à deux · Coop ou Duel'),
       h('div', { class: 'row' },
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!needName()) soloScreen(a); } }, '🤖 Solo'),
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!needName()) survivalScreen(a); } }, '♾️ Survie')),
@@ -85,19 +89,24 @@ function survivalScreen(a: MenuActions) {
     h('p', { class: 'muted center' }, 'Pas d\'adversaire : tenez le plus longtemps possible. Après la vague 21, la faille devient infinie.'),
     h('div', { class: 'menu' },
       h('button', { class: 'btn primary', onclick: () => a.duo('survival') }, '👥 Survie à deux'),
-      h('button', { class: 'btn', onclick: () => a.solo('survival', 9999, 'normal') }, '🤖 Survie avec une IA partenaire'),
+      h('button', { class: 'btn', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, f => { save.profile.faction = f; save.flush(); a.solo('survival', 9999, 'normal'); }, () => survivalScreen(a), 'Lancer la survie') }, '🤖 Survie avec une IA partenaire'),
       h('button', { class: 'btn ghost', onclick: () => show(menuScreen(a)) }, '← Retour'))));
 }
 
 function soloScreen(a: MenuActions) {
   let waves = 21, diff: Difficulty = 'normal';
-  show(h('div', { class: 'screen' },
+  const armyRow = h('div', { class: 'row' });
+  const drawArmy = () => { clear(armyRow); armyRow.append(armyBadge((save.profile.faction || 'random') as FactionChoice), h('button', { class: 'btn small gold', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, f => { save.profile.faction = f; save.flush(); show(scr); drawArmy(); }, () => show(scr)) }, 'Choisir mon armée')); };
+  drawArmy();
+  const scr = h('div', { class: 'screen' },
     h('h2', {}, '🤖 SOLO — toi + une IA alliée contre 2 IA'),
     h('div', { class: 'card col' },
+      h('div', { class: 'muted' }, 'Ton armée'), armyRow,
       h('div', { class: 'muted' }, 'Durée'), seg<number>([[10, 'Courte (10 vagues)'], [21, 'Complète (21 vagues)']], waves, v => (waves = v)),
       h('div', { class: 'muted' }, 'Difficulté des adversaires'), seg<Difficulty>(DIFFS, diff, v => (diff = v)),
       h('button', { class: 'btn primary', onclick: () => a.solo('vsai', waves, diff) }, 'Jouer'),
-      h('button', { class: 'btn ghost', onclick: () => show(menuScreen(a)) }, '← Retour'))));
+      h('button', { class: 'btn ghost', onclick: () => show(menuScreen(a)) }, '← Retour')));
+  show(scr);
 }
 
 export function duoScreen(mode: GameMode, onCreate: () => void, onJoin: (code: string) => void, back: () => void, prefill = '') {
@@ -141,8 +150,10 @@ export function lobbyScreen(session: Session, leave: () => void) {
     const slots = [0, 1].map(i => {
       const p = l.players[i];
       return h('div', { class: `lp ${i ? 'b' : 'a'}` },
-        h('div', { class: 'muted', style: 'font-size:12px' }, i === 0 ? 'JOUEUR 1 · voie gauche' : 'JOUEUR 2 · voie droite'),
+        h('div', { class: 'muted', style: 'font-size:12px' }, l.settings.mode === 'duel' ? (i === 0 ? 'JOUEUR 1 · camp bleu' : 'JOUEUR 2 · camp rouge') : i === 0 ? 'JOUEUR 1 · voie gauche' : 'JOUEUR 2 · voie droite'),
         p ? h('div', { class: 'nm' }, `${p.avatar} ${p.name}${p.uid === session.uid ? ' (toi)' : ''}`) : h('div', { class: 'nm muted' }, '… en attente'),
+        p ? armyBadge(p.faction ?? 'random') : null,
+        p && p.uid === session.uid ? h('button', { class: 'btn small', onclick: () => armyPicker(p.faction ?? 'random', f => { session.setFaction(f); show(root); }, () => show(root)) }, 'Choisir mon armée') : null,
         p ? h('span', { class: `badge ${p.ready ? 'ok' : 'wait'}` }, p.ready ? 'PRÊT' : 'PAS PRÊT') : h('span', { class: 'muted', style: 'font-size:12px' }, host ? 'Partage le code !' : ''));
     });
     const s = l.settings;
@@ -161,11 +172,12 @@ export function lobbyScreen(session: Session, leave: () => void) {
       h('div', { class: 'card col', style: 'margin-top:10px;width:min(640px,100%)' },
         h('div', { class: 'lobby-players' }, ...slots),
         h('div', { class: 'muted', style: 'font-size:12px' }, 'Mode'),
-        seg<GameMode>([['vsai', '⚔️ Duo vs 2 IA'], ['survival', '♾️ Survie duo']], s.mode, v => session.setSettings({ mode: v }), !host),
-        s.mode === 'vsai' ? h('div', { class: 'muted', style: 'font-size:12px' }, 'Durée') : null,
-        s.mode === 'vsai' ? seg<number>([[10, '10 vagues (~12 min)'], [21, '21 vagues (~25 min)']], s.totalWaves, v => session.setSettings({ totalWaves: v }), !host) : null,
-        s.mode === 'vsai' ? h('div', { class: 'muted', style: 'font-size:12px' }, 'Difficulté des IA adverses') : null,
-        s.mode === 'vsai' ? seg<Difficulty>(DIFFS, s.difficulty, v => session.setSettings({ difficulty: v }), !host) : null,
+        seg<GameMode>([['vsai', '🤝 Coop vs 2 IA'], ['duel', '⚔️ Duel 1 contre 1'], ['survival', '♾️ Survie duo']], s.mode, v => session.setSettings({ mode: v, totalWaves: v === 'survival' ? 9999 : s.totalWaves > 21 ? 21 : s.totalWaves }), !host),
+        s.mode === 'duel' ? h('div', { class: 'muted small' }, 'Chacun défend son Core avec un allié IA et attaque l\'autre joueur : envois, malédictions, pouvoirs.') : null,
+        s.mode !== 'survival' ? h('div', { class: 'muted', style: 'font-size:12px' }, 'Durée') : null,
+        s.mode !== 'survival' ? seg<number>([[10, '10 vagues (~15 min)'], [21, '21 vagues (~30 min)']], s.totalWaves, v => session.setSettings({ totalWaves: v }), !host) : null,
+        s.mode !== 'survival' ? h('div', { class: 'muted', style: 'font-size:12px' }, s.mode === 'duel' ? 'Niveau des alliés IA' : 'Difficulté des IA adverses') : null,
+        s.mode !== 'survival' ? seg<Difficulty>(DIFFS, s.difficulty, v => session.setSettings({ difficulty: v }), !host) : null,
         h('div', { class: 'row', style: 'margin-top:6px' },
           h('button', { class: `btn ${myReady ? '' : 'gold'}`, style: 'flex:1', onclick: () => { audio.play('ready'); session.setReady(!myReady); } }, myReady ? '✔ Prêt (annuler)' : 'Je suis PRÊT'),
           host ? h('button', { class: 'btn primary', style: 'flex:1', disabled: !session.canStart(), onclick: () => session.startGame() }, l.players.length < 2 ? 'Démarrer avec une IA' : 'DÉMARRER') : null),
@@ -207,4 +219,52 @@ export function optionsScreen(back: () => void) {
         h('div', { class: 'muted', style: 'font-size:12px' }, '📲 iPhone : Safari → Partager → « Sur l\'écran d\'accueil ». Android : menu ⋮ → « Installer l\'application ».'),
       h('button', { class: 'btn primary', onclick: back }, 'OK')),
     h('p', { class: 'muted center', style: 'font-size:11px;max-width:520px' }, `${GAME_NAME} v${VERSION} — jeu original. Univers, unités, sons et visuels créés pour ce projet.`)));
+}
+
+// ---------------------------------------------------------------- army (faction) choice
+
+export function armyBadge(f: FactionChoice) {
+  if (f === 'random') return h('span', { class: 'armybadge rnd' }, '🎲 Aléatoire');
+  const d = FACTIONS[f];
+  return h('span', { class: 'armybadge', style: `--fc:${d.color}` }, d.name, h('small', {}, d.title));
+}
+
+/** Full-screen army picker: list on the left, details (units, powers, strengths, weaknesses, style) on the right. */
+export function armyPicker(current: FactionChoice, onPick: (f: FactionChoice) => void, onBack: () => void, okLabel = 'Choisir cette armée') {
+  let sel: FactionChoice = current;
+  const list = h('div', { class: 'armylist' });
+  const detail = h('div', { class: 'armydetail' });
+  const draw = () => {
+    clear(list);
+    for (const f of [...FACTION_IDS, 'random'] as FactionChoice[]) {
+      const d = f === 'random' ? null : FACTIONS[f];
+      list.append(h('button', { class: `armyitem${sel === f ? ' on' : ''}`, style: d ? `--fc:${d.color}` : '--fc:#c8b8ff', onclick: () => { sel = f; audio.play('click'); draw(); } },
+        h('b', {}, d ? d.name : '🎲 Aléatoire'), h('small', {}, d ? d.title : `Bonus +${ECONOMY.randomFactionGold} or, +25 % XP`)));
+    }
+    clear(detail);
+    if (sel === 'random') {
+      detail.append(h('h3', {}, '🎲 Armée aléatoire'), h('p', {}, 'Le jeu t\'attribue une armée au lancement de la partie.'),
+        h('div', { class: 'pros' }, h('b', {}, 'Récompense : '), `+${ECONOMY.randomFactionGold} pièces d'or au départ et +25 % d'expérience en fin de partie.`),
+        h('p', { class: 'muted small' }, 'Parfait pour apprendre toutes les armées et varier les parties.'));
+    } else {
+      const d = FACTIONS[sel];
+      detail.append(
+        h('h3', { style: `color:${d.color}` }, d.name, h('small', {}, ` — ${d.title}`)),
+        h('p', { class: 'small' }, d.style),
+        h('div', { class: 'pc' }, h('div', { class: 'pros' }, ...d.strengths.flatMap(t => [h('span', {}, '✔ ' + t), h('br')])), h('div', { class: 'cons' }, ...d.weaknesses.flatMap(t => [h('span', {}, '✖ ' + t), h('br')]))),
+        h('div', { class: 'sect' }, 'Unités'),
+        h('div', { class: 'armyunits' }, ...d.units.map(id => {
+          const u = UNITS[id];
+          return h('div', { class: 'au', style: `--cat:${CATEGORY_COLORS[u.category]}` },
+            h('span', { class: 'cat', html: icon(categoryIcon(u.category), 14, '#14112A', 3) }),
+            h('div', {}, h('b', {}, u.name), h('small', {}, `${CATEGORY_NAMES[u.category]} · ${u.cost} or`), h('small', { class: 'muted' }, u.passiveText)));
+        })),
+        h('div', { class: 'sect' }, 'Pouvoirs de commandant'),
+        h('div', { class: 'armypowers' }, ...FACTION_POWERS[sel].map(p => h('div', { class: 'ap' }, h('span', { html: icon(p.icon, 22, '#FFC233') }), h('div', {}, h('b', {}, p.name), h('small', {}, p.text))))),
+      );
+    }
+    detail.append(h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn primary', style: 'flex:1', onclick: () => { audio.play('ready'); onPick(sel); } }, okLabel), h('button', { class: 'btn ghost', onclick: onBack }, '← Retour')));
+  };
+  draw();
+  show(h('div', { class: 'screen armyscreen' }, h('h2', {}, '⚔️ Choisis ton armée'), h('div', { class: 'armywrap' }, list, detail)));
 }

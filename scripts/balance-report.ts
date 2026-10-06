@@ -14,12 +14,14 @@ import type { GameState } from '../src/sim/state';
 
 const GAMES = Number(process.argv.find(a => /^\d+$/.test(a)) ?? 120);
 const QUICK = process.argv.includes('--quick');
+const DUELS_ONLY = process.argv.includes('--duels');
 const out: string[] = [];
 const log = (l = '') => { out.push(l); console.log(l); };
 const pct = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100)} %`;
 const median = (a: number[]) => { const b = a.slice().sort((x, y) => x - y); return b[Math.floor(b.length / 2)]; };
 
 // ---------------------------------------------------------------- 1. unit table
+if (!DUELS_ONLY) {
 log('# Rapport d\'équilibrage DUO BASTION');
 log(`_Généré automatiquement le ${new Date().toISOString().slice(0, 16).replace('T', ' ')}_`);
 log();
@@ -129,6 +131,7 @@ log('Moyenne par armée (plus bas = plus efficace contre les vagues) :');
 for (const f of FACTION_IDS) log(`- ${FACTIONS[f].name} : ${(facThr[f].reduce((a, b) => a + b, 0) / facThr[f].length).toFixed(2)}`);
 console.log('THRESHOLDS ' + JSON.stringify(thr));
 
+}
 // ---------------------------------------------------------------- 3. duel league
 log();
 log(`## 3. Ligue de duels IA (${GAMES} parties, armées aléatoires, difficulté normale des deux côtés)`);
@@ -159,5 +162,5 @@ log();
 log(`Parties décidées avant la vague 21 : ${Math.round((decidedEarly / GAMES) * 100)} % · durée moyenne ${(totalWaves / GAMES).toFixed(1)} vagues`);
 log(`Par joueur et par partie : ${(sentTotal / GAMES / 4).toFixed(1)} envois, ${(castsTotal / GAMES / 4).toFixed(1)} pouvoirs, ${(upgrades / GAMES / 4).toFixed(1)} améliorations, ${(fusions / GAMES / 4).toFixed(1)} fusions.`);
 
-writeFileSync('BALANCE_REPORT.md', out.join('\n') + '\n');
+if (!DUELS_ONLY) writeFileSync('BALANCE_REPORT.md', out.join('\n') + '\n');
 console.log('\n→ BALANCE_REPORT.md');

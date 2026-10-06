@@ -155,3 +155,108 @@ function rr(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: num
   g.arcTo(x, y, x + w, y, r);
   g.closePath();
 }
+
+/** Soft, slightly lumpy puff for smoke and dust (tinted by the particle colour). */
+export function smokeTexture() {
+  return cached('smoke', () => {
+    const S = 64;
+    const { c, g } = canvas(S, S);
+    const r = rng(11);
+    for (let i = 0; i < 9; i++) {
+      const x = 20 + r() * 24, y = 20 + r() * 24, rad = 10 + r() * 14;
+      const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, S, S);
+    }
+    return new THREE.CanvasTexture(c);
+  });
+}
+
+/** Four-point star sparkle (flashes, crits, stun stars). */
+export function starTexture() {
+  return cached('star', () => {
+    const S = 64;
+    const { c, g } = canvas(S, S);
+    const grad = g.createRadialGradient(32, 32, 0, 32, 32, 30);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2, rad = i % 2 ? 7 : 31;
+      g.lineTo(32 + Math.cos(a) * rad, 32 + Math.sin(a) * rad);
+    }
+    g.closePath();
+    g.fill();
+    return new THREE.CanvasTexture(c);
+  });
+}
+
+/** Warm packed-dirt path with pebbles and cracks (tileable). */
+export function dirtTexture() {
+  return cached('dirt', () => {
+    const S = 256;
+    const { c, g } = canvas(S, S);
+    const r = rng(23);
+    g.fillStyle = '#c99a62';
+    g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 260; i++) {
+      const x = r() * S, y = r() * S, rad = 6 + r() * 26, k = r();
+      g.fillStyle = k < 0.5 ? `rgba(226,180,120,${0.18 + r() * 0.2})` : `rgba(150,105,62,${0.12 + r() * 0.16})`;
+      for (const ox of [0, S, -S]) for (const oy of [0, S, -S]) { g.beginPath(); g.ellipse(x + ox, y + oy, rad, rad * (0.5 + r() * 0.5), r() * 3, 0, Math.PI * 2); g.fill(); }
+    }
+    // flat stones
+    for (let i = 0; i < 12; i++) {
+      const x = r() * S, y = r() * S, w = 14 + r() * 22, h = 10 + r() * 14;
+      for (const ox of [0, S, -S]) for (const oy of [0, S, -S]) {
+        g.fillStyle = `rgba(${200 + r() * 30 | 0},${160 + r() * 25 | 0},${110 + r() * 20 | 0},0.3)`;
+        g.beginPath(); rr(g, x + ox, y + oy, w, h, 6); g.fill();
+        g.strokeStyle = 'rgba(110,72,40,0.18)'; g.lineWidth = 1.2; g.stroke();
+      }
+    }
+    // pebbles
+    for (let i = 0; i < 90; i++) {
+      g.fillStyle = r() < 0.5 ? 'rgba(120,110,105,0.7)' : 'rgba(240,225,200,0.6)';
+      g.beginPath(); g.arc(r() * S, r() * S, 1 + r() * 2.2, 0, Math.PI * 2); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  });
+}
+
+/** Saturated stylised grass (tileable). */
+export function grassTexture() {
+  return cached('grass', () => {
+    const S = 256;
+    const { c, g } = canvas(S, S);
+    const r = rng(31);
+    g.fillStyle = '#5f9a32';
+    g.fillRect(0, 0, S, S);
+    for (let i = 0; i < 160; i++) {
+      const x = r() * S, y = r() * S, rad = 10 + r() * 30;
+      g.fillStyle = r() < 0.5 ? `rgba(120,180,60,${0.2 + r() * 0.2})` : `rgba(60,110,30,${0.15 + r() * 0.2})`;
+      for (const ox of [0, S, -S]) for (const oy of [0, S, -S]) { g.beginPath(); g.arc(x + ox, y + oy, rad, 0, Math.PI * 2); g.fill(); }
+    }
+    for (let i = 0; i < 900; i++) {
+      const x = r() * S, y = r() * S, h = 3 + r() * 6;
+      g.strokeStyle = r() < 0.5 ? 'rgba(160,215,90,0.55)' : 'rgba(50,95,25,0.5)';
+      g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y - h); g.stroke();
+    }
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = ['#ffe36a', '#ffffff', '#ff8ab0', '#9ad8ff'][Math.floor(r() * 4)];
+      g.beginPath(); g.arc(r() * S, r() * S, 1.6, 0, Math.PI * 2); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  });
+}

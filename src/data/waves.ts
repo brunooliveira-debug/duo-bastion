@@ -31,7 +31,7 @@ export const WAVES: WaveDef[] = [
  * Difficulty calibration per wave (applied to HP and damage), measured by scripts/balance-report.ts:
  * an army worth ≈ 70 % of the expected gold holds a normal wave, ≈ 85 % a boss wave.
  */
-export const WAVE_DIFF = [1.46, 1.49, 1.9, 1.75, 2.64, 3.6, 1.72, 2.2, 3.6, 1.18, 3.9, 1.67, 2.2, 4.2, 2.34, 3.4, 2.64, 2.3, 3.2, 2.3, 1.04];
+export const WAVE_DIFF = [1.46, 1.83, 1.9, 1.75, 2.64, 3.6, 1.9, 2.2, 3.6, 1.05, 4.6, 1.05, 2.2, 4.2, 1.6, 4.4, 1.1, 2.5, 2.74, 2.3, 0.6];
 const ENDLESS_DIFF = 2.3;
 
 const ENDLESS_POOL = ['rampelin', 'essaim', 'coureur', 'cuirasse', 'tireur', 'mage_fele', 'bete_runique'];

@@ -83,8 +83,8 @@ export const UNITS: Record<string, UnitDef> = {
   }),
   loup_astral: def({
     id: 'loup_astral', name: 'Loup Astral', faction: 'astreens', category: 'rapide', cost: 65,
-    hp: 340, armor: 0, dmg: 20, atkSpeed: 1.3, range: 1.1, moveSpeed: 5, attack: 'perf', defense: 'leg', roles: ['dps', 'assassin'],
-    abilities: [{ kind: 'interceptor', radius: 14 }, { kind: 'bonusVsDef', def: 'leg', pct: 0.25 }],
+    hp: 330, armor: 0, dmg: 18, atkSpeed: 1.3, range: 1.1, moveSpeed: 5, attack: 'perf', defense: 'leg', roles: ['dps', 'assassin'],
+    abilities: [{ kind: 'interceptor', radius: 10 }, { kind: 'bonusVsDef', def: 'leg', pct: 0.25 }],
     description: 'Prédateur stellaire qui traque les fuyards.', passiveText: 'Chasseur : poursuit en priorité les ennemis rapides et ceux qui filent vers le Core. +25 % contre Légers.',
     pros: 'Rattrape les fuites, idéal contre les Coureurs.', cons: 'Fragile au corps à corps prolongé.',
     branches: [
@@ -94,8 +94,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'wolf', color: 0x5a7ad8, accent: 0xbfe0ff, scale: 1 }, fx: 'star', sfx: 'slash',
   }),
   tireuse_etoile: def({
-    id: 'tireuse_etoile', name: 'Tireuse d\'Étoiles', faction: 'astreens', category: 'portee', cost: 90,
-    hp: 230, armor: 0, dmg: 26, atkSpeed: 1.1, range: 5.5, moveSpeed: 2.4, attack: 'perf', defense: 'leg', roles: ['ranged', 'dps'],
+    id: 'tireuse_etoile', name: 'Tireuse d\'Étoiles', faction: 'astreens', category: 'portee', cost: 90, tower: 'archer',
+    hp: 230, armor: 0, dmg: 25, atkSpeed: 1.1, range: 5.5, moveSpeed: 2.4, attack: 'perf', defense: 'leg', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'bonusVsSlowed', pct: 0.3 }],
     description: 'Archère qui tire des éclats de constellation.', passiveText: 'Marque stellaire : +30 % dégâts contre les ennemis ralentis.',
     pros: 'Longue portée, excellent rapport dégâts/prix.', cons: 'Très fragile si la ligne cède.',
@@ -106,7 +106,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'archer', color: 0x4f7fd8, accent: 0xbfe0ff, scale: 1 }, fx: 'star', sfx: 'arrow',
   }),
   lanciere_eclair: def({
-    id: 'lanciere_eclair', name: 'Lancière d\'Éclair', faction: 'astreens', category: 'antiblindage', cost: 110,
+    id: 'lanciere_eclair', name: 'Lancière d\'Éclair', faction: 'astreens', category: 'antiblindage', cost: 110, tower: 'spire',
     hp: 270, armor: 0.05, dmg: 44, atkSpeed: 0.7, range: 4.5, moveSpeed: 2.3, attack: 'ener', defense: 'leg', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'bonusVsBig', pct: 0.5 }, { kind: 'pierce', pct: 0.4 }],
     description: 'Ses javelots de foudre percent les carapaces.', passiveText: '+50 % contre les boss et colosses. Ignore 40 % de l\'armure.',
@@ -118,7 +118,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'lancer', color: 0x5a7ad8, accent: 0x9ffcff, scale: 1 }, fx: 'lightning', sfx: 'zap',
   }),
   harmoniste: def({
-    id: 'harmoniste', name: 'Harmoniste Astral', faction: 'astreens', category: 'soutien', cost: 100,
+    id: 'harmoniste', name: 'Harmoniste Astral', faction: 'astreens', category: 'soutien', cost: 100, tower: 'shrine',
     hp: 320, armor: 0, dmg: 12, atkSpeed: 1.0, range: 4, moveSpeed: 2.3, attack: 'ener', defense: 'leg', roles: ['support', 'aura'],
     abilities: [{ kind: 'auraAttackSpeed', radius: 3, pct: 0.2 }, { kind: 'hastePulse', every: 9, radius: 3.5, pct: 0.35, duration: 3 }, { kind: 'heal', every: 3, amount: 25, range: 4 }],
     description: 'Chante la fréquence des étoiles.', skillText: 'Crescendo (9 s) : +35 % vitesse d\'attaque aux alliés proches pendant 3 s.',
@@ -131,7 +131,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'bard', color: 0x8aa8ff, accent: 0xfff6c0, scale: 1 }, fx: 'note', sfx: 'chime',
   }),
   astromancienne: def({
-    id: 'astromancienne', name: 'Astromancienne', faction: 'astreens', category: 'zone', cost: 135,
+    id: 'astromancienne', name: 'Astromancienne', faction: 'astreens', category: 'zone', cost: 135, tower: 'ice',
     hp: 270, armor: 0, dmg: 36, atkSpeed: 0.6, range: 5, moveSpeed: 2.2, attack: 'arca', defense: 'mys', roles: ['mage', 'aoe'],
     abilities: [{ kind: 'splash', radius: 1.6, pct: 0.6 }, { kind: 'slowOnHit', slow: 0.3, duration: 2 }],
     description: 'Elle fait tomber des fragments d\'étoiles glacées.', passiveText: 'Zone (1,6 m, 60 %). Ralentit sa cible de 30 %.',
@@ -145,7 +145,7 @@ export const UNITS: Record<string, UnitDef> = {
 
   // ======================================================== CONCORDAT DES ROUAGES
   ferraille: def({
-    id: 'ferraille', name: 'Sentinelle Ferraille', faction: 'rouages', category: 'defense', cost: 60,
+    id: 'ferraille', name: 'Sentinelle Ferraille', faction: 'rouages', category: 'defense', cost: 65,
     hp: 560, armor: 0.15, dmg: 15, atkSpeed: 1.0, range: 1.1, moveSpeed: 2.2, attack: 'phys', defense: 'bli', roles: ['tank'],
     abilities: [{ kind: 'taunt', radius: 3.5 }],
     description: 'Golem de récupération bon marché.', skillText: 'Provocation : les ennemis à 3,5 m le ciblent en priorité.', passiveText: 'Plaques recyclées : 15 % d\'armure.',
@@ -169,7 +169,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'driller', color: 0xb07a3a, accent: 0xffd27a, scale: 1 }, fx: 'spark', sfx: 'metal',
   }),
   bombardiere: def({
-    id: 'bombardiere', name: 'Bombardière', faction: 'rouages', category: 'portee', cost: 125,
+    id: 'bombardiere', name: 'Bombardière', faction: 'rouages', category: 'portee', cost: 130, tower: 'cannon',
     hp: 250, armor: 0.05, dmg: 54, atkSpeed: 0.45, range: 7.5, moveSpeed: 1.8, attack: 'phys', defense: 'bli', roles: ['ranged', 'aoe'],
     abilities: [{ kind: 'splash', radius: 1.3, pct: 0.55 }],
     description: 'Une ingénieure et son mortier à vapeur.', passiveText: 'Obus explosifs : 55 % des dégâts autour de l\'impact. Portée 7,5 m.',
@@ -181,7 +181,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'bomber', color: 0xb07a3a, accent: 0xffd27a, scale: 1 }, fx: 'shell', sfx: 'boom',
   }),
   colosse_forge: def({
-    id: 'colosse_forge', name: 'Colosse de Forge', faction: 'rouages', category: 'lourde', tier: 3, cost: 150,
+    id: 'colosse_forge', name: 'Colosse de Forge', faction: 'rouages', category: 'lourde', tier: 3, cost: 155,
     hp: 1250, armor: 0.15, dmg: 62, atkSpeed: 0.5, range: 1.3, moveSpeed: 1.6, attack: 'phys', defense: 'bli', roles: ['tank', 'dps', 'aoe'],
     abilities: [{ kind: 'splash', radius: 1.3, pct: 0.5 }, { kind: 'stunOnHit', chance: 0.2, duration: 0.8 }],
     description: 'Géant de laiton au marteau-pilon.', passiveText: 'Ses coups frappent en zone et étourdissent parfois (20 %, 0,8 s).',
@@ -193,7 +193,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'colossus', color: 0xa87a3a, accent: 0xffb547, scale: 1.15 }, fx: 'spark', sfx: 'boom',
   }),
   mecanicienne: def({
-    id: 'mecanicienne', name: 'Mécanicienne', faction: 'rouages', category: 'soutien', cost: 95,
+    id: 'mecanicienne', name: 'Mécanicienne', faction: 'rouages', category: 'soutien', cost: 100, tower: 'shrine',
     hp: 340, armor: 0.1, dmg: 12, atkSpeed: 1.0, range: 3.5, moveSpeed: 2.3, attack: 'ener', defense: 'bli', roles: ['support'],
     abilities: [{ kind: 'heal', every: 3.5, amount: 40, range: 4 }, { kind: 'shieldPulse', every: 8, amount: 55, radius: 3 }],
     description: 'Clé à molette et rivets de fortune.', skillText: 'Blindage d\'urgence (8 s) : bouclier de 55 aux alliés proches.', passiveText: 'Répare l\'allié le plus abîmé (40 PV / 3,5 s).',
@@ -205,7 +205,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'mechanic', color: 0xb07a3a, accent: 0x9ffcff, scale: 1 }, fx: 'spark', sfx: 'metal',
   }),
   exarque_prisme: def({
-    id: 'exarque_prisme', name: 'Exarque Prisme', faction: 'rouages', category: 'speciale', tier: 5, cost: 270,
+    id: 'exarque_prisme', name: 'Exarque Prisme', faction: 'rouages', category: 'speciale', tier: 5, cost: 280, tower: 'mage',
     hp: 950, armor: 0.1, dmg: 74, atkSpeed: 0.9, range: 4.2, moveSpeed: 2.0, attack: 'ener', defense: 'bli', roles: ['carry', 'hybrid'],
     abilities: [{ kind: 'chain', targets: 2, pct: 0.6, range: 3 }],
     description: 'Automate-cristal qui décompose la lumière en éclairs.', passiveText: 'Réfraction : chaque tir rebondit sur 2 ennemis (60 %).',
@@ -243,7 +243,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'blade', color: 0x3f9e4f, accent: 0xb4ff7a, scale: 1 }, fx: 'leaf', sfx: 'slash',
   }),
   rodeuse: def({
-    id: 'rodeuse', name: 'Rôdeuse des Fourrés', faction: 'ronces', category: 'speciale', cost: 95,
+    id: 'rodeuse', name: 'Rôdeuse des Fourrés', faction: 'ronces', category: 'speciale', cost: 95, tower: 'archer',
     hp: 240, armor: 0, dmg: 32, atkSpeed: 0.9, range: 5, moveSpeed: 2.6, attack: 'perf', defense: 'org', roles: ['ranged', 'assassin'],
     abilities: [{ kind: 'stealth', ambush: 0.6 }],
     description: 'Invisible dans les feuillages jusqu\'au premier tir.', passiveText: 'Camouflage : les ennemis ne la voient pas tant qu\'elle ne tire pas. Embuscade : +60 % au premier tir.',
@@ -255,7 +255,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'archer', color: 0x3a6a3a, accent: 0xb4ff7a, scale: 1 }, fx: 'leaf', sfx: 'arrow',
   }),
   semeuse: def({
-    id: 'semeuse', name: 'Semeuse de Spores', faction: 'ronces', category: 'zone', cost: 105,
+    id: 'semeuse', name: 'Semeuse de Spores', faction: 'ronces', category: 'zone', cost: 105, tower: 'poison',
     hp: 300, armor: 0, dmg: 12, atkSpeed: 0.8, range: 4, moveSpeed: 2.2, attack: 'perf', defense: 'org', roles: ['mage', 'aoe'],
     abilities: [{ kind: 'poison', dps: 9, duration: 4, radius: 1.6 }, { kind: 'slowOnHit', slow: 0.2, duration: 1.5 }],
     description: 'Plante-mère qui crache des nuages de spores.', passiveText: 'Poison de zone (1,6 m) : 9 dégâts/s pendant 4 s, ignore l\'armure.',
@@ -267,7 +267,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'sower', color: 0x5a8a3a, accent: 0xd8ff6a, scale: 1 }, fx: 'poison', sfx: 'whoosh',
   }),
   druidesse: def({
-    id: 'druidesse', name: 'Druidesse', faction: 'ronces', category: 'soutien', cost: 95,
+    id: 'druidesse', name: 'Druidesse', faction: 'ronces', category: 'soutien', cost: 95, tower: 'shrine',
     hp: 330, armor: 0, dmg: 12, atkSpeed: 1.0, range: 4, moveSpeed: 2.2, attack: 'arca', defense: 'org', roles: ['support'],
     abilities: [{ kind: 'heal', every: 2.5, amount: 34, range: 4 }],
     description: 'Gardienne des sèves anciennes.', passiveText: 'Soigne l\'allié le plus blessé (34 PV / 2,5 s).',
@@ -293,8 +293,8 @@ export const UNITS: Record<string, UnitDef> = {
 
   // ======================================================== MARÉE ABYSSALE
   carapace_abysses: def({
-    id: 'carapace_abysses', name: 'Carapace des Abysses', faction: 'abysses', category: 'lourde', tier: 3, cost: 140,
-    hp: 1300, armor: 0.2, dmg: 24, atkSpeed: 0.75, range: 1.2, moveSpeed: 1.8, attack: 'phys', defense: 'mys', roles: ['tank', 'aoe'],
+    id: 'carapace_abysses', name: 'Carapace des Abysses', faction: 'abysses', category: 'lourde', tier: 3, cost: 125,
+    hp: 1350, armor: 0.2, dmg: 29, atkSpeed: 0.75, range: 1.2, moveSpeed: 1.8, attack: 'phys', defense: 'mys', roles: ['tank', 'aoe'],
     abilities: [{ kind: 'taunt', radius: 3 }, { kind: 'slowPulse', every: 5, radius: 2.6, slow: 0.35, duration: 2.5, dmg: 20 }],
     description: 'Tortue-colosse qui libère des vagues glacées.', skillText: 'Onde de marée (5 s) : ralentit de 35 % autour d\'elle.', passiveText: 'Provocation (3 m). 20 % d\'armure.',
     pros: 'Mur vivant qui ralentit tout.', cons: 'Faibles dégâts.',
@@ -305,8 +305,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'turtle', color: 0x1f8f9a, accent: 0x7ff6ff, scale: 1.1 }, fx: 'water', sfx: 'wave',
   }),
   ondin: def({
-    id: 'ondin', name: 'Ondin Lame-Courant', faction: 'abysses', category: 'rapide', cost: 75,
-    hp: 350, armor: 0, dmg: 23, atkSpeed: 1.2, range: 1.1, moveSpeed: 4, attack: 'perf', defense: 'org', roles: ['dps', 'assassin'],
+    id: 'ondin', name: 'Ondin Lame-Courant', faction: 'abysses', category: 'rapide', cost: 65,
+    hp: 380, armor: 0, dmg: 24, atkSpeed: 1.2, range: 1.1, moveSpeed: 4, attack: 'perf', defense: 'org', roles: ['dps', 'assassin'],
     abilities: [{ kind: 'dash', range: 7 }, { kind: 'slowOnHit', slow: 0.3, duration: 1.5 }],
     description: 'Guerrier-poisson au trident.', skillText: 'Vague-éclair : bondit sur un ennemi à 7 m au début du combat.', passiveText: 'Ses coups ralentissent de 30 %.',
     pros: 'Rapide, gêne les ennemis dès le début.', cons: 'Peu résistant.',
@@ -317,8 +317,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'merman', color: 0x2a9aa0, accent: 0x9ffcff, scale: 1 }, fx: 'water', sfx: 'slash',
   }),
   harponneuse: def({
-    id: 'harponneuse', name: 'Harponneuse', faction: 'abysses', category: 'portee', cost: 105,
-    hp: 260, armor: 0, dmg: 40, atkSpeed: 0.7, range: 5, moveSpeed: 2.3, attack: 'perf', defense: 'mys', roles: ['ranged', 'dps'],
+    id: 'harponneuse', name: 'Harponneuse', faction: 'abysses', category: 'portee', cost: 95, tower: 'archer',
+    hp: 270, armor: 0, dmg: 44, atkSpeed: 0.7, range: 5, moveSpeed: 2.3, attack: 'perf', defense: 'mys', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'bonusVsBig', pct: 0.4 }, { kind: 'slowOnHit', slow: 0.3, duration: 2 }],
     description: 'Ses harpons clouent les géants.', passiveText: '+40 % contre les gros ennemis. Ralentit sa cible de 30 %.',
     pros: 'Bonne contre les boss et les mini-boss.', cons: 'Cadence lente.',
@@ -329,9 +329,9 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'lancer', color: 0x1f8f9a, accent: 0x7ff6ff, scale: 1 }, fx: 'water', sfx: 'arrow',
   }),
   meduse: def({
-    id: 'meduse', name: 'Méduse Abyssale', faction: 'abysses', category: 'zone', cost: 120,
-    hp: 300, armor: 0, dmg: 18, atkSpeed: 0.8, range: 3.5, moveSpeed: 2, attack: 'ener', defense: 'mys', roles: ['mage', 'aoe'],
-    abilities: [{ kind: 'chain', targets: 2, pct: 0.6, range: 2.6 }, { kind: 'stunOnHit', chance: 0.15, duration: 0.8 }],
+    id: 'meduse', name: 'Méduse Abyssale', faction: 'abysses', category: 'zone', cost: 110, tower: 'spire',
+    hp: 320, armor: 0, dmg: 21, atkSpeed: 0.8, range: 3.5, moveSpeed: 2, attack: 'ener', defense: 'mys', roles: ['mage', 'aoe'],
+    abilities: [{ kind: 'chain', targets: 2, pct: 0.7, range: 2.8 }, { kind: 'stunOnHit', chance: 0.15, duration: 0.8 }],
     description: 'Ses filaments électriques sautent d\'ennemi en ennemi.', passiveText: 'Arc électrique : rebondit sur 2 ennemis. 15 % de chance d\'étourdir.',
     pros: 'Contrôle de foule, anti-Blindés (Énergie).', cons: 'Faibles dégâts directs.',
     branches: [
@@ -341,10 +341,10 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'jelly', color: 0x6a8aff, accent: 0xd0f8ff, scale: 1 }, fx: 'lightning', sfx: 'zap',
   }),
   pretresse: def({
-    id: 'pretresse', name: 'Prêtresse des Marées', faction: 'abysses', category: 'soutien', cost: 105,
+    id: 'pretresse', name: 'Prêtresse des Marées', faction: 'abysses', category: 'soutien', cost: 95, tower: 'shrine',
     hp: 340, armor: 0, dmg: 12, atkSpeed: 1.0, range: 4, moveSpeed: 2.2, attack: 'arca', defense: 'mys', roles: ['support'],
-    abilities: [{ kind: 'shieldPulse', every: 6, amount: 70, radius: 3.2 }, { kind: 'heal', every: 4, amount: 30, range: 4 }],
-    description: 'Elle tisse des boucliers d\'eau vive.', skillText: 'Bulle (6 s) : bouclier de 70 aux alliés proches.', passiveText: 'Soin léger (30 PV / 4 s).',
+    abilities: [{ kind: 'shieldPulse', every: 6, amount: 85, radius: 3.4 }, { kind: 'heal', every: 4, amount: 30, range: 4 }],
+    description: 'Elle tisse des boucliers d\'eau vive.', skillText: 'Bulle (6 s) : bouclier de 85 aux alliés proches.', passiveText: 'Soin léger (30 PV / 4 s).',
     pros: 'Annule les pics de dégâts.', cons: 'Faibles dégâts.',
     branches: [
       { name: 'Grande Prêtresse', text: 'Bulles doublées toutes les 5 s.', add: [{ kind: 'shieldPulse', every: 5, amount: 140, radius: 3.6 }], color: 0x2a7aaa, accent: 0xffffff },
@@ -353,8 +353,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'priestess', color: 0x2a8aaa, accent: 0xa8ffff, scale: 1 }, fx: 'water', sfx: 'chime',
   }),
   kraken: def({
-    id: 'kraken', name: 'Rejeton du Kraken', faction: 'abysses', category: 'speciale', tier: 4, cost: 220,
-    hp: 1100, armor: 0.1, dmg: 40, atkSpeed: 0.8, range: 2.5, moveSpeed: 1.6, attack: 'phys', defense: 'mys', roles: ['tank', 'aoe'],
+    id: 'kraken', name: 'Rejeton du Kraken', faction: 'abysses', category: 'speciale', tier: 4, cost: 190,
+    hp: 1150, armor: 0.1, dmg: 46, atkSpeed: 0.8, range: 2.5, moveSpeed: 1.6, attack: 'phys', defense: 'mys', roles: ['tank', 'aoe'],
     abilities: [{ kind: 'splash', radius: 1.6, pct: 0.5 }, { kind: 'stunOnHit', chance: 0.25, duration: 1.2 }, { kind: 'taunt', radius: 2 }],
     description: 'Ses tentacules balaient et étreignent.', passiveText: 'Balayage de zone (2,5 m). 25 % de chance d\'étreindre (étourdit 1,2 s).',
     pros: 'Contrôle massif en première ligne.', cons: 'Cher, Mystique (craint l\'Arcane).',
@@ -367,7 +367,7 @@ export const UNITS: Record<string, UnitDef> = {
 
   // ======================================================== BRASIER SOLAIRE
   paladin_aube: def({
-    id: 'paladin_aube', name: 'Paladine de l\'Aube', faction: 'solaires', category: 'defense', cost: 95,
+    id: 'paladin_aube', name: 'Paladine de l\'Aube', faction: 'solaires', category: 'defense', cost: 105,
     hp: 700, armor: 0.2, dmg: 17, atkSpeed: 0.9, range: 1.2, moveSpeed: 2.2, attack: 'phys', defense: 'mys', roles: ['tank', 'support'],
     abilities: [{ kind: 'taunt', radius: 3 }, { kind: 'guardAura', radius: 2.5, pct: 0.12 }],
     description: 'Son bouclier solaire protège ceux qui l\'entourent.', passiveText: 'Provocation. Aura : alliés proches -12 % dégâts subis.',
@@ -379,10 +379,10 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'paladin', color: 0xd88a3a, accent: 0xfff2a0, scale: 1 }, fx: 'fire', sfx: 'metal',
   }),
   danse_flamme: def({
-    id: 'danse_flamme', name: 'Danse-Flamme', faction: 'solaires', category: 'rapide', cost: 80,
+    id: 'danse_flamme', name: 'Danse-Flamme', faction: 'solaires', category: 'rapide', cost: 90,
     hp: 310, armor: 0, dmg: 22, atkSpeed: 1.3, range: 1.1, moveSpeed: 3.2, attack: 'ener', defense: 'leg', roles: ['dps'],
-    abilities: [{ kind: 'burn', dps: 10, duration: 3 }],
-    description: 'Duelliste aux cimeterres incandescents.', passiveText: 'Brûlure : 10 dégâts/s pendant 3 s.',
+    abilities: [{ kind: 'burn', dps: 9, duration: 3 }],
+    description: 'Duelliste aux cimeterres incandescents.', passiveText: 'Brûlure : 9 dégâts/s pendant 3 s.',
     pros: 'Gros dégâts sur la durée, rapide.', cons: 'Légère et fragile.',
     branches: [
       { name: 'Lame Solaire', text: '+30 % dégâts, frénésie (+60 % cadence max).', dmg: 1.3, add: [{ kind: 'ramp', perHit: 0.07, max: 0.6 }], color: 0xe8701a, accent: 0xffffff },
@@ -391,7 +391,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'duelist', color: 0xd8572a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'slash',
   }),
   arbaletriere: def({
-    id: 'arbaletriere', name: 'Arbalétrière Solaire', faction: 'solaires', category: 'antiblindage', cost: 100,
+    id: 'arbaletriere', name: 'Arbalétrière Solaire', faction: 'solaires', category: 'antiblindage', cost: 105, tower: 'archer',
     hp: 240, armor: 0, dmg: 30, atkSpeed: 1.0, range: 5.5, moveSpeed: 2.3, attack: 'ener', defense: 'leg', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'armorShred', pct: 0.15, duration: 3 }, { kind: 'burn', dps: 6, duration: 3 }],
     description: 'Carreaux chauffés à blanc.', passiveText: 'Ses carreaux fragilisent (+15 % dégâts subis) et brûlent.',
@@ -403,9 +403,9 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'xbow', color: 0xd86a2a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'arrow',
   }),
   oracle_braise: def({
-    id: 'oracle_braise', name: 'Oracle de Braise', faction: 'solaires', category: 'zone', tier: 3, cost: 140,
+    id: 'oracle_braise', name: 'Oracle de Braise', faction: 'solaires', category: 'zone', tier: 3, cost: 150, tower: 'fire',
     hp: 270, armor: 0, dmg: 42, atkSpeed: 0.65, range: 4.5, moveSpeed: 2.2, attack: 'arca', defense: 'mys', roles: ['mage', 'aoe'],
-    abilities: [{ kind: 'splash', radius: 1.7, pct: 0.7 }, { kind: 'burn', dps: 8, duration: 3 }],
+    abilities: [{ kind: 'splash', radius: 1.7, pct: 0.65 }, { kind: 'burn', dps: 8, duration: 3 }],
     description: 'Projette des fragments de soleil captif.', passiveText: 'Éclat solaire : 70 % des dégâts autour de la cible. Brûle.',
     pros: 'Zone énorme.', cons: 'Très fragile.',
     branches: [
@@ -415,10 +415,10 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'mage', color: 0xd8572a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'fire',
   }),
   vestale: def({
-    id: 'vestale', name: 'Vestale du Feu Sacré', faction: 'solaires', category: 'soutien', cost: 95,
+    id: 'vestale', name: 'Vestale du Feu Sacré', faction: 'solaires', category: 'soutien', cost: 100, tower: 'shrine',
     hp: 300, armor: 0, dmg: 12, atkSpeed: 1.0, range: 4, moveSpeed: 2.3, attack: 'arca', defense: 'mys', roles: ['support', 'aura'],
-    abilities: [{ kind: 'hastePulse', every: 8, radius: 3.5, pct: 0.4, duration: 3.5 }, { kind: 'heal', every: 3.5, amount: 25, range: 4 }],
-    description: 'Gardienne de la flamme qui embrase les cœurs.', skillText: 'Ferveur (8 s) : +40 % vitesse d\'attaque aux alliés proches pendant 3,5 s.', passiveText: 'Soin léger.',
+    abilities: [{ kind: 'hastePulse', every: 8, radius: 3.5, pct: 0.35, duration: 3.5 }, { kind: 'heal', every: 3.5, amount: 25, range: 4 }],
+    description: 'Gardienne de la flamme qui embrase les cœurs.', skillText: 'Ferveur (8 s) : +35 % vitesse d\'attaque aux alliés proches pendant 3,5 s.', passiveText: 'Soin léger.',
     pros: 'Boost de cadence en rafales.', cons: 'Pas de défense.',
     branches: [
       { name: 'Flamme Éternelle', text: 'Ferveur toutes les 6 s (+60 %).', add: [{ kind: 'hastePulse', every: 6, radius: 3.8, pct: 0.6, duration: 3.5 }], color: 0xe8701a, accent: 0xffffff },
@@ -427,9 +427,9 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'priestess', color: 0xe8803a, accent: 0xfff2a0, scale: 1 }, fx: 'fire', sfx: 'chime',
   }),
   elementaire: def({
-    id: 'elementaire', name: 'Élémentaire Solaire', faction: 'solaires', category: 'speciale', tier: 4, cost: 200,
+    id: 'elementaire', name: 'Élémentaire Solaire', faction: 'solaires', category: 'speciale', tier: 4, cost: 220,
     hp: 760, armor: 0, dmg: 52, atkSpeed: 0.8, range: 3, moveSpeed: 2, attack: 'arca', defense: 'mys', roles: ['carry', 'aoe'],
-    abilities: [{ kind: 'novaPulse', every: 4, radius: 3, dmg: 45, burn: 11 }],
+    abilities: [{ kind: 'novaPulse', every: 4, radius: 3, dmg: 42, burn: 10 }],
     description: 'Un fragment de soleil vivant.', skillText: 'Nova (4 s) : explosion de feu autour de lui (45 + brûlure).', passiveText: '—',
     pros: 'Dégâts de zone constants au contact.', cons: 'Aucune armure.',
     branches: [
@@ -441,8 +441,8 @@ export const UNITS: Record<string, UnitDef> = {
 
   // ======================================================== VOILE NÉCROSE
   garde_os: def({
-    id: 'garde_os', name: 'Garde d\'Os', faction: 'necrose', category: 'defense', cost: 65,
-    hp: 560, armor: 0.15, dmg: 16, atkSpeed: 1.0, range: 1.1, moveSpeed: 2.1, attack: 'phys', defense: 'org', roles: ['tank'],
+    id: 'garde_os', name: 'Garde d\'Os', faction: 'necrose', category: 'defense', cost: 60,
+    hp: 580, armor: 0.15, dmg: 18, atkSpeed: 1.0, range: 1.1, moveSpeed: 2.1, attack: 'phys', defense: 'org', roles: ['tank'],
     abilities: [{ kind: 'taunt', radius: 3 }, { kind: 'lifesteal', pct: 0.15 }],
     description: 'Squelette en armure rouillée, fidèle au-delà de la mort.', passiveText: 'Provocation. Vol de vie 15 %.',
     pros: 'Tank bon marché qui se soigne en frappant.', cons: 'Faible contre le Physique.',
@@ -453,8 +453,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'boneguard', color: 0x5a4a6a, accent: 0xc48bff, scale: 1 }, fx: 'shadow', sfx: 'metal',
   }),
   spectre_vif: def({
-    id: 'spectre_vif', name: 'Spectre Vif', faction: 'necrose', category: 'rapide', cost: 85,
-    hp: 260, armor: 0, dmg: 30, atkSpeed: 1.4, range: 1.1, moveSpeed: 4.2, attack: 'perf', defense: 'leg', roles: ['assassin'],
+    id: 'spectre_vif', name: 'Spectre Vif', faction: 'necrose', category: 'rapide', cost: 75,
+    hp: 285, armor: 0, dmg: 31, atkSpeed: 1.4, range: 1.1, moveSpeed: 4.2, attack: 'perf', defense: 'leg', roles: ['assassin'],
     abilities: [{ kind: 'dash', range: 8 }, { kind: 'execute', threshold: 0.35, pct: 0.6 }, { kind: 'stealth', ambush: 0.4 }],
     description: 'Une ombre qui frappe les arrières ennemis.', skillText: 'Saut d\'ombre : bondit sur l\'ennemi le plus lointain à 8 m.', passiveText: 'Camouflé. Exécution : +60 % sous 35 % PV.',
     pros: 'Tue les tireurs et les soigneurs ennemis.', cons: 'Meurt vite s\'il est ciblé.',
@@ -465,8 +465,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'shade', color: 0x7a3fc4, accent: 0xff6ad5, scale: 1 }, fx: 'shadow', sfx: 'whoosh',
   }),
   archere_cendres: def({
-    id: 'archere_cendres', name: 'Archère des Cendres', faction: 'necrose', category: 'portee', cost: 95,
-    hp: 220, armor: 0, dmg: 27, atkSpeed: 1.1, range: 5.5, moveSpeed: 2.4, attack: 'arca', defense: 'leg', roles: ['ranged', 'dps'],
+    id: 'archere_cendres', name: 'Archère des Cendres', faction: 'necrose', category: 'portee', cost: 90, tower: 'archer',
+    hp: 220, armor: 0, dmg: 29, atkSpeed: 1.1, range: 5.5, moveSpeed: 2.4, attack: 'arca', defense: 'leg', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'armorShred', pct: 0.1, duration: 3 }, { kind: 'lifesteal', pct: 0.1 }],
     description: 'Ses flèches portent une malédiction.', passiveText: 'Malédiction : la cible subit +10 % de dégâts (3 s). Vol de vie 10 %.',
     pros: 'Arcane : excellent contre Blindés et Mystiques.', cons: 'Très fragile.',
@@ -477,7 +477,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'archer', color: 0x5a3a7a, accent: 0xd06aff, scale: 1 }, fx: 'shadow', sfx: 'arrow',
   }),
   pestifere: def({
-    id: 'pestifere', name: 'Pestiféré', faction: 'necrose', category: 'zone', cost: 100,
+    id: 'pestifere', name: 'Pestiféré', faction: 'necrose', category: 'zone', cost: 90, tower: 'poison',
     hp: 380, armor: 0, dmg: 14, atkSpeed: 0.85, range: 3.5, moveSpeed: 2, attack: 'ener', defense: 'org', roles: ['aoe'],
     abilities: [{ kind: 'poison', dps: 12, duration: 4, radius: 2.1 }, { kind: 'armorShred', pct: 0.1, duration: 3 }],
     description: 'Il balance un encensoir de miasmes.', passiveText: 'Miasme : poison de zone (2 m, 12/s, 4 s).',
@@ -489,10 +489,10 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'censer', color: 0x4a5a3a, accent: 0xb4ff6a, scale: 1 }, fx: 'poison', sfx: 'whoosh',
   }),
   invocatrice: def({
-    id: 'invocatrice', name: 'Invocatrice du Voile', faction: 'necrose', category: 'speciale', tier: 3, cost: 130,
+    id: 'invocatrice', name: 'Invocatrice du Voile', faction: 'necrose', category: 'speciale', tier: 3, cost: 115, tower: 'dark',
     hp: 300, armor: 0, dmg: 18, atkSpeed: 0.8, range: 4, moveSpeed: 2.2, attack: 'arca', defense: 'mys', roles: ['summoner', 'mage'],
-    abilities: [{ kind: 'summon', unit: 'squelette', count: 3 }, { kind: 'raise', unit: 'squelette', chance: 0.35, max: 4, radius: 5 }],
-    description: 'Elle rappelle les morts pour qu\'ils servent encore.', skillText: 'Relève : 35 % de chance de relever un ennemi tué à 5 m (max 4).', passiveText: '3 squelettes au début du combat.',
+    abilities: [{ kind: 'summon', unit: 'squelette', count: 3 }, { kind: 'raise', unit: 'squelette', chance: 0.4, max: 4, radius: 5 }],
+    description: 'Elle rappelle les morts pour qu\'ils servent encore.', skillText: 'Relève : 40 % de chance de relever un ennemi tué à 5 m (max 4).', passiveText: '3 squelettes au début du combat.',
     pros: 'Armée gratuite qui grossit pendant le combat.', cons: 'Squelettes balayés par la zone.',
     branches: [
       { name: 'Reine du Voile', text: 'Invoque des Chevaliers d\'os, relève plus souvent.', add: [{ kind: 'summon', unit: 'chevalier_os', count: 2 }, { kind: 'raise', unit: 'squelette', chance: 0.5, max: 6, radius: 5 }], color: 0x6a2a8a, accent: 0xff9aff },
@@ -501,8 +501,8 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'necro', color: 0x4a2a6a, accent: 0x9affd0, scale: 1 }, fx: 'shadow', sfx: 'whoosh',
   }),
   abomination: def({
-    id: 'abomination', name: 'Abomination Cousue', faction: 'necrose', category: 'lourde', tier: 3, cost: 145,
-    hp: 1300, armor: 0.05, dmg: 38, atkSpeed: 0.7, range: 1.2, moveSpeed: 1.7, attack: 'phys', defense: 'org', roles: ['tank'],
+    id: 'abomination', name: 'Abomination Cousue', faction: 'necrose', category: 'lourde', tier: 3, cost: 140,
+    hp: 1420, armor: 0.05, dmg: 42, atkSpeed: 0.7, range: 1.2, moveSpeed: 1.7, attack: 'phys', defense: 'org', roles: ['tank'],
     abilities: [{ kind: 'taunt', radius: 2.5 }, { kind: 'lifesteal', pct: 0.2 }, { kind: 'split', unit: 'squelette', count: 3 }],
     description: 'Un amas de chair et de crochets.', passiveText: 'Provocation. Vol de vie 20 %. Libère 3 squelettes en mourant.',
     pros: 'Énorme réserve de PV, continue à servir après sa mort.', cons: 'Peu d\'armure.',
@@ -516,7 +516,7 @@ export const UNITS: Record<string, UnitDef> = {
   // ======================================================== TOKENS (summoned)
   squelette: def({
     id: 'squelette', name: 'Squelette', faction: 'necrose', category: 'speciale', cost: 0, token: true,
-    hp: 150, armor: 0, dmg: 11, atkSpeed: 1.0, range: 1.0, moveSpeed: 2.4, attack: 'phys', defense: 'org', roles: ['dps'],
+    hp: 175, armor: 0, dmg: 12, atkSpeed: 1.0, range: 1.0, moveSpeed: 2.4, attack: 'phys', defense: 'org', roles: ['dps'],
     abilities: [], description: 'Invoqué.', passiveText: '—', pros: '', cons: '',
     model: { shape: 'skeleton', color: 0xd8d0c0, accent: 0x9affd0, scale: 0.85 }, fx: 'shadow', sfx: 'slash',
   }),

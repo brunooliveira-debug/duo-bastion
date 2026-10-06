@@ -248,7 +248,7 @@ export const LANE = {
   gridFrontX: 27, // front edge (spawn side) of the build grid
   leakX: 12, // passing |x| < leakX = leaked into the Core zone
   halfWidth: 4,
-  coreRadius: 1.8,
+  coreRadius: 2.4, // castle gate: leaked enemies detonate here
 };
 
 /** Direction enemies travel along x in lane `slot` (slot 0 = left lane, enemies move +x). */

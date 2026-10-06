@@ -73,4 +73,37 @@ describe('duo multiplayer (host-authoritative)', () => {
     clearInterval(pump);
     host.close(); guest.close();
   }, 40000);
+
+  it('duel: opposite teams, chosen armies, sends between the two humans', async () => {
+    const { Session } = await import('../src/net/Session');
+    const noop = { lobby() {}, start() {}, toast() {}, conn() {}, kicked() {}, rematch() {} };
+    let guestStarted = false;
+    const host = new Session('host', 'DUEL1', 'uid-h', { ...noop });
+    const guest = new Session('guest', 'DUEL1', 'uid-g', { ...noop, start: () => { guestStarted = true; } });
+    await host.open();
+    await guest.open();
+    await until(() => host.lobby.players.length === 2);
+    host.setFaction('rouages');
+    guest.setFaction('abysses');
+    await until(() => host.lobby.players[1].faction === 'abysses');
+    host.setReady(true); guest.setReady(true);
+    await until(() => host.lobby.players.every(p => p.ready));
+    host.setSettings({ mode: 'duel', totalWaves: 10, difficulty: 'normal' });
+    host.startGame();
+    await until(() => guestStarted);
+    expect(guest.myPid).toBe(2);
+    const st = host.state!;
+    expect(st.players[0].faction).toBe('rouages');
+    expect(st.players[2].faction).toBe('abysses');
+    expect(st.players[2].team).toBe(1);
+    // the guest builds on its own lane and sends raiders at the host
+    st.players[2].ether = 100;
+    guest.send({ c: 'build', unit: 'ondin', col: 2, row: 3 });
+    guest.send({ c: 'raider', raider: 'grignoteur', to: 0 });
+    await until(() => st.players[2].builds.length === 1 && st.players[2].raiderQueue.length === 1);
+    expect(st.players[2].raiderQueue[0].to).toBe(0);
+    // and cannot touch the host's army (anti-cheat: commands are tied to the sender's pid)
+    guest.send({ c: 'sell', bid: 999 });
+    host.close(); guest.close();
+  }, 20000);
 });

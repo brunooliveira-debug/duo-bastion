@@ -7,11 +7,11 @@ import { save } from '../save/SaveSystem';
 interface Step { text: string; until: string | 'button' }
 const STEPS: Step[] = [
   { text: '<b>1/7 — Acheter une unité.</b> Fais <b>glisser une carte</b> du bas vers ta voie (cases vertes), ou touche une carte puis une case. Chaque unité coûte de l\'<b>Or 🪙</b>.', until: 'build' },
-  { text: '<b>2/7 — Positionner.</b> Les ennemis arrivent du <b>portail violet</b> et marchent vers le <b>Core</b>. Mets les <b>tanks 🛡️ devant</b> (côté portail) et les <b>tireurs 🏹 derrière</b>. Glisse une unité placée pour la déplacer.', until: 'button' },
-  { text: '<b>3/7 — Le combat.</b> Appuie sur <b>PRÊT</b> pour lancer la vague. Le combat est <b>automatique</b> : observe tes unités !', until: 'combat' },
+  { text: '<b>2/7 — Positionner.</b> Les ennemis arrivent du <b>portail violet</b> et marchent vers le <b>Core</b>. Mets les <b>tanks 🛡️ devant</b> (côté portail) et les <b>tours de tir 🏹 derrière</b>. Des unités <b>voisines</b> créent des <b>synergies</b>. Touche une unité placée pour l\'<b>améliorer</b>.', until: 'button' },
+  { text: '<b>3/7 — Le combat.</b> Appuie sur <b>LANCER</b> pour démarrer la vague tout de suite. Pendant le combat, utilise tes <b>POUVOIRS</b> en bas à gauche !', until: 'combat' },
   { text: '<b>4/7 — Travailleurs.</b> Entre deux vagues, achète un <b>OUVRIER ⛏️</b>. Moins d\'or pour défendre maintenant… mais il produit de l\'<b>Éther ✨</b> en continu.', until: 'worker' },
-  { text: '<b>5/7 — L\'Éther.</b> L\'Éther sert à envoyer des <b>RAIDERS 👹</b> chez l\'adversaire et à améliorer le <b>Core</b>. Économie ou défense ? C\'est tout le dilemme !', until: 'button' },
-  { text: '<b>6/7 — Raiders.</b> Dès que tu as 10 ✨, ouvre <b>RAIDERS</b> et envoie un Grignoteur : ton <b>REVENU 📈</b> (versé à chaque vague) augmente !', until: 'raider' },
+  { text: '<b>5/7 — L\'Éther.</b> L\'Éther sert à <b>ATTAQUER ⚔️</b> l\'adversaire (envois d\'ennemis) et à améliorer le <b>Core</b> et tes <b>pouvoirs</b>. Économie ou défense ? C\'est tout le dilemme !', until: 'button' },
+  { text: '<b>6/7 — Raiders.</b> Dès que tu as 10 ✨, ouvre <b>ATTAQUER</b> et envoie des Grignoteurs : ton <b>REVENU 📈</b> (versé à chaque vague) augmente !', until: 'raider' },
   { text: '<b>7/7 — Le Core.</b> Le Core est <b>commun</b> avec ton partenaire. S\'il tombe, vous perdez tous les deux. Ouvre <b>CORE</b> et améliore-le avec de l\'Éther.', until: 'core' },
 ];
 
