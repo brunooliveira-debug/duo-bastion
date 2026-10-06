@@ -5,7 +5,7 @@ import { Hud } from './ui/Hud';
 import { audio } from './audio/AudioSystem';
 import { save } from './save/SaveSystem';
 import { ensureAuth, createLobby, joinLobby, friendly, upsertProfile, recordMatch, setLobbyStatus } from './net/backend';
-import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, MenuActions } from './ui/screens';
+import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions } from './ui/screens';
 import { log, ONLINE, DEBUG } from './config';
 import { step, drainEvents } from './sim/game';
 import type { Difficulty, GameMode } from './sim/state';
@@ -24,7 +24,7 @@ audio.setVolumes(save.prefs.sfx, save.prefs.music);
 const events: SessionEvents = {
   lobby: l => lobbyRender?.(l),
   start: () => enterGame(),
-  toast: (m, k) => { if (hud) hud.toast(m, k === 'error' ? 'error' : 'info'); else if (k === 'error') alert(m); },
+  toast: (m, k) => { if (hud) hud.toast(m, k === 'error' ? 'error' : 'info'); else if (k === 'error') notify(m); },
   conn: () => { /* HUD reads session.partnerOnline each refresh */ },
   kicked: msg => { teardown(); errorScreen(msg, goMenu); },
   rematch: () => {
@@ -223,5 +223,5 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); (windo
 if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') audio.unlock(); });
 
-if (DEBUG) (window as unknown as { __db: unknown }).__db = { get session() { return session; }, step, drainEvents };
+if (DEBUG) (window as unknown as { __db: unknown }).__db = { get session() { return session; }, get renderer() { return renderer; }, step, drainEvents };
 boot();

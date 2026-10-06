@@ -14,6 +14,13 @@ export function show(el: HTMLElement) {
 }
 export function hideScreens() { current?.remove(); current = null; }
 
+/** Small non-blocking message (replaces alert(), which freezes mobile browsers). */
+export function notify(text: string) {
+  const t = h('div', { class: 'toast', style: 'position:fixed;left:50%;top:calc(16px + var(--sat));transform:translateX(-50%);z-index:60' }, text);
+  document.body.append(t);
+  setTimeout(() => t.remove(), 2400);
+}
+
 const DIFFS: [Difficulty, string][] = [['initiation', 'Initiation'], ['normal', 'Normal'], ['difficile', 'Difficile'], ['expert', 'Expert'], ['maitre', 'Maître']];
 
 function nameField() {
@@ -24,7 +31,13 @@ function nameField() {
 
 function needName(): boolean {
   if (save.profile.name) return false;
-  alert('Choisis d\'abord un pseudo 🙂');
+  // highlight the pseudo field instead of a blocking alert()
+  const f = document.querySelector<HTMLInputElement>('.screen input.field:not(.code)');
+  if (f) {
+    f.classList.remove('need'); void f.offsetWidth; f.classList.add('need');
+    f.placeholder = 'Choisis d\'abord un pseudo';
+    f.focus();
+  } else notify('Choisis d\'abord un pseudo');
   return true;
 }
 
@@ -98,7 +111,7 @@ export function duoScreen(mode: GameMode, onCreate: () => void, onJoin: (code: s
       h('div', { class: 'card col', style: 'margin-top:6px' },
         h('div', { class: 'muted center' }, 'ou rejoindre avec le code de ton partenaire :'),
         code,
-        h('button', { class: 'btn gold', onclick: () => { if (needName()) return; if (code.value.length !== 5) { alert('Le code fait 5 caractères.'); return; } onJoin(code.value); } }, '➜ Rejoindre')),
+        h('button', { class: 'btn gold', onclick: () => { if (needName()) return; if (code.value.length !== 5) { notify('Le code fait 5 caractères.'); return; } onJoin(code.value); } }, '➜ Rejoindre')),
       h('button', { class: 'btn ghost', onclick: back }, '← Retour')));
   show(scr);
   if (prefill) setTimeout(() => code.focus(), 50);
@@ -138,7 +151,7 @@ export function lobbyScreen(session: Session, leave: () => void) {
       const text = `Rejoins-moi sur ${GAME_NAME} ! Code : ${session.code}`;
       try {
         if (navigator.share) await navigator.share({ title: GAME_NAME, text, url: link });
-        else { await navigator.clipboard.writeText(link); alert('Lien copié !'); }
+        else { await navigator.clipboard.writeText(link); notify('Lien copié !'); }
       } catch { /* cancelled */ }
     };
     root.append(...[

@@ -15,6 +15,7 @@ import { audio } from '../audio/AudioSystem';
 import { save } from '../save/SaveSystem';
 import { DEBUG } from '../config';
 import { h, clear, unitIcon, unitColor, roleLabel, fmt, vibrate } from './dom';
+import { icon, roleIcon } from './icons';
 import { Tutorial } from './Tutorial';
 
 type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | null;
@@ -72,33 +73,48 @@ export class Hud {
   // ------------------------------------------------------------------ DOM skeleton
   private build() {
     const E = this.els;
-    E.wave = h('div', { class: 'w' }); E.phase = h('div', { class: 'ph' });
-    E.timer = h('div', { class: 'pill timer' });
-    E.coreFill = h('i'); E.coreLbl = h('span'); E.coreBar = h('div', { class: 'bar' }, E.coreFill);
-    E.enemyFill = h('i'); E.enemyBar = h('div', { class: 'bar enemy', style: 'height:7px' }, E.enemyFill);
-    E.enemyRow = h('div', { class: 'lbl' }, h('span', {}, '☠ Core adverse'), h('span', {}));
-    E.partner = h('div', { class: 'pill partner' });
-    const top = h('div', { class: 'hud-top' },
-      h('div', { class: 'pill wave-box' }, E.wave, E.phase),
-      E.timer,
-      h('div', { class: 'pill core-box' }, h('div', { class: 'lbl' }, h('span', {}, '🔷 CORE'), E.coreLbl), E.coreBar, E.enemyRow, E.enemyBar),
-      E.partner,
-      h('button', { class: 'iconbtn', onclick: () => this.openSheet('pings') }, '💬'),
-      h('button', { class: 'iconbtn', onclick: () => this.openSheet('menu') }, '⚙️'),
-    );
-    E.gold = h('span', { class: 'v g' }); E.ether = h('span', { class: 'v e' }); E.income = h('span', { class: 'v' }); E.workers = h('span', { class: 'v' });
-    E.army = h('div', { class: 'army', style: 'grid-column: span 2' });
-    const res = h('div', { class: 'res' },
-      h('span', {}, '🪙'), E.gold, h('span', {}, '✨'), E.ether, h('span', {}, '📈'), E.income, h('span', {}, '⛏️'), E.workers, E.army);
-    E.next = h('div', { class: 'next' });
-    E.left = h('div', { class: 'hud-left' }, res, E.next);
+    const pill = (ic: string, color: string, val: HTMLElement, extra = '') => h('div', { class: `pill ${extra}` }, h('span', { html: icon(ic, 22, color) }), val);
+    // top-left: Core, gold, ether, income, wave + timer
+    E.coreTxt = h('b'); E.coreFill = h('i'); E.coreBar = h('div', { class: 'bar' }, E.coreFill);
+    E.gold = h('b', { class: 'g' }); E.ether = h('b', { class: 'e' }); E.income = h('b', { class: 'inc' });
+    E.wave = h('b'); E.timer = h('span', { class: 'timer-chip' });
+    const pills = h('div', { class: 'pills' },
+      h('div', { class: 'pill core-pill', 'aria-label': 'Points de vie du Core' }, h('span', { html: icon('heart', 22, '#FF6B7A') }), h('div', { class: 'core-col' }, E.coreTxt, E.coreBar)),
+      pill('coin', '#FFB547', E.gold), pill('ether', '#9FE9FF', E.ether), pill('income', '#7DFFB0', E.income, 'inc-pill'),
+      h('div', { class: 'pill wave-pill' }, E.wave, E.timer));
+    // top-right: partner, messages, speed, menu
+    E.partner = h('div', { class: 'partner' });
+    E.speedBadge = h('span', { class: 'badge2' });
+    E.speedBtn = h('button', { class: 'sqbtn', 'aria-label': 'Vitesse de jeu', html: icon('ff', 22), onclick: () => this.cycleSpeed() });
+    E.speedBtn.append(E.speedBadge);
+    const top = h('div', { class: 'hud-top' }, pills, h('div', { class: 'top-right' }, E.partner,
+      h('button', { class: 'sqbtn', 'aria-label': 'Messages au partenaire', html: icon('chat', 22), onclick: () => this.openSheet('pings') }),
+      E.speedBtn,
+      h('button', { class: 'sqbtn', 'aria-label': 'Menu', html: icon('gear', 22), onclick: () => this.openSheet('menu') })));
+    // second row: army vs recommended, next wave, enemy Core
+    E.army = h('div', { class: 'pill small army' });
+    E.next = h('button', { class: 'pill small next', onclick: () => { E.nextDetail.style.display = E.nextDetail.style.display === 'none' ? 'block' : 'none'; } });
+    E.nextDetail = h('div', { class: 'next-detail', style: 'display:none' });
+    E.enemyFill = h('i'); E.enemyBar = h('div', { class: 'bar enemy' }, E.enemyFill);
+    E.enemyRow = h('div', { class: 'pill small enemy-core' }, h('span', {}, 'Core adverse'), E.enemyBar);
+    E.left = h('div', { class: 'hud-left' }, h('div', { class: 'hud-row2' }, E.army, E.next, E.enemyRow), E.nextDetail);
+    // bottom: unit cards + round actions + READY
     E.cards = h('div', { class: 'cards' });
-    E.workerBtn = h('button', { class: 'abtn', onclick: () => { if (this.cmd({ c: 'worker' })) { audio.play('worker'); this.tutorial?.on('worker'); } } });
-    E.raiderBtn = h('button', { class: 'abtn', onclick: () => this.openSheet('raiders') }, '👹', h('span', {}, 'RAIDERS'));
-    E.coreBtn = h('button', { class: 'abtn', onclick: () => this.openSheet('core') }, '🔷', h('span', {}, 'CORE'));
-    E.statsBtn = h('button', { class: 'abtn', onclick: () => this.openSheet('stats') }, '📊', h('span', {}, 'STATS'));
-    E.ready = h('button', { class: 'abtn ready', onclick: () => this.toggleReady() });
-    const bottom = h('div', { class: 'hud-bottom' }, E.cards, h('div', { class: 'actions' }, E.workerBtn, E.raiderBtn, E.coreBtn, E.statsBtn, E.ready));
+    const round = (cls: string, ic: string, color: string, label: string, onclick: () => void) => {
+      const badge = h('span', { class: 'badge2' });
+      const sub = h('small', {}, label);
+      const btn = h('button', { class: `rbtn ${cls}`, 'aria-label': label, html: icon(ic, 28, color), onclick });
+      btn.append(badge);
+      return { wrap: h('div', { class: 'rwrap' }, btn, sub), btn, badge, sub };
+    };
+    const w = round('worker', 'pick', '#FFD27A', 'Ouvrier', () => { if (this.cmd({ c: 'worker' })) { audio.play('worker'); this.tutorial?.on('worker'); } });
+    const r = round('raider', 'claw', '#FF9AA6', 'Raiders', () => this.openSheet('raiders'));
+    const c = round('corebtn', 'core', '#9FE9FF', 'Core', () => this.openSheet('core'));
+    E.workerBtn = w.btn; E.workerBadge = w.badge; E.workerSub = w.sub;
+    E.raiderBtn = r.btn; E.raiderBadge = r.badge; E.raiderSub = r.sub;
+    E.coreBtn = c.btn; c.badge.style.display = 'none';
+    E.ready = h('button', { class: 'ready', onclick: () => this.toggleReady() });
+    const bottom = h('div', { class: 'hud-bottom' }, E.cards, h('div', { class: 'actions' }, w.wrap, r.wrap, c.wrap, E.ready));
     E.sheet = h('div', { class: 'sheet', style: 'display:none' });
     E.toasts = h('div', { class: 'toasts' });
     E.vignette = h('div', { class: 'vignette' });
@@ -128,8 +144,10 @@ export class Hud {
     // timer (smoothly extrapolated for guests)
     const elapsed = m.paused ? 0 : (now - this.metaAt) / 1000 * m.speed;
     const t = Math.max(0, this.session.role === 'guest' ? this.metaTimer - elapsed : m.timer);
-    this.els.timer.textContent = m.phase === 'build' ? String(Math.ceil(t)) : m.phase === 'combat' ? '⚔️' : '…';
-    this.els.timer.classList.toggle('urgent', m.phase === 'build' && t < 6);
+    const tm = this.els.timer;
+    tm.textContent = m.paused ? 'PAUSE' : m.phase === 'build' ? `${Math.ceil(t)} s` : m.phase === 'combat' ? 'COMBAT' : m.phase === 'ended' ? 'FIN' : '…';
+    tm.classList.toggle('urgent', m.phase === 'build' && t < 6 && !m.paused);
+    tm.classList.toggle('combat', m.phase === 'combat');
     if (now - this.lastUi > 100) { this.lastUi = now; this.refresh(m); }
     this.tutorial?.update(m);
     void dt;
@@ -145,47 +163,58 @@ export class Hud {
     const me = this.me!;
     const total = m.settings.mode === 'survival' ? '∞' : m.settings.totalWaves;
     E.wave.textContent = `VAGUE ${m.wave}/${total}`;
-    E.phase.textContent = m.paused ? 'PAUSE' : m.phase === 'build' ? 'PRÉPARATION' : m.phase === 'combat' ? 'COMBAT' : m.phase === 'resolution' ? 'RÉSOLUTION' : 'FIN';
     const ct = m.teams[me.team];
     const k = ct.hp / ct.maxHp;
     E.coreFill.style.width = `${k * 100}%`;
     E.coreBar.classList.toggle('low', k < 0.3);
-    E.coreLbl.textContent = `${fmt(ct.hp)} / ${fmt(ct.maxHp)}`;
+    E.coreTxt.textContent = fmt(ct.hp);
     const enemy = m.teams.length > 1 ? m.teams[1 - me.team] : null;
-    E.enemyRow.style.display = E.enemyBar.style.display = enemy ? '' : 'none';
-    if (enemy) { E.enemyFill.style.width = `${(enemy.hp / enemy.maxHp) * 100}%`; (E.enemyRow.lastChild as HTMLElement).textContent = fmt(enemy.hp); }
+    E.enemyRow.style.display = enemy ? '' : 'none';
+    if (enemy) E.enemyFill.style.width = `${(enemy.hp / enemy.maxHp) * 100}%`;
     // resources
     E.gold.textContent = fmt(me.gold);
     E.ether.textContent = fmt(me.ether);
     E.income.textContent = `+${me.income}`;
-    E.workers.textContent = String(me.workers);
     const value = me.builds.reduce((t, b) => t + b.value, 0);
     const rec = recommendedValue(m.wave, me.builds.map(b => b.defId), value);
     const risk = riskOf(value, rec);
-    E.army.className = `army ${risk}`;
-    E.army.textContent = `⚔️ ${fmt(value)} / conseillé ${fmt(rec)}`;
+    const armyKey = `${risk}|${value}|${rec}`;
+    if (E.army.dataset.k !== armyKey) {
+      E.army.dataset.k = armyKey;
+      E.army.className = `pill small army ${risk}`;
+      E.army.innerHTML = `${icon('shield', 16, risk === 'green' ? '#7DFFB0' : risk === 'orange' ? '#FFB03A' : '#FF5A6A')}<span>Armée ${fmt(value)}</span><span class="rec">· conseillé ${fmt(rec)}</span>`;
+    }
     // next wave
     this.renderNext(m);
-    // partner
+    // partner chip
     const partner = m.players.find(p => p.team === me.team && p.pid !== me.pid)!;
     const pv = partner.builds.reduce((t, b) => t + b.value, 0);
-    clear(E.partner);
-    E.partner.classList.toggle('off', !this.session.partnerOnline && !partner.isAI);
-    E.partner.append(
-      h('div', { class: 'nm' }, `${partner.isAI ? '🤖' : '🤝'} ${partner.name}`),
-      h('div', {}, `⚔️ ${fmt(pv)} · ⛏️ ${partner.workers}`),
-      h('div', { style: `color:${partner.ready ? 'var(--ok)' : 'var(--muted)'};font-weight:800` }, !this.session.partnerOnline && !partner.isAI ? 'CONNEXION…' : m.phase === 'build' ? (partner.ready ? 'PRÊT ✔' : 'construit…') : m.phase === 'combat' ? (partner.leakedThisWave ? `⚠ ${partner.leakedThisWave} fuites` : 'en combat') : ''),
-    );
+    const off = !this.session.partnerOnline && !partner.isAI;
+    const state = off ? 'CONNEXION…' : m.phase === 'build' ? (partner.ready ? '<em>PRÊT</em>' : 'construit…') : m.phase === 'combat' ? (partner.leakedThisWave ? `${partner.leakedThisWave} fuites` : 'en combat') : '';
+    const pKey = `${partner.name}|${pv}|${partner.workers}|${state}|${off}`;
+    if (E.partner.dataset.k !== pKey) {
+      E.partner.dataset.k = pKey;
+      E.partner.classList.toggle('off', off);
+      E.partner.innerHTML = `<div class="av">${partner.isAI ? 'IA' : escapeHtml(partner.name.slice(0, 1).toUpperCase())}</div><div><div class="nm">${escapeHtml(partner.name)}</div><div class="st">Armée ${fmt(pv)} · ${partner.workers} ouvr. · ${state}</div></div>`;
+    }
+    // speed (host controls it, shared by both)
+    E.speedBadge.textContent = `x${m.speed}`;
+    (E.speedBtn as HTMLButtonElement).disabled = this.session.role === 'guest';
     // cards
     this.renderCards(me, m);
-    // buttons
+    // round actions
     const wc = ECONOMY.workerBaseCost + ECONOMY.workerCostStep * (me.workers - ECONOMY.startWorkers);
-    clear(E.workerBtn); E.workerBtn.append('⛏️', h('span', {}, 'OUVRIER'), h('small', {}, `${wc}🪙`));
+    E.workerBadge.textContent = String(me.workers);
+    E.workerSub.textContent = `Ouvrier ${wc}`;
     (E.workerBtn as HTMLButtonElement).disabled = me.gold < wc || me.workers >= ECONOMY.maxWorkers;
-    E.raiderBtn.querySelector('span')!.textContent = m.settings.mode === 'vsai' ? 'RAIDERS' : 'INVESTIR';
-    E.raiderBtn.firstChild!.textContent = m.settings.mode === 'vsai' ? '👹' : '📈';
-    clear(E.ready);
-    E.ready.append(me.ready ? '✔' : '▶', h('span', {}, me.ready ? 'PRÊT !' : 'PRÊT'));
+    E.raiderSub.textContent = m.settings.mode === 'vsai' ? 'Raiders' : 'Investir';
+    E.raiderBadge.textContent = String(me.raiderQueue.length);
+    E.raiderBadge.style.display = me.raiderQueue.length ? '' : 'none';
+    const rKey = `${me.ready}`;
+    if (E.ready.dataset.k !== rKey) {
+      E.ready.dataset.k = rKey;
+      E.ready.innerHTML = me.ready ? `${icon('check', 22, '#7DFFB0', 3)}PRÊT !` : 'PRÊT';
+    }
     E.ready.classList.toggle('on', me.ready);
     (E.ready as HTMLButtonElement).disabled = m.phase !== 'build';
     // overlays
@@ -218,9 +247,13 @@ export class Hud {
       const avg = [...def].reduce((t, d) => t + me.builds.reduce((s, b) => s + DAMAGE_MATRIX[UNITS[b.defId].attack][d], 0) / me.builds.length, 0) / def.size;
       hint = ` ${matrixArrow(avg + (avg > 1.04 ? 0.06 : avg < 0.96 ? -0.06 : 0))}`;
     }
-    clear(E.next);
-    E.next.className = `next${w.boss ? ' boss' : ''}`;
-    E.next.append(
+    const nKey = `${m.wave}|${m.phase}|${hint}`;
+    if (E.next.dataset.k === nKey) return;
+    E.next.dataset.k = nKey;
+    E.next.className = `pill small next${w.boss ? ' boss' : ''}`;
+    E.next.textContent = `${m.phase === 'build' ? 'Prochaine' : 'En cours'} : ${w.name} · ${[...def].map(d => DEFENSE_NAMES[d]).join('/')}${hint} · ×${count}`;
+    clear(E.nextDetail);
+    E.nextDetail.append(
       h('b', {}, `${m.phase === 'build' ? 'PROCHAINE' : 'EN COURS'} : ${w.name}`), h('br'),
       `${[...atk].map(a => ATTACK_ICONS[a] + ' ' + ATTACK_NAMES[a]).join(', ')}`, h('br'),
       `${[...def].map(d => DEFENSE_ICONS[d] + ' ' + DEFENSE_NAMES[d]).join(', ')}${hint}`, h('br'),
@@ -247,16 +280,16 @@ export class Hud {
     clear(E.cards);
     for (const id of me.draft) {
       const u = UNITS[id];
-      const c = h('div', { class: `ucard${me.gold < u.cost ? ' poor' : ''}${this.selCard === id ? ' sel' : ''}`, 'data-id': id },
+      const c = h('div', { class: `ucard${me.gold < u.cost ? ' poor' : ''}${this.selCard === id ? ' sel' : ''}`, 'data-id': id, role: 'button', 'aria-label': `${u.name}, ${u.cost} or` },
         h('div', { class: 'tier' }, `T${u.tier}`),
-        h('div', { class: 'ic', style: `background:${unitColor(id)}` }, unitIcon(id)),
+        h('div', { class: 'ic', style: `background:${unitColor(id)}`, html: icon(roleIcon(u.roles), 22, '#14112A') }),
         h('div', { class: 'nm' }, u.name),
-        h('div', { class: 'ct' }, `${u.cost}🪙`));
+        h('div', { class: 'ct', html: `${icon('coin', 12, '#FFB547', 3)}${u.cost}` }));
       this.bindCard(c, id);
       E.cards.append(c);
     }
     if (showReroll) {
-      E.cards.append(h('button', { class: 'abtn', style: 'height:78px', onclick: () => this.cmd({ c: 'reroll' }) }, '🎲', h('span', {}, 'RELANCER')));
+      E.cards.append(h('button', { class: 'ucard', 'aria-label': 'Relancer la sélection', onclick: () => this.cmd({ c: 'reroll' }) }, h('div', { class: 'ic', style: 'background:#3e3560', html: icon('ff', 22, '#FFD27A') }), h('div', { class: 'nm' }, 'Relancer'), h('div', { class: 'ct' }, '1×')));
     }
   }
 
@@ -337,6 +370,12 @@ export class Hud {
   }
 
   // ------------------------------------------------------------------ ready / placement
+  private cycleSpeed() {
+    const m = this.meta; if (!m || this.session.role === 'guest') return;
+    this.cmd({ c: 'speed', speed: m.speed >= 3 ? 1 : m.speed + 1 });
+    audio.play('click');
+  }
+
   private toggleReady() {
     const me = this.me; if (!me) return;
     this.cmd({ c: 'ready', value: !me.ready });
@@ -381,7 +420,7 @@ export class Hud {
         if (this.meta?.phase !== 'build') return;
         dragging = true; if (lp) clearTimeout(lp);
         this.selCard = id; this.gesture = 'cardDrag';
-        this.dragEl = h('div', { class: 'dragcard', style: `background:${unitColor(id)}` }, unitIcon(id));
+        this.dragEl = h('div', { class: 'dragcard', style: `background:${unitColor(id)}`, html: icon(roleIcon(UNITS[id].roles), 26, '#14112A') });
         document.body.append(this.dragEl);
       }
       if (dragging) {
@@ -658,9 +697,17 @@ export class Hud {
     };
     S.append(vol('🔊 Effets', save.prefs.sfx, v => { save.prefs.sfx = v; audio.setVolumes(v, save.prefs.music); save.flush(); }));
     S.append(vol('🎵 Musique', save.prefs.music, v => { save.prefs.music = v; audio.setVolumes(save.prefs.sfx, v); save.flush(); }));
+    S.append(h('button', { class: 'opt', onclick: () => this.openSheet('stats') }, h('div', { html: icon('stats', 22) }), h('div', { class: 't' }, h('b', {}, 'Statistiques & matrice ATT/DEF'))));
     S.append(h('button', { class: 'opt', onclick: () => { this.r.focus(this.me!.slot, 0); this.closeSheet(); } }, h('div', { style: 'font-size:22px' }, '🎯'), h('div', { class: 't' }, h('b', {}, 'Recentrer la caméra'))));
     if (m.teams.length > 1) S.append(h('button', { class: 'opt', onclick: () => { this.r.focus(this.me!.slot, 1); this.closeSheet(); } }, h('div', { style: 'font-size:22px' }, '👁'), h('div', { class: 't' }, h('b', {}, 'Observer l\'arène adverse'))));
-    S.append(h('button', { class: 'opt', onclick: () => { if (confirm('Quitter la partie ?')) this.cb.exit(); } }, h('div', { style: 'font-size:22px' }, '🚪'), h('div', { class: 't' }, h('b', {}, 'Quitter la partie'))));
+    // two taps to quit (no blocking confirm() dialog on phones)
+    const quitLabel = h('b', {}, 'Quitter la partie');
+    let armed = false;
+    S.append(h('button', { class: 'opt', onclick: () => {
+      if (armed) { this.cb.exit(); return; }
+      armed = true; quitLabel.textContent = 'Touche encore pour quitter'; quitLabel.style.color = 'var(--bad)';
+      setTimeout(() => { armed = false; quitLabel.textContent = 'Quitter la partie'; quitLabel.style.color = ''; }, 3000);
+    } }, h('div', { style: 'font-size:22px' }, '🚪'), h('div', { class: 't' }, quitLabel)));
     S.append(h('div', { class: 'muted', style: 'font-size:11px;margin-top:6px' }, `Partie ${this.session.code} · ${this.session.role === 'host' ? 'hôte' : this.session.role === 'guest' ? 'invité' : 'solo'}`));
   }
 
@@ -728,3 +775,6 @@ export class Hud {
     this.root.append(scr);
   }
 }
+
+const HTML_ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHtml(t: string) { return t.replace(/[&<>"']/g, c => HTML_ESC[c]); }

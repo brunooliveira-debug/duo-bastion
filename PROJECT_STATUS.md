@@ -1,6 +1,6 @@
 # PROJECT_STATUS — DUO BASTION
 
-**VERSION ACTUELLE :** 0.1.0-alpha
+**VERSION ACTUELLE :** 0.2.0-alpha (direction artistique « Crépuscule des Îles Suspendues »)
 **URL PUBLIQUE (GitHub Pages) :** https://brunooliveira-debug.github.io/duo-bastion/
 **DERNIER TEST :** 2026-10-05
 - `vitest` 9/9 OK (simulation + multijoueur hôte/invité)
@@ -14,6 +14,7 @@
 - Clé client : clé *publishable* Supabase dans `.env.production` (publique par conception, protégée par RLS). Aucune clé secrète dans le code.
 
 ## TERMINÉ
+- v0.2 : 16 personnages 3D articulés originaux (marche, frappe, tir, sort, ailes, orbites, mort), arène sur îles flottantes (falaises, pavés, parapets, torches, bannières, pont, cascades animées, cristaux, portails tourbillonnants, îles lointaines avec cités, mer de nuages, ciel de crépuscule), Core monumental, projectiles à traînée, HUD bronze (pastilles, cartes, boutons ronds, PRÊT doré), plus aucun alert()/confirm() bloquant.
 - Gameplay complet MVP+ : 8 unités + 8 évolutions, 21 vagues + infini, 4 Raiders, 12 pouvoirs, ouvriers/Éther/revenu, Core partagé + améliorations, fuites, entraide entre voies, draft + relance, IA (5 difficultés × 4 personnalités).
 - Modes : Duo vs 2 IA (10/21 vagues), Survie duo, Solo + IA alliée, Tutoriel.
 - Multijoueur hôte autoritaire (anti-triche), reconnexion, pause, IA de relève si partenaire absent > 45 s.
