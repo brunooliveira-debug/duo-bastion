@@ -2,6 +2,8 @@
 // usage: npx tsx scripts/simulate.ts [mode=vsai|survival] [waves=21] [difficulty=normal] [seeds=3]
 import { createGame, step, drainEvents, armyValue } from '../src/sim/game';
 import type { Difficulty, GameMode } from '../src/sim/state';
+import { TIMING } from "../src/data/economy";
+const TIMING_RES = TIMING.resolution;
 import { recommendedValue } from '../src/sim/balance';
 
 const mode = (process.argv[2] ?? 'vsai') as GameMode;
@@ -23,16 +25,16 @@ for (let seed = 1; seed <= seeds; seed++) {
       if (verbose) {
         const line = s.players.map(p => {
           const v = armyValue(p);
-          const rec = recommendedValue(s.wave, p.builds.map(b => b.defId), v, 1);
-          return `${p.pid}:${p.personality.slice(0, 3)} v${v}/r${rec} g${Math.round(p.gold)} w${p.workers} inc${p.income} e${Math.round(p.ether)}`;
+          const rec = recommendedValue(s.wave, p.builds, v, 1);
+          return `${p.pid}:${p.faction.slice(0, 4)}:${p.personality.slice(0, 3)} L${p.builds.map(b => b.level).join('')} v${v}/r${rec} g${Math.round(p.gold)} w${p.workers} inc${p.income} e${Math.round(p.ether)}`;
         }).join(' | ');
         console.log(`W${s.wave} cores ${s.teams.map(t => Math.round(t.core.hp)).join('/')} :: ${line}`);
       }
     }
-    if (s.phase === 'resolution' && verbose && s.timer > 2.94) {
+    if (s.phase === 'resolution' && verbose && s.timer > TIMING_RES - 0.06) {
       console.log(`   end W${s.wave} t=${s.combatTime.toFixed(1)}s leaks ${s.players.map(p => p.leakedThisWave).join(',')} cores ${s.teams.map(t => Math.round(t.core.hp)).join('/')}`);
     }
   }
   console.log(`seed ${seed}: ${s.result?.outcome} at wave ${s.wave} — ${s.result?.reason} | cores ${s.teams.map(t => Math.round(t.core.hp)).join('/')} | game time ${(s.time / 60).toFixed(1)} min | cpu ${Date.now() - t0} ms`);
-  for (const p of s.players) console.log(`   P${p.pid} ${p.personality} army ${armyValue(p)} workers ${p.workers} income ${p.income} leaks ${p.stats.leaks} dmg ${Math.round(p.stats.dmgDealt)} best ${p.stats.bestUnit}`);
+  for (const p of s.players) console.log(`   P${p.pid} ${p.faction} ${p.personality} army ${armyValue(p)} workers ${p.workers} income ${p.income} leaks ${p.stats.leaks} dmg ${Math.round(p.stats.dmgDealt)} best ${p.stats.bestUnit} up${p.stats.upgrades} fu${p.stats.fusions} casts${p.stats.casts} sent${p.stats.raidersSent} curses${p.stats.curses}`);
 }

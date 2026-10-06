@@ -3,9 +3,9 @@
 //  - the guest sends commands and renders interpolated snapshots.
 // Postgres is touched only for lobby creation/join and one save per wave (never per frame).
 import { applyCommand, Command, createGame, drainEvents, step } from '../sim/game';
-import type { Difficulty, GameEvent, GameMode, GameSettings, GameState } from '../sim/state';
-import { DT } from '../sim/state';
-import { ViewState, metaOf, packEnts, unpackEnts, EntView, F_ENEMY, F_SLOW, F_SHIELD, F_LEAK, F_BOSS, F_RAIDER } from './snapshot';
+import type { Difficulty, FactionChoice, GameEvent, GameMode, GameSettings, GameState } from '../sim/state';
+import { DT, STATE_VERSION, humanPid } from '../sim/state';
+import { ViewState, metaOf, packEnts, unpackEnts, EntView, entView } from './snapshot';
 import { DEF_IDS } from './snapshot';
 import { LocalTransport, SupabaseTransport, Transport, Msg, ConnStatus } from './transport';
 import { ONLINE, log } from '../config';
@@ -13,7 +13,7 @@ import { setLobbyStatus, loadLobbyState } from './backend';
 import { save } from '../save/SaveSystem';
 
 export interface LobbySettings { mode: GameMode; totalWaves: number; difficulty: Difficulty }
-export interface LobbyPlayer { uid: string; name: string; avatar: string; ready: boolean }
+export interface LobbyPlayer { uid: string; name: string; avatar: string; ready: boolean; faction: FactionChoice }
 export interface LobbyState { code: string; hostUid: string; players: LobbyPlayer[]; settings: LobbySettings; started: boolean }
 
 export interface SessionEvents {
@@ -30,19 +30,12 @@ void DEF_INDEX;
 
 function entViews(s: GameState): Map<number, EntView> {
   const m = new Map<number, EntView>();
-  for (const e of s.ents) {
-    if (e.dead) continue;
-    let f = 0;
-    if (e.enemy) f |= F_ENEMY;
-    if (e.slowUntil > s.time) f |= F_SLOW;
-    if (e.shield > 0) f |= F_SHIELD;
-    if (e.leaked) f |= F_LEAK;
-    if (e.boss) f |= F_BOSS;
-    if (e.raider) f |= F_RAIDER;
-    m.set(e.id, { id: e.id, defId: e.defId, x: e.x, z: e.z, hp: e.hp / e.maxHp, arena: e.arena, flags: f, owner: e.owner });
-  }
+  for (const e of s.ents) if (!e.dead) m.set(e.id, entView(s, e));
   return m;
 }
+
+const FACTION_SET = new Set(['astreens', 'rouages', 'ronces', 'abysses', 'solaires', 'necrose', 'random']);
+function validFaction(f: unknown): FactionChoice { return (typeof f === 'string' && FACTION_SET.has(f) ? f : 'random') as FactionChoice; }
 
 export class Session {
   role: 'host' | 'guest' | 'solo';
@@ -73,7 +66,10 @@ export class Session {
     this.lobby = { code, hostUid: role === 'guest' ? '' : uid, players: [], settings: { mode: 'vsai', totalWaves: 10, difficulty: 'normal' }, started: false };
   }
 
-  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, ready: false }; }
+  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, ready: false, faction: (save.profile.faction || 'random') as FactionChoice }; }
+
+  /** pid of the lobby player at index i (co-op: 0/1, duel: 0/2). */
+  pidOf(i: number) { return humanPid(this.state?.settings.mode ?? this.lobby.settings.mode, i); }
 
   // ------------------------------------------------------------------ setup
 
@@ -102,7 +98,7 @@ export class Session {
     }
   }
 
-  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar }); }
+  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, faction: save.profile.faction || 'random' }); }
 
   close() {
     if (this.lobbyTimer) clearInterval(this.lobbyTimer);
@@ -132,11 +128,21 @@ export class Session {
     } else this.transport?.send({ k: 'ready', uid: this.uid, v });
   }
 
+  /** Army choice in the lobby (host applies it, guest asks the host). */
+  setFaction(f: FactionChoice) {
+    save.profile.faction = f; save.flush();
+    if (this.role === 'host') {
+      const p = this.lobby.players.find(x => x.uid === this.uid);
+      if (p) p.faction = f;
+      this.broadcastLobby();
+    } else this.transport?.send({ k: 'faction', uid: this.uid, f });
+  }
+
   canStart() { return this.role === 'host' && this.lobby.players.every(p => p.ready) && this.lobby.players.length >= 1; }
 
   startGame() {
     if (this.role !== 'host') return;
-    const humans = this.lobby.players.slice(0, 2).map(p => ({ name: p.name }));
+    const humans = this.lobby.players.slice(0, 2).map(p => ({ name: p.name, faction: p.faction ?? 'random' }));
     const settings: GameSettings = {
       mode: this.lobby.settings.mode,
       totalWaves: this.lobby.settings.mode === 'survival' ? 9999 : this.lobby.settings.totalWaves,
@@ -159,7 +165,7 @@ export class Session {
 
   private sendStart() {
     const pids: Record<string, number> = {};
-    this.lobby.players.forEach((p, i) => (pids[p.uid] = i));
+    this.lobby.players.forEach((p, i) => (pids[p.uid] = this.pidOf(i)));
     this.transport?.send({ k: 'start', pids });
     this.sendMeta(true);
   }
@@ -171,6 +177,7 @@ export class Session {
     if (!json) return false;
     try {
       const st = JSON.parse(json) as GameState & { _lobby?: LobbyState };
+      if (st.v !== STATE_VERSION) return false; // save from an older version of the game
       this.lobby = st._lobby ?? this.lobby;
       delete st._lobby;
       st.ents = []; st.events = [];
@@ -201,7 +208,7 @@ export class Session {
           let p = this.lobby.players.find(x => x.uid === uid);
           if (!p) {
             if (this.lobby.started || this.lobby.players.length >= 2) { this.transport?.send({ k: 'reject', to: uid, msg: this.lobby.started ? 'Cette partie a déjà commencé.' : 'Cette partie est déjà complète.' }); return; }
-            p = { uid, name: String(m.name).slice(0, 16) || 'Joueur', avatar: String(m.avatar ?? '🙂'), ready: false };
+            p = { uid, name: String(m.name).slice(0, 16) || 'Joueur', avatar: String(m.avatar ?? '🙂'), ready: false, faction: validFaction(m.faction) };
             this.lobby.players.push(p);
             log('Player joined', p.name);
             this.ev.toast(`${p.name} a rejoint la partie !`, 'info');
@@ -214,6 +221,11 @@ export class Session {
           if (!this.state) return;
           if (this.lobby.players.some(p => p.uid === m.uid)) this.sendStart();
           else this.transport?.send({ k: 'reject', to: m.uid, msg: 'Cette partie n\'existe plus.' });
+          break;
+        }
+        case 'faction': {
+          const p = this.lobby.players.find(x => x.uid === m.uid);
+          if (p && !this.lobby.started) { p.faction = validFaction(m.f); this.broadcastLobby(); }
           break;
         }
         case 'ready': {
@@ -230,8 +242,9 @@ export class Session {
         }
         case 'cmd': {
           if (!this.state) return;
-          const pid = this.lobby.players.findIndex(p => p.uid === m.uid);
-          if (pid < 0) return;
+          const idx = this.lobby.players.findIndex(p => p.uid === m.uid);
+          if (idx < 0) return;
+          const pid = this.pidOf(idx);
           const err = applyCommand(this.state, pid, m.cmd as Command);
           if (err) this.transport?.send({ k: 'err', to: m.uid, msg: err });
           this.sendMeta(true);
@@ -293,7 +306,7 @@ export class Session {
     log(online ? 'Partner online' : 'Partner offline');
     if (!online) this.partnerGoneAt = performance.now();
     else if (this.aiTakeover && this.state) {
-      this.state.players[1].isAI = false;
+      this.state.players[this.pidOf(1)].isAI = false;
       this.aiTakeover = false;
       this.ev.toast('Ton partenaire a repris le contrôle.', 'info');
     }
@@ -324,11 +337,12 @@ export class Session {
     const waitingPartner = this.role === 'host' && this.guestUid && !this.partnerOnline && !this.aiTakeover && s.phase !== 'ended';
     if (waitingPartner && performance.now() - this.partnerGoneAt > 45000) {
       this.aiTakeover = true;
-      s.players[1].isAI = true;
+      s.players[this.pidOf(1)].isAI = true;
       this.ev.toast('Partenaire absent : l\'IA garde sa voie en attendant son retour.', 'info');
     }
     if (!waitingPartner) {
-      this.acc += Math.min(dt, 0.25) * s.speed;
+      // the end-of-game sequence plays in slow motion
+      this.acc += Math.min(dt, 0.25) * s.speed * (s.ending > 0 ? 0.35 : 1);
       let n = 0;
       while (this.acc >= DT && n < 12) {
         step(s);

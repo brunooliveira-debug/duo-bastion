@@ -7,6 +7,8 @@ export interface Profile {
   games: number; wins: number; xp: number; bestSurvival: number;
   duoRecords: Record<string, number>;
   tutorialDone: boolean;
+  faction: string; // last army choice ('random' or a faction id)
+  factionGames: Record<string, number>;
 }
 export interface ActiveGame { code: string; role: 'host' | 'guest'; ts: number }
 
@@ -24,7 +26,7 @@ function defaults(): SaveData {
   return {
     profile: {
       name: '', avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)], localId: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
-      games: 0, wins: 0, xp: 0, bestSurvival: 0, duoRecords: {}, tutorialDone: false,
+      games: 0, wins: 0, xp: 0, bestSurvival: 0, duoRecords: {}, tutorialDone: false, faction: 'random', factionGames: {},
     },
     prefs: { sfx: 0.8, music: 0.45, quality: mobile ? 'medium' : 'high', vibrate: true },
     active: null,

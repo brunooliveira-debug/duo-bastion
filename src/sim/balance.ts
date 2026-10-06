@@ -1,6 +1,6 @@
 // Balance model (Lanchester-style): a group's fighting strength ≈ sqrt(ΣDPS × ΣEHP).
-// Used for the "recommended army value" indicator, the AI, and scripts/balance.ts.
-import { UNITS } from '../data/units';
+// Used for the "recommended army value" indicator, the AI, and scripts/balance-report.ts.
+import { UNITS, unitStats } from '../data/units';
 import { ENEMIES } from '../data/enemies';
 import { DAMAGE_MATRIX, ECONOMY } from '../data/economy';
 import { getWave } from '../data/waves';
@@ -8,24 +8,60 @@ import type { CombatStats, AttackType, DefenseType } from '../data/types';
 
 export function unitDps(s: CombatStats): number {
   let dps = s.dmg * s.atkSpeed;
+  const base = dps;
   for (const a of s.abilities) {
-    if (a.kind === 'splash') dps *= 1 + a.pct * 1.2;
-    if (a.kind === 'chain') dps *= 1 + a.pct * a.targets * 0.8;
-    if (a.kind === 'ramp') dps *= 1 + a.max * 0.6;
-    if (a.kind === 'auraAttackSpeed') dps += 25 * a.pct * 4; // value of buffing ~4 allies (abstract)
-    if (a.kind === 'slowPulse') dps += (a.dmg / a.every) * 3;
-    if (a.kind === 'execute') dps *= 1 + a.pct * 0.25;
-    if (a.kind === 'bonusVsSlowed') dps *= 1 + a.pct * 0.3;
+    switch (a.kind) {
+      case 'splash': dps *= 1 + a.pct * 1.2; break;
+      case 'chain': dps *= 1 + a.pct * a.targets * 0.8; break;
+      case 'ramp': dps *= 1 + a.max * 0.6; break;
+      case 'auraAttackSpeed': dps += 25 * a.pct * 4; break; // value of buffing ~4 allies (abstract)
+      case 'hastePulse': dps += 25 * a.pct * 4 * Math.min(1, a.duration / a.every); break;
+      case 'slowPulse': dps += (a.dmg / a.every) * 3; break;
+      case 'stunPulse': dps += (a.dmg / a.every) * 3; break;
+      case 'novaPulse': dps += (a.dmg / a.every + a.burn) * 3; break;
+      case 'execute': dps *= 1 + a.pct * 0.25; break;
+      case 'bonusVsSlowed': dps *= 1 + a.pct * 0.3; break;
+      case 'bonusVsDef': dps *= 1 + a.pct * 0.25; break;
+      case 'bonusVsBig': dps *= 1 + a.pct * 0.25; break;
+      case 'pierce': dps *= 1 + a.pct * 0.12; break;
+      case 'armorShred': dps *= 1 + a.pct * 0.6; break;
+      case 'stunOnHit': dps *= 1 + a.chance * a.duration * 0.6; break;
+      case 'poison': dps += a.dps * (1 + a.radius * 1.2); break;
+      case 'burn': dps += a.dps * 0.8; break;
+      case 'stealth': dps *= 1 + a.ambush * 0.15; break;
+      case 'dash': dps *= 1.05; break;
+      case 'thorns': dps += a.pct * 15; break;
+      case 'explode': dps += a.dmg * 0.3; break;
+      case 'enrage': dps *= 1 + a.atkSpeed * 0.3; break;
+      case 'summon': if (UNITS[a.unit]) dps += unitDps(UNITS[a.unit]) * a.count; break;
+      case 'raise': if (UNITS[a.unit]) dps += unitDps(UNITS[a.unit]) * a.max * 0.4; break;
+      case 'spawn': if (ENEMIES[a.unit]) dps += unitDps(ENEMIES[a.unit]) * a.count * (20 / a.every); break;
+    }
   }
+  void base;
   return dps;
 }
 
 export function unitEhp(s: CombatStats): number {
   let ehp = s.hp / (1 - s.armor);
   for (const a of s.abilities) {
-    if (a.kind === 'heal') ehp += (a.amount / a.every) * 25;
-    if (a.kind === 'shieldStart') ehp += a.amount * 3;
-    if (a.kind === 'lifesteal') ehp *= 1 + a.pct;
+    switch (a.kind) {
+      case 'heal': ehp += (a.amount / a.every) * 25; break;
+      case 'shieldStart': ehp += a.amount * 3; break;
+      case 'shieldPulse': ehp += (a.amount / a.every) * 3 * 25; break;
+      case 'lifesteal': ehp *= 1 + a.pct; break;
+      case 'regen': ehp *= 1 + a.pct * 15; break;
+      case 'guardAura': ehp *= 1 + a.pct * 4; break;
+      case 'stealth': ehp *= 1.4; break;
+      case 'veilStart': ehp *= 1.1; break;
+      case 'stunPulse': ehp *= 1 + (a.duration / a.every) * 1.5; break;
+      case 'resist': ehp *= 1 + a.pct * 0.4; break;
+      case 'resistSplash': ehp *= 1 + a.pct * 0.2; break;
+      case 'summon': if (UNITS[a.unit]) ehp += unitEhp(UNITS[a.unit]) * a.count; break;
+      case 'raise': if (UNITS[a.unit]) ehp += unitEhp(UNITS[a.unit]) * a.max * 0.4; break;
+      case 'split': ehp += ((UNITS[a.unit] ?? ENEMIES[a.unit])?.hp ?? 0) * a.count; break;
+      case 'spawn': if (ENEMIES[a.unit]) ehp += ENEMIES[a.unit].hp * a.count * (20 / a.every); break;
+    }
   }
   return ehp;
 }
@@ -45,6 +81,7 @@ export function groupStrength(list: { stats: CombatStats; hpMul?: number; dmgMul
     g.atk[stats.attack] += d;
     g.def[stats.defense] += e;
   }
+  g.s = Math.sqrt(g.dps * g.ehp);
   return g;
 }
 
@@ -79,24 +116,27 @@ export function fightRatio(army: Strength, wave: Strength): number {
 
 /** Baseline: strength per gold of an average reference army (used when the army is empty). */
 const REF_POWER_PER_GOLD = (() => {
-  const ids = ['ferraille', 'lame_ronce', 'tireuse_etoile', 'harmoniste'];
+  const ids = ['ferraille', 'lame_ronce', 'tireuse_etoile', 'harmoniste', 'gardien_ecorce', 'archere_cendres'];
   const g = groupStrength(ids.map(id => ({ stats: UNITS[id] })));
   const cost = ids.reduce((t, id) => t + UNITS[id].cost, 0);
   return Math.sqrt(g.dps * g.ehp) / cost;
 })();
 
+export interface ArmyUnit { defId: string; level?: number; branch?: 'A' | 'B' | null }
+export function armyStats(list: ArmyUnit[]): CombatStats[] { return list.map(b => unitStats(b.defId, b.level ?? 1, b.branch ?? null)); }
+
 /**
- * Recommended army value for wave n given a current army (list of unit defIds) and its gold value.
+ * Recommended army value for wave n given a current army and its gold value.
  * Strength scales ~linearly with value for a fixed composition, so value_needed = value × target/ratio.
  */
-export function recommendedValue(n: number, armyIds: string[], armyValue: number, target = 1.25): number {
+export function recommendedValue(n: number, army: ArmyUnit[], armyValue: number, target = 1.25): number {
   const wave = waveGroup(n);
-  if (armyIds.length === 0 || armyValue <= 0) {
+  if (army.length === 0 || armyValue <= 0) {
     const waveS = Math.sqrt(wave.dps * wave.ehp);
     return Math.round((waveS * target) / REF_POWER_PER_GOLD);
   }
-  const army = groupStrength(armyIds.map(id => ({ stats: UNITS[id] })));
-  const r = fightRatio(army, wave);
+  const g = groupStrength(armyStats(army).map(stats => ({ stats })));
+  const r = fightRatio(g, wave);
   return Math.round((armyValue * target) / Math.max(0.05, r));
 }
 
@@ -116,4 +156,13 @@ export function expectedGold(n: number): number {
     g += ECONOMY.startIncome + bounty + ECONOMY.waveClearBonus;
   }
   return g;
+}
+
+/** Rough "power" bucket shown to opponents (no exact numbers: keeps some uncertainty). */
+export function powerBucket(value: number): string {
+  if (value < 300) return 'Faible';
+  if (value < 800) return 'Moyenne';
+  if (value < 1800) return 'Solide';
+  if (value < 3500) return 'Redoutable';
+  return 'Écrasante';
 }

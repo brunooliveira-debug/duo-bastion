@@ -54,7 +54,8 @@ describe('duo multiplayer (host-authoritative)', () => {
     await until(() => errors.length > 0);
     expect(errors[0]).toMatch(/occupée|or/i);
     // cheating attempt: building with a unit not in the draft
-    const notInDraft = ['ferraille', 'lame_ronce', 'tireuse_etoile', 'carapace_abysses', 'oracle_braise', 'harmoniste', 'spectre_vif', 'exarque_prisme'].find(u => !draft.includes(u))!;
+    const { BASE_UNIT_IDS } = await import('../src/data/units');
+    const notInDraft = BASE_UNIT_IDS.find(u => !draft.includes(u))!;
     guest.send({ c: 'build', unit: notInDraft, col: 5, row: 3 });
     await wait(150);
     expect(host.state!.players[1].builds.length).toBe(1);

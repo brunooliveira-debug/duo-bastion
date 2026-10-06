@@ -1,16 +1,22 @@
 // GameState — the single source of truth, owned by the host. Pure data (JSON-serialisable).
-import type { Ability, AttackType, DefenseType } from '../data/types';
+import type { Ability, AttackType, Branch, DefenseType, FactionId } from '../data/types';
+import type { RuneTile } from '../data/synergies';
 import { CORE, ECONOMY, GRID, TIMING } from '../data/economy';
 import { CoreUpgradeId } from '../data/economy';
 
+export const STATE_VERSION = 2;
+
 export type Phase = 'build' | 'combat' | 'resolution' | 'ended';
-export type GameMode = 'vsai' | 'survival';
+export type GameMode = 'vsai' | 'survival' | 'duel';
 export type Difficulty = 'initiation' | 'normal' | 'difficile' | 'expert' | 'maitre';
 export type Personality = 'defensive' | 'economic' | 'aggressive' | 'balanced';
+export type FactionChoice = FactionId | 'random';
 
 export interface Build {
   bid: number;
-  defId: string;
+  defId: string; // base unit id
+  level: number; // 1..5
+  branch: Branch | null; // chosen at level 4, permanent
   col: number;
   row: number;
   placedWave: number;
@@ -30,7 +36,16 @@ export interface PlayerStats {
   maxDps: number;
   bestUnit: string;
   bestUnitDmg: number;
+  upgrades: number;
+  fusions: number;
+  casts: number;
+  kills: number;
+  unitsBuilt: number;
+  sentUnits: number;
+  curses: number;
 }
+
+export interface QueuedSend { r: string; to: number }
 
 export interface PlayerState {
   pid: number; // team*2 + slot
@@ -39,17 +54,27 @@ export interface PlayerState {
   name: string;
   isAI: boolean;
   personality: Personality;
+  faction: FactionId;
+  randomFaction: boolean;
   gold: number;
   ether: number;
   income: number;
   workers: number;
-  draft: string[];
+  draft: string[]; // the faction roster
   rerolls: number;
   builds: Build[];
   ready: boolean;
   powers: string[];
   powerChoice: string[] | null;
-  raiderQueue: string[];
+  raiderQueue: QueuedSend[];
+  raiderCd: Record<string, number>; // raider id → first wave it is available again
+  curseQueue: QueuedSend[];
+  curseCd: Record<string, number>;
+  powerLv: number[]; // commander powers level (1..3)
+  powerCd: number[]; // seconds of combat before each power is ready
+  fogUntil: number; // curses received: combat time until which they apply
+  jamUntil: number;
+  runes: RuneTile[];
   leakedThisWave: number;
   waveDmg: number;
   pauseVote: boolean;
@@ -74,9 +99,11 @@ export interface Ent {
   id: number;
   enemy: boolean;
   defId: string;
+  level: number;
+  branch: Branch | null;
   arena: number; // team index
   owner: number; // pid owning the unit, or lane-owner pid for enemies (bounty receiver)
-  bid: number; // build id for units
+  bid: number; // build id for units (-1 for summons)
   x: number;
   z: number;
   hx: number; // home (units)
@@ -100,6 +127,32 @@ export interface Ent {
   slowPct: number;
   shredUntil: number;
   shredPct: number;
+  stunUntil: number;
+  poisonUntil: number;
+  poisonDps: number;
+  poisonSrc: number;
+  burnUntil: number;
+  burnDps: number;
+  burnSrc: number;
+  hasteUntil: number;
+  hastePct: number;
+  lsUntil: number; // temporary lifesteal (commander power)
+  lsPct: number;
+  guard: number; // damage reduction from auras, recomputed every tick
+  guardBase: number; // permanent reduction (synergies)
+  crit: number; // critical chance
+  dotMul: number;
+  elite: boolean;
+  expires: number; // temporary summons: combat time of disappearance (0 = never)
+  back: boolean; // placed in the back line (fog curse)
+  veilUntil: number; // untargetable (commander veil)
+  buffUntil: number; // temporary damage buff
+  buffDmg: number;
+  mul: number; // stat multiplier it was spawned with (children / summons inherit it)
+  stealth: boolean;
+  ambush: number;
+  lastAtk: number;
+  raised: number;
   ramp: number;
   timers: number[];
   dashed: boolean;
@@ -107,25 +160,36 @@ export interface Ent {
   dead: boolean;
   boss: boolean;
   raider: boolean;
+  summon: boolean;
   bounty: number;
   leakDamage: number;
 }
 
 export type GameEvent =
-  | { t: 'atk'; a: number; b: number; fx: string; ranged: boolean }
+  | { t: 'atk'; a: number; b: number; fx: string; ranged: boolean; dmg: number; crit: boolean }
   | { t: 'coreShot'; team: number; b: number }
-  | { t: 'die'; id: number; boss: boolean; x: number; z: number; arena: number }
+  | { t: 'die'; id: number; boss: boolean; x: number; z: number; arena: number; enemy: boolean }
   | { t: 'leak'; arena: number; pid: number }
   | { t: 'coreHit'; team: number; dmg: number }
   | { t: 'pulse'; arena: number; x: number; z: number; r: number; fx: string }
+  | { t: 'explode'; arena: number; x: number; z: number; r: number }
   | { t: 'dash'; id: number }
   | { t: 'heal'; id: number }
+  | { t: 'stun'; id: number }
+  | { t: 'summon'; arena: number; x: number; z: number }
   | { t: 'ping'; pid: number; ping: string }
   | { t: 'build'; pid: number; bid: number }
-  | { t: 'evolve'; pid: number; bid: number }
+  | { t: 'evolve'; pid: number; bid: number; level: number; branch: Branch | null }
+  | { t: 'fuse'; pid: number; bid: number; col: number; row: number }
+  | { t: 'curse'; pid: number; curse: string; to: number }
+  | { t: 'hexed'; to: number; list: string[] }
+  | { t: 'bossIn'; arena: number; id: string }
+  | { t: 'powerUp'; pid: number; slot: number }
   | { t: 'sell'; pid: number }
   | { t: 'worker'; pid: number }
-  | { t: 'raider'; pid: number; raider: string }
+  | { t: 'raider'; pid: number; raider: string; to: number }
+  | { t: 'sends'; from: number; to: number; list: string[] }
+  | { t: 'cast'; pid: number; power: string; arena: number; x: number; z: number }
   | { t: 'coreUp'; pid: number; up: string }
   | { t: 'wave'; n: number; boss: boolean }
   | { t: 'combat' }
@@ -133,16 +197,20 @@ export type GameEvent =
   | { t: 'msg'; pid: number; text: string }
   | { t: 'end'; result: string };
 
+export interface HumanSlot { name: string; faction?: FactionChoice }
+
 export interface GameSettings {
   mode: GameMode;
   totalWaves: number; // 10 or 21 (survival: infinite after 21)
   difficulty: Difficulty;
-  humans: { name: string }[]; // 1 or 2 humans; missing partner = AI
+  humans: HumanSlot[]; // 1 or 2 humans; missing partner = AI
   tutorial?: boolean;
 }
 
 export interface GameResult {
+  /** outcome from team 0's point of view (kept for compatibility); use `winner` per viewer */
   outcome: 'victory' | 'defeat';
+  winner: number; // team index, -1 = none (survival)
   wave: number;
   reason: string;
 }
@@ -157,6 +225,10 @@ export interface GameState {
   wave: number;
   phase: Phase;
   timer: number;
+  timerMax: number;
+  waveEvent: string | null; // random event of the current/next wave (announced during the preparation)
+  lastEvent: string | null;
+  ending: number; // > 0 during the end-of-game sequence
   combatTime: number;
   speed: number;
   paused: boolean;
@@ -193,6 +265,7 @@ export function newStats(): PlayerStats {
   return {
     dmgDealt: 0, dmgTanked: 0, goldEarned: 0, etherProduced: 0, maxWorkers: ECONOMY.startWorkers,
     raidersSent: 0, leaks: 0, coreDamageCaused: 0, maxDps: 0, bestUnit: '', bestUnitDmg: 0,
+    upgrades: 0, fusions: 0, casts: 0, kills: 0, unitsBuilt: 0, sentUnits: 0, curses: 0,
   };
 }
 
@@ -200,16 +273,26 @@ export function newCore(): CoreState {
   return { hp: CORE.hp, maxHp: CORE.hp, up: { atk: 0, regen: 0, def: 0, pow: 0 }, cd: 0, powCd: 7 };
 }
 
-export function teamCount(s: GameState) { return s.settings.mode === 'vsai' ? 2 : 1; }
+export function teamCount(s: GameState) { return s.settings.mode === 'survival' ? 1 : 2; }
 
 export function playersOfTeam(s: GameState, team: number) { return s.players.filter(p => p.team === team); }
 
-/** Opponent lane-owner receiving raiders from pid. */
+/** Opposing lane owners that pid may send to (vs-AI mode only). */
+export function opponents(s: GameState, pid: number): PlayerState[] {
+  if (s.settings.mode === 'survival') return [];
+  const p = s.players[pid];
+  return s.players.filter(o => o.team !== p.team);
+}
+
+/** Default target of pid's sends: the mirrored opposing lane. */
 export function raiderTarget(s: GameState, pid: number): PlayerState | null {
-  if (s.settings.mode !== 'vsai') return null;
+  if (s.settings.mode === 'survival') return null;
   const p = s.players[pid];
   return s.players.find(o => o.team !== p.team && o.slot === p.slot) ?? null;
 }
+
+/** Human pids per mode: co-op humans share team 0, duel puts them on opposite teams. */
+export function humanPid(mode: GameMode, index: number) { return mode === 'duel' ? index * 2 : index; }
 
 export function humanPlayers(s: GameState) { return s.players.filter(p => !p.isAI); }
 
