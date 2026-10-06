@@ -503,6 +503,8 @@ export class Hud {
 
   // ------------------------------------------------------------------ feedback
   toast(text: string, kind: 'error' | 'info' | 'ping' = 'info') {
+    // the same message twice in a row replaces the previous one instead of stacking
+    for (const old of Array.from(this.els.toasts.children)) if (old.textContent === text) old.remove();
     const t = h('div', { class: `toast ${kind}` }, text);
     this.els.toasts.append(t);
     while (this.els.toasts.children.length > 3) this.els.toasts.firstChild!.remove();
