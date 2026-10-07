@@ -1,7 +1,8 @@
 // Automatic balance analysis. usage: npx tsx scripts/balance-report.ts [games=120] [--quick]
 // 1. Unit table: analytic strength per gold for every unit / level / branch, outliers flagged.
 // 2. Lane benchmark: each army, same gold budget, fights each wave alone (no sends) → core damage & time.
-// 3. Duel league: all-AI duel games with random armies → win rate per faction.
+// 3. Duel league: all-AI duel games with random armies → win rate, economy, sends, powers, progression, matchups, win causes.
+// Options: --quick (fewer waves in the PvE bench), --duels (league only), --out=FILE, --json=FILE (before/after comparison).
 // Writes BALANCE_REPORT.md and prints a summary.
 import { writeFileSync } from 'node:fs';
 import { UNITS, FACTIONS, FACTION_IDS, unitStats, unitValueAt, CATEGORY_NAMES } from '../src/data/units';
@@ -9,6 +10,7 @@ import { getWave } from '../src/data/waves';
 import { createGame, step, drainEvents, armyValue } from '../src/sim/game';
 import { aiSpendAll } from '../src/sim/ai';
 import { unitDps, unitEhp, expectedGold } from '../src/sim/balance';
+import { buildBonuses } from '../src/sim/synergy';
 import type { FactionId } from '../src/data/types';
 import type { GameState } from '../src/sim/state';
 
@@ -132,35 +134,112 @@ for (const f of FACTION_IDS) log(`- ${FACTIONS[f].name} : ${(facThr[f].reduce((a
 console.log('THRESHOLDS ' + JSON.stringify(thr));
 
 }
-// ---------------------------------------------------------------- 3. duel league
+// ---------------------------------------------------------------- 3. duel league (instrumented)
 log();
 log(`## 3. Ligue de duels IA (${GAMES} parties, armées aléatoires, difficulté normale des deux côtés)`);
-const wins: Record<string, { games: number; wins: number }> = {};
-for (const f of FACTION_IDS) wins[f] = { games: 0, wins: 0 };
-let decidedEarly = 0, totalWaves = 0, sentTotal = 0, castsTotal = 0, fusions = 0, upgrades = 0;
+interface Acc { games: number; wins: number; [k: string]: number }
+const acc: Record<string, Acc> = {};
+const keys = ['gold', 'ether', 'army', 'level', 'workers', 'income', 'leaks', 'coreDmg', 'firstLeak', 'neverLeak', 'sends', 'sendValue', 'sendDmg', 'casts', 'powerDmg',
+  'fusions', 'upgrades', 'helpKills', 'saves', 'syn', 'army5', 'army10', 'army15', 'lvl10', 'lvl15', 'reso', 'orders', 'modules', 'rifts', 'etherLeft', 'goldLeft'] as const;
+for (const f of FACTION_IDS) { acc[f] = { games: 0, wins: 0 }; for (const k of keys) acc[f][k] = 0; }
+const vs: Record<string, Record<string, { g: number; w: number }>> = {};
+for (const a of FACTION_IDS) { vs[a] = {}; for (const b of FACTION_IDS) vs[a][b] = { g: 0, w: 0 }; }
+const causes: Record<string, number> = { 'Défense débordée (vagues)': 0, 'Pression des envois': 0, 'PV du Core à la vague finale': 0 };
+let decidedEarly = 0, totalWaves = 0;
+const avgLevel = (p: GameState['players'][number]) => p.builds.length ? p.builds.reduce((t, b) => t + b.level, 0) / p.builds.length : 0;
 for (let g = 0; g < GAMES; g++) {
   const s: GameState = createGame({ mode: 'duel', totalWaves: 21, difficulty: 'normal', humans: [] }, 1000 + g * 7919);
-  let n = 0;
-  while (s.phase !== 'ended' && n++ < 20 * 60 * 60) { step(s); drainEvents(s); }
+  const snap: Record<number, Record<number, { army: number; lvl: number }>> = {};
+  let n = 0, lastW = 0;
+  while (s.phase !== 'ended' && n++ < 20 * 60 * 60) {
+    step(s); drainEvents(s);
+    if (s.phase === 'combat' && s.wave !== lastW) {
+      lastW = s.wave;
+      if (lastW === 5 || lastW === 10 || lastW === 15) snap[lastW] = Object.fromEntries(s.players.map(p => [p.pid, { army: armyValue(p), lvl: avgLevel(p) }]));
+    }
+  }
   if (!s.result) continue;
-  if (s.wave < 21) decidedEarly++;
+  if (s.teams.some(t => !t.alive)) decidedEarly++;
   totalWaves += s.wave;
+  const loser = s.teams.find(t => t.id !== s.result!.winner) as (GameState['teams'][number] & { dmgSends?: number; dmgWaves?: number }) | undefined;
+  if (loser) {
+    if (loser.alive) causes['PV du Core à la vague finale']++;
+    else if ((loser.dmgSends ?? 0) > (loser.dmgWaves ?? 0)) causes['Pression des envois']++;
+    else causes['Défense débordée (vagues)']++;
+  }
   for (const p of s.players) {
-    wins[p.faction].games++;
-    if (p.team === s.result.winner) wins[p.faction].wins++;
-    sentTotal += p.stats.raidersSent; castsTotal += p.stats.casts; fusions += p.stats.fusions; upgrades += p.stats.upgrades;
+    const a = acc[p.faction], st = p.stats as unknown as Record<string, number>;
+    a.games++;
+    const won = p.team === s.result.winner;
+    if (won) a.wins++;
+    for (const o of s.players) if (o.team !== p.team) { vs[p.faction][o.faction].g++; if (won) vs[p.faction][o.faction].w++; }
+    a.gold += p.stats.goldEarned; a.ether += p.stats.etherProduced; a.army += armyValue(p); a.level += avgLevel(p);
+    a.workers += p.workers; a.income += p.income; a.leaks += p.stats.leaks; a.coreDmg += p.stats.coreDamageCaused;
+    if (st.firstLeakWave) a.firstLeak += st.firstLeakWave; else a.neverLeak++;
+    a.sends += p.stats.raidersSent; a.sendValue += (st.raiderEther ?? 0) + (st.raiderGold ?? 0); a.sendDmg += st.raiderCoreDmg ?? 0;
+    a.casts += p.stats.casts; a.powerDmg += st.powerDmg ?? 0; a.fusions += p.stats.fusions; a.upgrades += p.stats.upgrades;
+    a.helpKills += st.helpKills ?? 0; a.saves += st.saves ?? 0;
+    a.syn += [...buildBonuses(p.builds, p.runes).values()].reduce((t, b) => t + b.syn.length, 0);
+    a.reso += st.resoGain ?? 0; a.orders += st.orders ?? 0; a.rifts += st.riftsClosed ?? 0; a.modules += st.etherModules ?? 0;
+    a.etherLeft += p.ether; a.goldLeft += p.gold;
+    for (const w of [5, 10, 15] as const) if (snap[w]?.[p.pid]) { a[`army${w}`] += snap[w][p.pid].army; if (w !== 5) a[`lvl${w}`] += snap[w][p.pid].lvl; }
   }
 }
+const byRate = FACTION_IDS.slice().sort((a, b) => acc[b].wins / Math.max(1, acc[b].games) - acc[a].wins / Math.max(1, acc[a].games));
+const avg = (f: string, k: string, d = 0) => (acc[f][k] / Math.max(1, acc[f].games)).toFixed(d);
+const N = (f: string) => FACTIONS[f as FactionId].name;
 log();
 log('| Armée | Parties | Victoires | Taux |');
 log('|---|---|---|---|');
-for (const f of FACTION_IDS.slice().sort((a, b) => wins[b].wins / Math.max(1, wins[b].games) - wins[a].wins / Math.max(1, wins[a].games))) {
-  const w = wins[f];
-  log(`| ${FACTIONS[f].name} | ${w.games} | ${w.wins} | ${Math.round((w.wins / Math.max(1, w.games)) * 100)} % |`);
+for (const f of byRate) log(`| ${N(f)} | ${acc[f].games} | ${acc[f].wins} | ${Math.round((acc[f].wins / Math.max(1, acc[f].games)) * 100)} % |`);
+log();
+log(`Parties décidées par la destruction d'un Core : ${Math.round((decidedEarly / GAMES) * 100)} % · durée moyenne ${(totalWaves / GAMES).toFixed(1)} vagues`);
+log();
+log('### 3a. Cause principale de victoire');
+for (const [k, v] of Object.entries(causes)) log(`- ${k} : ${Math.round((v / Math.max(1, GAMES)) * 100)} %`);
+log();
+log('### 3b. Économie (moyennes par joueur et par partie)');
+log('| Armée | Or gagné | Éther produit | Ouvriers | Revenu final | Or restant | Éther restant |');
+log('|---|---|---|---|---|---|---|');
+for (const f of byRate) log(`| ${N(f)} | ${avg(f, 'gold')} | ${avg(f, 'ether')} | ${avg(f, 'workers', 1)} | ${avg(f, 'income')} | ${avg(f, 'goldLeft')} | ${avg(f, 'etherLeft')} |`);
+log();
+log('### 3c. Défense (PvE subi en duel)');
+log('| Armée | Fuites | Dégâts au Core venus de sa voie | Vague du 1er leak | Jamais de fuite | Kills chez le partenaire | Sauvetages |');
+log('|---|---|---|---|---|---|---|');
+for (const f of byRate) {
+  const leaked = acc[f].games - acc[f].neverLeak;
+  log(`| ${N(f)} | ${avg(f, 'leaks', 1)} | ${avg(f, 'coreDmg')} | ${leaked ? (acc[f].firstLeak / leaked).toFixed(1) : '—'} | ${Math.round((acc[f].neverLeak / Math.max(1, acc[f].games)) * 100)} % | ${avg(f, 'helpKills', 1)} | ${avg(f, 'saves', 1)} |`);
 }
 log();
-log(`Parties décidées avant la vague 21 : ${Math.round((decidedEarly / GAMES) * 100)} % · durée moyenne ${(totalWaves / GAMES).toFixed(1)} vagues`);
-log(`Par joueur et par partie : ${(sentTotal / GAMES / 4).toFixed(1)} envois, ${(castsTotal / GAMES / 4).toFixed(1)} pouvoirs, ${(upgrades / GAMES / 4).toFixed(1)} améliorations, ${(fusions / GAMES / 4).toFixed(1)} fusions.`);
+log('### 3d. Envois (Raiders)');
+log('| Armée | Envois | Valeur investie | Dégâts au Core adverse | Dégâts par point investi |');
+log('|---|---|---|---|---|');
+for (const f of byRate) log(`| ${N(f)} | ${avg(f, 'sends', 1)} | ${avg(f, 'sendValue')} | ${avg(f, 'sendDmg')} | ${(acc[f].sendDmg / Math.max(1, acc[f].sendValue)).toFixed(2)} |`);
+log();
+log('### 3e. Pouvoirs de commandant');
+log('| Armée | Pouvoirs lancés | Dégâts des pouvoirs | Dégâts par lancer |');
+log('|---|---|---|---|');
+for (const f of byRate) log(`| ${N(f)} | ${avg(f, 'casts', 1)} | ${avg(f, 'powerDmg')} | ${(acc[f].powerDmg / Math.max(1, acc[f].casts)).toFixed(0)} |`);
+log();
+log('### 3f. Progression, synergies, fusions');
+log('| Armée | Armée V5 | Armée V10 | Armée V15 | Armée finale | Niveau moyen V10 | Niveau moyen V15 | Niveau final | Améliorations | Fusions | Synergies actives (fin) |');
+log('|---|---|---|---|---|---|---|---|---|---|---|');
+for (const f of byRate) log(`| ${N(f)} | ${avg(f, 'army5')} | ${avg(f, 'army10')} | ${avg(f, 'army15')} | ${avg(f, 'army')} | ${avg(f, 'lvl10', 2)} | ${avg(f, 'lvl15', 2)} | ${avg(f, 'level', 2)} | ${avg(f, 'upgrades', 1)} | ${avg(f, 'fusions', 2)} | ${avg(f, 'syn', 1)} |`);
+if (FACTION_IDS.some(f => acc[f].reso + acc[f].orders + acc[f].rifts + acc[f].modules > 0)) {
+  log();
+  log('### 3g. Mécaniques v0.4');
+  log('| Armée | Charge de Résonance apportée | Ordres donnés | Failles fermées | Éther dans les modules |');
+  log('|---|---|---|---|---|');
+  for (const f of byRate) log(`| ${N(f)} | ${avg(f, 'reso')} | ${avg(f, 'orders', 1)} | ${avg(f, 'rifts', 2)} | ${avg(f, 'modules')} |`);
+}
+log();
+log('### 3h. Matchups (taux de victoire de la ligne contre la colonne)');
+log(`| | ${FACTION_IDS.map(f => FACTIONS[f].title).join(' | ')} |`);
+log(`|---|${FACTION_IDS.map(() => '---').join('|')}|`);
+for (const a of FACTION_IDS) log(`| ${FACTIONS[a].title} | ${FACTION_IDS.map(b => vs[a][b].g ? `${Math.round((vs[a][b].w / vs[a][b].g) * 100)} %` : '—').join(' | ')} |`);
 
-if (!DUELS_ONLY) writeFileSync('BALANCE_REPORT.md', out.join('\n') + '\n');
-console.log('\n→ BALANCE_REPORT.md');
+const outPath = process.argv.find(a => a.startsWith('--out='))?.slice(6) ?? 'BALANCE_REPORT.md';
+const jsonPath = process.argv.find(a => a.startsWith('--json='))?.slice(7);
+if (!DUELS_ONLY || process.argv.some(a => a.startsWith('--out='))) writeFileSync(outPath, out.join('\n') + '\n');
+if (jsonPath) writeFileSync(jsonPath, JSON.stringify({ games: GAMES, acc, vs, causes, decidedEarly, totalWaves }, null, 1));
+console.log('\n→ ' + outPath);

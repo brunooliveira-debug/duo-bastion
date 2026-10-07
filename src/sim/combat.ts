@@ -19,7 +19,7 @@ const BASE_CRIT = 0.07, CRIT_MUL = 1.8;
 /** every leak hurts: an undefended wave costs a real chunk of the Core */
 const LEAK_MUL = 1.8;
 
-export interface SpawnSpec { enemy: string; hpMul: number; dmgMul: number; raider?: boolean; elite?: boolean; speedMul?: number; shieldPct?: number }
+export interface SpawnSpec { enemy: string; hpMul: number; dmgMul: number; raider?: boolean; elite?: boolean; speedMul?: number; shieldPct?: number; src?: number }
 
 function hasPower(p: PlayerState | undefined, id: string) { return !!p && p.powers.includes(id); }
 
@@ -42,7 +42,7 @@ function baseEnt(s: GameState, def: CombatStats, defId: string): Ent {
     hasteUntil: 0, hastePct: 0, lsUntil: 0, lsPct: 0, guard: 0, guardBase: 0, crit: 0, dotMul: 1, elite: false, expires: 0,
     back: false, veilUntil: 0, buffUntil: 0, buffDmg: 0, mul: 1,
     stealth: false, ambush: 0, lastAtk: -9, raised: 0, ramp: 0, timers: def.abilities.map(a => ('every' in a ? a.every * 0.6 : 0)),
-    dashed: false, leaked: false, dead: false, boss: false, raider: false, summon: false, bounty: 0, leakDamage: 0,
+    dashed: false, leaked: false, dead: false, boss: false, raider: false, summon: false, bounty: 0, leakDamage: 0, src: -1,
   };
 }
 
@@ -138,7 +138,7 @@ function enemyEnt(s: GameState, it: SpawnSpec, team: number, owner: number): Ent
   e.dmg = def.dmg * it.dmgMul * (it.elite ? 1.5 : 1);
   e.bounty = def.bounty * (it.elite ? 6 : 1);
   e.leakDamage = Math.round(def.leakDamage * LEAK_MUL * Math.sqrt(it.dmgMul) * (it.elite ? 2 : 1));
-  e.boss = !!def.boss; e.raider = !!it.raider; e.elite = !!it.elite;
+  e.boss = !!def.boss; e.raider = !!it.raider; e.elite = !!it.elite; e.src = it.src ?? -1;
   e.moveSpeed *= it.speedMul ?? 1;
   if (it.shieldPct) e.shield = e.maxHp * it.shieldPct;
   e.radius = 0.32 * def.model.scale * (it.elite ? 1.15 : 1);
@@ -163,7 +163,7 @@ export function spawnEnemies(s: GameState, team: number, slot: number, owner: nu
 /** Spawn enemies at a point (boss calls, splits). */
 function spawnEnemyAt(s: GameState, parent: Ent, unit: string, count: number) {
   for (let i = 0; i < count; i++) {
-    const e = enemyEnt(s, { enemy: unit, hpMul: parent.mul, dmgMul: Math.sqrt(parent.mul), raider: parent.raider }, parent.arena, parent.owner);
+    const e = enemyEnt(s, { enemy: unit, hpMul: parent.mul, dmgMul: Math.sqrt(parent.mul), raider: parent.raider, src: parent.src }, parent.arena, parent.owner);
     e.x = parent.x + (rand(s) - 0.5) * 1.6;
     e.z = Math.max(-LANE.halfWidth, Math.min(LANE.halfWidth, parent.z + (rand(s) - 0.5) * 1.6));
     e.leaked = parent.leaked;
@@ -199,6 +199,8 @@ function applyDamage(s: GameState, src: Ent | null, t: Ent, raw: number, o: DmgO
     const p = s.players[src.owner];
     p.stats.dmgDealt += total;
     p.waveDmg += total;
+    if (src.id === PHANTOM_ID) p.stats.powerDmg += total;
+    else if (t.enemy && t.owner !== src.owner && !t.leaked) p.stats.helpDmg += total;
     if (src.bid >= 0) { const b = p.builds.find(x => x.bid === src.bid); if (b) b.dmgTotal += total; }
   }
   if (!t.enemy) s.players[t.owner].stats.dmgTanked += total;
@@ -228,7 +230,12 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
       p.gold += g;
       p.stats.goldEarned += g;
     }
-    if (killer && !killer.enemy) s.players[killer.owner].stats.kills++;
+    if (killer && !killer.enemy) {
+      const ks = s.players[killer.owner].stats;
+      ks.kills++;
+      if (t.leaked) ks.saves++;
+      else if (t.owner !== killer.owner) ks.helpKills++;
+    }
     // necromancy: units able to raise the dead nearby
     for (const o of s.ents) {
       if (o.enemy || o.dead || o.arena !== t.arena) continue;
@@ -597,7 +604,7 @@ export function combatTick(s: GameState) {
         const team = s.teams[e.arena];
         const dmg = e.leakDamage * (1 - CORE.upgrades.def.per * team.core.up.def);
         team.core.hp -= dmg;
-        s.players[e.owner].stats.coreDamageCaused += dmg;
+        coreDamageBy(s, e, dmg);
         s.events.push({ t: 'coreHit', team: e.arena, dmg });
         e.dead = true; e.hp = 0;
         s.events.push({ t: 'die', id: e.id, boss: e.boss, x: e.x, z: e.z, arena: e.arena, enemy: true });
@@ -620,6 +627,7 @@ export function combatTick(s: GameState) {
             e.leaked = true;
             const p = s.players[e.owner];
             p.stats.leaks++; p.leakedThisWave++;
+            if (!p.stats.firstLeakWave) p.stats.firstLeakWave = s.wave;
             s.events.push({ t: 'leak', arena: e.arena, pid: e.owner });
           }
         } else {
@@ -692,6 +700,14 @@ export function combatTick(s: GameState) {
   s.ents = s.ents.filter(e => !e.dead);
 }
 
+/** Core damage bookkeeping: lane owner, damage source (wave or send) and the sender's credit. */
+export function coreDamageBy(s: GameState, e: Ent, dmg: number) {
+  s.players[e.owner].stats.coreDamageCaused += dmg;
+  const team = s.teams[e.arena];
+  if (e.src >= 0) { team.dmgSends += dmg; const from = s.players[e.src]; if (from) from.stats.raiderCoreDmg += dmg; }
+  else team.dmgWaves += dmg;
+}
+
 export function enemiesAlive(s: GameState, arena?: number) {
   for (const e of s.ents) if (e.enemy && !e.dead && (arena === undefined || e.arena === arena)) return true;
   return false;
@@ -714,9 +730,10 @@ function focus(s: GameState, p: PlayerState, foes: Ent[]) {
   return { x: best.x, z: best.z };
 }
 
+const PHANTOM_ID = -9;
 const PHANTOM: Ent = (() => {
   const e = baseEnt({ nextId: -1 } as GameState, UNITS.squelette, 'squelette');
-  return { ...e, id: -9, range: 99, hp: 1e9, maxHp: 1e9, abilities: [], attack: 'arca' };
+  return { ...e, id: PHANTOM_ID, range: 99, hp: 1e9, maxHp: 1e9, abilities: [], attack: 'arca' };
 })();
 
 /** Apply faction power `slot` of player p (validated by applyCommand). */

@@ -43,6 +43,14 @@ export interface PlayerStats {
   unitsBuilt: number;
   sentUnits: number;
   curses: number;
+  // instrumentation (balance analysis / end-of-game report)
+  goldArmy: number; // gold spent on units and level-ups
+  raiderEther: number; raiderGold: number; // spent on sends
+  raiderCoreDmg: number; // Core damage dealt by this player's sends
+  powerDmg: number; // damage dealt by commander powers
+  firstLeakWave: number; // 0 = never leaked
+  helpDmg: number; helpKills: number; // damage / kills in the partner's lane
+  saves: number; // leaked enemies killed before reaching the Core
 }
 
 export interface QueuedSend { r: string; to: number }
@@ -93,6 +101,8 @@ export interface TeamState {
   id: number;
   core: CoreState;
   alive: boolean;
+  dmgWaves: number; // Core damage taken from regular waves (analysis)
+  dmgSends: number; // Core damage taken from opposing sends
 }
 
 export interface Ent {
@@ -163,6 +173,7 @@ export interface Ent {
   summon: boolean;
   bounty: number;
   leakDamage: number;
+  src: number; // pid that sent this enemy (-1 = regular wave)
 }
 
 export type GameEvent =
@@ -266,6 +277,7 @@ export function newStats(): PlayerStats {
     dmgDealt: 0, dmgTanked: 0, goldEarned: 0, etherProduced: 0, maxWorkers: ECONOMY.startWorkers,
     raidersSent: 0, leaks: 0, coreDamageCaused: 0, maxDps: 0, bestUnit: '', bestUnitDmg: 0,
     upgrades: 0, fusions: 0, casts: 0, kills: 0, unitsBuilt: 0, sentUnits: 0, curses: 0,
+    goldArmy: 0, raiderEther: 0, raiderGold: 0, raiderCoreDmg: 0, powerDmg: 0, firstLeakWave: 0, helpDmg: 0, helpKills: 0, saves: 0,
   };
 }
 

@@ -13,7 +13,7 @@ import {
   DT, GameSettings, GameState, PlayerState, STATE_VERSION, newCore, newStats, teamCount, raiderTarget, opponents, humanPlayers, humanPid, Personality,
 } from './state';
 import { rand, shuffle } from './rng';
-import { castPower, combatTick, enemiesAlive, spawnEnemies, spawnUnits, SpawnSpec } from './combat';
+import { castPower, combatTick, coreDamageBy, enemiesAlive, spawnEnemies, spawnUnits, SpawnSpec } from './combat';
 import { runAI, aiCombat } from './ai';
 
 export type Command =
@@ -63,7 +63,7 @@ export function createGame(settings: GameSettings, seed: number): GameState {
     teams: [], players: [], ents: [], nextId: 1, events: [], result: null,
   };
   const nTeams = teamCount(s);
-  for (let t = 0; t < nTeams; t++) s.teams.push({ id: t, core: newCore(), alive: true });
+  for (let t = 0; t < nTeams; t++) s.teams.push({ id: t, core: newCore(), alive: true, dmgWaves: 0, dmgSends: 0 });
   const humanAt = new Map<number, number>();
   settings.humans.forEach((_, i) => humanAt.set(humanPid(settings.mode, i), i));
   for (let t = 0; t < nTeams; t++) {
@@ -127,6 +127,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       const u = UNITS[cmd.unit];
       if (p.gold < u.cost) return 'Pas assez d\'or.';
       p.gold -= u.cost;
+      p.stats.goldArmy += u.cost;
       const bid = s.nextId++;
       p.builds.push({ bid, defId: u.id, level: 1, branch: null, col: cmd.col, row: cmd.row, placedWave: s.wave, value: u.cost, dmgTotal: 0 });
       p.stats.unitsBuilt++;
@@ -166,6 +167,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       const cost = upgradeCost(b.defId, next);
       if (p.gold < cost) return 'Pas assez d\'or.';
       p.gold -= cost;
+      p.stats.goldArmy += cost;
       b.level = next; b.branch = branch;
       b.value += cost;
       p.stats.upgrades++;
@@ -227,6 +229,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       if (p.ether < price.ether) return 'Pas assez d\'Éther.';
       if (p.gold < price.gold) return 'Pas assez d\'or.';
       p.ether -= price.ether; p.gold -= price.gold;
+      p.stats.raiderEther += price.ether; p.stats.raiderGold += price.gold;
       p.income += r.income;
       p.raiderQueue.push({ r: r.id, to });
       if (r.cooldown) p.raiderCd[r.id] = s.wave + r.cooldown;
@@ -422,7 +425,7 @@ function startCombat(s: GameState) {
       const list: SpawnSpec[] = [];
       for (const id of ids) {
         const r = RAIDERS.find(x => x.id === id)!;
-        for (const u of r.units) for (let i = 0; i < u.count; i++) list.push(withHex({ enemy: u.enemy, hpMul: r.hpMul * sc, dmgMul: sc, raider: true, elite: r.category === 'champion' }, h));
+        for (const u of r.units) for (let i = 0; i < u.count; i++) list.push(withHex({ enemy: u.enemy, hpMul: r.hpMul * sc, dmgMul: sc, raider: true, elite: r.category === 'champion', src: p.pid }, h));
       }
       const off = offsets.get(to) ?? 7;
       spawnEnemies(s, tgt.team, tgt.slot, tgt.pid, list, off);
@@ -444,8 +447,8 @@ function endCombat(s: GameState) {
       const core = s.teams[e.arena].core;
       const dmg = e.leakDamage * (1 - CORE.upgrades.def.per * core.up.def);
       core.hp -= dmg;
-      s.players[e.owner].stats.coreDamageCaused += dmg;
-      if (!e.leaked) { s.players[e.owner].stats.leaks++; s.players[e.owner].leakedThisWave++; }
+      coreDamageBy(s, e, dmg);
+      if (!e.leaked) { s.players[e.owner].stats.leaks++; s.players[e.owner].leakedThisWave++; if (!s.players[e.owner].stats.firstLeakWave) s.players[e.owner].stats.firstLeakWave = s.wave; }
       s.events.push({ t: 'coreHit', team: e.arena, dmg });
     }
   }
