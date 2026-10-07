@@ -42,8 +42,15 @@ export function unitDps(s: CombatStats): number {
   return dps;
 }
 
+/**
+ * Ranged units (and towers) fight behind the front line: in simulation they take far fewer hits than the
+ * Lanchester model assumes. Without this factor every shooter was rated 28–47 % below the median and the AI
+ * never built them (v0.4 audit: 10 of the 36 units were never used by the AI).
+ */
+export const RANGED_PROTECTION = 1.6;
+
 export function unitEhp(s: CombatStats): number {
-  let ehp = s.hp / (1 - s.armor);
+  let ehp = (s.hp / (1 - s.armor)) * (s.range >= 3.5 || (s as { tower?: string }).tower ? RANGED_PROTECTION : 1);
   for (const a of s.abilities) {
     switch (a.kind) {
       case 'heal': ehp += (a.amount / a.every) * 25; break;

@@ -1,10 +1,10 @@
 // Compact view-state shared by host (local) and guests (network). The renderer/UI only read these.
 import { UNITS } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import type { GameEvent, GameState, GameSettings, Build, PlayerStats, GameResult, Phase, Ent, QueuedSend } from '../sim/state';
-import type { CoreUpgradeId } from '../data/economy';
+import type { GameEvent, GameState, GameSettings, Build, PlayerStats, GameResult, Phase, Ent, QueuedSend, ModuleSlot, Proposal, ResoCast, RiftSpec, JournalEntry } from '../sim/state';
 import type { Branch, FactionId } from '../data/types';
 import type { RuneTile } from '../data/synergies';
+import type { AnomalyId } from '../data/tactics';
 
 export const DEF_IDS = [...Object.keys(UNITS), ...Object.keys(ENEMIES)];
 const DEF_INDEX = new Map(DEF_IDS.map((id, i) => [id, i]));
@@ -18,21 +18,32 @@ export interface PlayerView {
   raiderQueue: QueuedSend[]; raiderCd: Record<string, number>;
   curseQueue: QueuedSend[]; curseCd: Record<string, number>;
   powerLv: number[]; powerCd: number[]; fogUntil: number; jamUntil: number;
-  runes: RuneTile[];
+  runes: RuneTile[]; hazards: { col: number; row: number }[];
+  orders: number; orderCd: number; anomalyVote: AnomalyId | null;
   pauseVote: boolean; leakedThisWave: number; stats: PlayerStats;
+}
+export interface TeamView {
+  hp: number; maxHp: number; shield: number;
+  reso: number; resoCast: ResoCast | null; resoUses: number;
+  modules: (ModuleSlot | null)[]; proposal: Proposal | null;
+  anomaly: { id: AnomalyId; until: number } | null; anomalyOffer: AnomalyId[] | null; bossBoost: number;
 }
 export interface MetaView {
   settings: GameSettings;
   wave: number; phase: Phase; timer: number; timerMax: number; speed: number; paused: boolean;
   combatTime: number; time: number;
-  waveEvent: string | null; ending: number;
+  waveEvent: string | null; ending: number; rift: RiftSpec | null; seed: number;
   result: GameResult | null;
-  teams: { hp: number; maxHp: number; up: Record<CoreUpgradeId, number> }[];
+  teams: TeamView[];
   players: PlayerView[];
+  /** game journal: only sent once the game is over (end-of-game timeline) */
+  journal: JournalEntry[] | null;
 }
 
 export const F_ENEMY = 1, F_SLOW = 2, F_SHIELD = 4, F_LEAK = 8, F_BOSS = 16, F_RAIDER = 32, F_ELITE = 64,
   F_POISON = 128, F_BURN = 256, F_STUN = 512, F_STEALTH = 1024, F_SUMMON = 2048, F_HASTE = 4096;
+// v0.4 (bits 18+; 13–17 hold level / branch)
+export const F_MARK = 1 << 18, F_WET = 1 << 19, F_FOCUS = 1 << 20, F_RIFT = 1 << 21, F_GHOST = 1 << 22, F_TASK = 1 << 23, F_RALLY = 1 << 24, F_TELE = 1 << 25;
 const LV_SHIFT = 13, BR_SHIFT = 16;
 
 export interface EntView { id: number; defId: string; x: number; z: number; hp: number; arena: number; flags: number; owner: number; level: number; branch: Branch | null }
@@ -53,6 +64,14 @@ export function entFlags(s: GameState, e: Ent): number {
   if (e.stealth || e.veilUntil > s.combatTime) f |= F_STEALTH;
   if (e.summon) f |= F_SUMMON;
   if (e.hasteUntil > s.combatTime) f |= F_HASTE;
+  if (e.markUntil > s.time) f |= F_MARK;
+  if (e.wetUntil > s.time) f |= F_WET;
+  if (e.focusUntil > s.combatTime) f |= F_FOCUS;
+  if (e.rift) f |= F_RIFT;
+  if (e.ghost) f |= F_GHOST;
+  if (e.task >= 0) f |= F_TASK;
+  if (e.rallyUntil > s.combatTime || e.retreatUntil > s.combatTime) f |= F_RALLY;
+  if (e.tele) f |= F_TELE;
   f |= (e.level & 7) << LV_SHIFT;
   f |= (e.branch === 'A' ? 1 : e.branch === 'B' ? 2 : 0) << BR_SHIFT;
   return f;
@@ -68,8 +87,14 @@ export function entView(s: GameState, e: Ent): EntView {
 export function metaOf(s: GameState): MetaView {
   return {
     settings: s.settings, wave: s.wave, phase: s.phase, timer: s.timer, timerMax: s.timerMax, speed: s.speed, paused: s.paused,
-    combatTime: s.combatTime, time: s.time, waveEvent: s.waveEvent, ending: s.ending, result: s.result,
-    teams: s.teams.map(t => ({ hp: Math.max(0, t.core.hp), maxHp: t.core.maxHp, up: { ...t.core.up } })),
+    combatTime: s.combatTime, time: s.time, waveEvent: s.waveEvent, ending: s.ending, result: s.result, rift: s.rift, seed: s.seed,
+    teams: s.teams.map(t => ({
+      hp: Math.max(0, t.core.hp), maxHp: t.core.maxHp, shield: Math.round(t.core.shield),
+      reso: Math.floor(t.reso * 10) / 10, resoCast: t.resoCast ? { ...t.resoCast } : null, resoUses: t.resoUses,
+      modules: t.modules.map(m => (m ? { ...m } : null)), proposal: t.proposal ? { ...t.proposal } : null,
+      anomaly: t.anomaly ? { ...t.anomaly } : null, anomalyOffer: t.anomalyOffer ? t.anomalyOffer.slice() : null, bossBoost: t.bossBoost,
+    })),
+    journal: s.phase === 'ended' ? s.journal : null,
     players: s.players.map(p => ({
       pid: p.pid, team: p.team, slot: p.slot, name: p.name, isAI: p.isAI, faction: p.faction, randomFaction: p.randomFaction,
       gold: Math.floor(p.gold), ether: p.ether, income: p.income, workers: p.workers,
@@ -78,7 +103,7 @@ export function metaOf(s: GameState): MetaView {
       raiderQueue: p.raiderQueue.map(q => ({ ...q })), raiderCd: { ...p.raiderCd },
       curseQueue: p.curseQueue.map(q => ({ ...q })), curseCd: { ...p.curseCd },
       powerLv: p.powerLv.slice(), powerCd: p.powerCd.map(c => Math.ceil(c * 10) / 10), fogUntil: p.fogUntil, jamUntil: p.jamUntil,
-      runes: p.runes,
+      runes: p.runes, hazards: p.hazards, orders: p.orders, orderCd: p.orderCd, anomalyVote: p.anomalyVote,
       pauseVote: p.pauseVote, leakedThisWave: p.leakedThisWave, stats: { ...p.stats },
     })),
   };

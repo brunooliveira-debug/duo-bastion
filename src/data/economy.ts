@@ -43,14 +43,8 @@ export const CORE = {
   range: 8,
   attack: 'arca' as AttackType,
   regenPerWave: 40,
-  upgrades: {
-    atk: { name: 'Attaque', icon: '⚡', max: 5, costs: [30, 45, 60, 80, 100], per: 0.35, text: '+35 % dégâts du Core' },
-    regen: { name: 'Régénération', icon: '💚', max: 5, costs: [25, 40, 55, 70, 90], per: 60, text: '+60 PV rendus par vague' },
-    def: { name: 'Défense', icon: '🛡️', max: 5, costs: [35, 50, 65, 80, 100], per: 0.08, text: '-8 % dégâts subis' },
-    pow: { name: 'Puissance', icon: '💥', max: 3, costs: [50, 80, 120], per: 160, text: 'Onde Bastion : choc de zone toutes les 7 s' },
-  },
+  // upgrades: see src/data/modules.ts (Modules du Bastion, v0.4)
 };
-export type CoreUpgradeId = keyof typeof CORE.upgrades;
 
 // attack row × defense column. ↑ ≥ 1.1, ↓ ≤ 0.9
 export const DAMAGE_MATRIX: Record<AttackType, Record<DefenseType, number>> = {
@@ -97,8 +91,12 @@ export const RAIDERS: RaiderDef[] = [
 export const RAIDER_CATEGORY_NAMES: Record<RaiderCategory, string> = {
   eco: 'Éco', rapide: 'Rapide', blinde: 'Blindé', resistant: 'Résistant', special: 'Spécial', puissant: 'Puissant', champion: 'Champion',
 };
-/** Raider stats grow slowly with the wave they are sent on. */
-export function raiderScale(wave: number) { return 1 + 0.09 * (wave - 1); }
+/**
+ * Raider stats grow with the wave they are sent on. v0.3 used 1 + 0.09·(w−1): late sends had 3–4× less HP than
+ * the wave enemies they walked behind and were wiped out (balance report: 0.06 Core damage per Éther invested,
+ * no game ever decided by sends). They now follow the waves' own toughness curve (waveToughness ≈ 1.2 + 0.36·(w−1)).
+ */
+export function raiderScale(wave: number) { return 1 + 0.32 * (wave - 1); }
 /** Unlock wave adapted to the game length (10-wave games unlock everything faster). */
 export function raiderUnlock(r: RaiderDef, totalWaves: number) { return totalWaves <= 10 ? Math.ceil(r.unlockWave * 0.55) : r.unlockWave; }
 /** Max number of sends per player per wave. */

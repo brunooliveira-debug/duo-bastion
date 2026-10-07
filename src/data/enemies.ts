@@ -47,19 +47,23 @@ export const ENEMIES: Record<string, EnemyDef> = {
   brute: {
     id: 'brute', name: 'Brute Fracassante', description: 'Mini-boss. Frappe en zone.',
     hp: 1150, armor: 0.15, dmg: 40, atkSpeed: 0.7, range: 1.3, moveSpeed: 1.7, attack: 'phys', defense: 'bli',
-    abilities: [{ kind: 'splash', radius: 1.2, pct: 0.5 }, { kind: 'enrage', below: 0.5, speed: 0.6, atkSpeed: 0.5 }], mechanic: 'Enragée : plus rapide sous 50 % PV.', bounty: 40, leakDamage: 80,
+    abilities: [{ kind: 'splash', radius: 1.2, pct: 0.5 }, { kind: 'enrage', below: 0.5, speed: 0.6, atkSpeed: 0.5 }, { kind: 'slam', every: 10, windup: 1.5, radius: 2, dmg: 55, stun: 0.4, reach: 5 }],
+    mechanic: 'Fracasse le sol (zone rouge : esquivez !). Enragée sous 50 % PV.', title: 'Fléau des remparts', bounty: 40, leakDamage: 80,
     model: { shape: 'brute', color: 0x7a2a1a, accent: 0xffa040, scale: 1.5 },
   },
   boss_colosse: {
     id: 'boss_colosse', name: 'Le Colosse Fêlé', description: 'BOSS. Blindé, frappe en zone.', boss: true,
     hp: 6000, armor: 0.25, dmg: 90, atkSpeed: 0.6, range: 1.7, moveSpeed: 1.4, attack: 'ener', defense: 'bli',
-    abilities: [{ kind: 'splash', radius: 1.6, pct: 0.6 }, { kind: 'shieldPulse', every: 8, amount: 700, radius: 2 }], mechanic: 'Bouclier rechargeable toutes les 8 s.', bounty: 150, leakDamage: 250,
+    abilities: [{ kind: 'splash', radius: 1.6, pct: 0.6 }, { kind: 'shieldPulse', every: 8, amount: 700, radius: 2 }, { kind: 'slam', every: 10, windup: 1.7, radius: 2.5, dmg: 150, stun: 1, reach: 6 }],
+    mechanic: 'Bouclier rechargeable, écrase le sol. Sous 50 % : carapace de faille.', title: 'La montagne qui marche',
+    phases: [{ at: 0.5, name: 'Carapace de faille', shield: 0.2, slamFaster: 0.7 }], bounty: 150, leakDamage: 250,
     model: { shape: 'boss', color: 0x4a1a2a, accent: 0xff3a5a, scale: 2.2 },
   },
   reine_essaim: {
     id: 'reine_essaim', name: 'La Reine-Essaim', description: 'BOSS MAJEUR. Crache des nuées arcaniques.', boss: true,
     hp: 9500, armor: 0.15, dmg: 75, atkSpeed: 1, range: 3.5, moveSpeed: 1.5, attack: 'arca', defense: 'org',
-    abilities: [{ kind: 'splash', radius: 2, pct: 0.5 }, { kind: 'spawn', unit: 'essaim', count: 3, every: 6 }], mechanic: 'Pond 3 moucherons toutes les 6 s.', bounty: 220, leakDamage: 350,
+    abilities: [{ kind: 'splash', radius: 2, pct: 0.5 }, { kind: 'spawn', unit: 'essaim', count: 3, every: 6 }], mechanic: 'Pond des moucherons. Deux pontes frénétiques en cours de combat.', title: 'Mère de mille ailes',
+    phases: [{ at: 0.66, name: 'Ponte frénétique', spawn: { unit: 'essaim', count: 6 } }, { at: 0.33, name: 'Nuée royale', spawn: { unit: 'essaim', count: 8 }, speed: 0.3 }], bounty: 220, leakDamage: 350,
     model: { shape: 'boss', color: 0x6a5a1a, accent: 0xfff04a, scale: 2.4 },
   },
   primordial: {
@@ -69,9 +73,19 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { kind: 'splash', radius: 2.2, pct: 0.7 },
       { kind: 'slowPulse', every: 6, radius: 3, slow: 0.3, duration: 2, dmg: 60 },
       { kind: 'regen', pct: 0.002 }, { kind: 'resistSplash', pct: 0.5 }, { kind: 'enrage', below: 0.35, speed: 0.5, atkSpeed: 0.6 },
-    ], mechanic: 'Régénère, résiste aux explosions, s\'enrage sous 35 %.',
+      { kind: 'slam', every: 9, windup: 1.8, radius: 2.8, dmg: 200, stun: 1.2, reach: 7 },
+    ], mechanic: 'Régénère, résiste aux explosions, fracture le sol. 3 phases.', title: 'La faille incarnée',
+    phases: [{ at: 0.66, name: 'Fracture', spawn: { unit: 'bete_runique', count: 3 }, shield: 0.12 }, { at: 0.33, name: 'Dissonance absolue', slamFaster: 0.6, speed: 0.25 }],
     bounty: 400, leakDamage: 800,
     model: { shape: 'boss', color: 0x1a0a3a, accent: 0xb04aff, scale: 2.8 },
+  },
+
+  // ---- Secondary rift (static objective, v0.4) ----
+  faille: {
+    id: 'faille', name: 'Faille secondaire', description: 'Crache des ennemis tant qu\'elle reste ouverte. Affecte des unités pour la fermer.',
+    hp: 500, armor: 0.15, dmg: 0, atkSpeed: 0.01, range: 0.5, moveSpeed: 0, attack: 'arca', defense: 'mys',
+    abilities: [], bounty: 0, leakDamage: 0,
+    model: { shape: 'rift', color: 0x7a3aff, accent: 0xff7aff, scale: 1.3 },
   },
 
   // ---- Raider bodies ----
@@ -144,32 +158,36 @@ export const ENEMIES: Record<string, EnemyDef> = {
   titan_dissonant: {
     id: 'titan_dissonant', name: 'Titan Dissonant', description: 'Ultime : un boss envoyé par l\'adversaire.', boss: true,
     hp: 7000, armor: 0.3, dmg: 140, atkSpeed: 0.6, range: 1.7, moveSpeed: 1.4, attack: 'arca', defense: 'mys',
-    abilities: [{ kind: 'splash', radius: 1.8, pct: 0.6 }, { kind: 'slowPulse', every: 6, radius: 3, slow: 0.3, duration: 2, dmg: 60 }, { kind: 'resist', attack: 'phys', pct: 0.3 }], mechanic: 'Résiste au Physique (-30 %).', bounty: 60, leakDamage: 450,
+    abilities: [{ kind: 'splash', radius: 1.8, pct: 0.6 }, { kind: 'slowPulse', every: 6, radius: 3, slow: 0.3, duration: 2, dmg: 60 }, { kind: 'resist', attack: 'phys', pct: 0.3 }, { kind: 'slam', every: 11, windup: 1.6, radius: 2.4, dmg: 160, stun: 1, reach: 6 }],
+    mechanic: 'Résiste au Physique (-30 %), écrase le sol.', title: 'Envoyé par l\'adversaire', bounty: 60, leakDamage: 450,
     model: { shape: 'boss', color: 0x1a3a3a, accent: 0x4affd0, scale: 2.2 },
   },
   // ---- mini-bosses ----
   alpha_coureur: {
     id: 'alpha_coureur', name: 'Coureur Alpha', description: 'Mini-boss d\'une vitesse folle.', boss: true,
     hp: 650, armor: 0.05, dmg: 22, atkSpeed: 1.2, range: 1.1, moveSpeed: 4.4, attack: 'phys', defense: 'leg',
-    abilities: [{ kind: 'ignoreTaunt' }], bounty: 25, leakDamage: 120, mechanic: 'Très grande vitesse, ignore la provocation.',
+    abilities: [{ kind: 'ignoreTaunt' }], bounty: 25, leakDamage: 120, mechanic: 'Très grande vitesse, ignore la provocation.', title: 'Le vent qui mord',
     model: { shape: 'runner', color: 0xd85a2a, accent: 0xfff06a, scale: 1.5 },
   },
   alpha_runique: {
     id: 'alpha_runique', name: 'Alpha Runique', description: 'Mini-boss qui se régénère.', boss: true,
     hp: 2100, armor: 0.1, dmg: 40, atkSpeed: 0.8, range: 1.2, moveSpeed: 1.9, attack: 'ener', defense: 'org',
-    abilities: [{ kind: 'regen', pct: 0.02 }], bounty: 35, leakDamage: 160, mechanic: 'Régénère 2 % de ses PV par seconde.',
+    abilities: [{ kind: 'regen', pct: 0.02 }], bounty: 35, leakDamage: 160, mechanic: 'Régénère 2 % de ses PV par seconde. Rage runique sous 50 %.', title: 'Le sang des runes',
+    phases: [{ at: 0.5, name: 'Rage runique', atkSpeed: 0.4 }],
     model: { shape: 'brute', color: 0x3a2a5a, accent: 0x6affd0, scale: 1.6 },
   },
   gardien_basalte: {
     id: 'gardien_basalte', name: 'Gardien de Basalte', description: 'Mini-boss à la carapace impénétrable.', boss: true,
     hp: 3300, armor: 0.3, dmg: 50, atkSpeed: 0.7, range: 1.3, moveSpeed: 1.5, attack: 'phys', defense: 'bli',
-    abilities: [{ kind: 'resist', attack: 'phys', pct: 0.5 }, { kind: 'splash', radius: 1.3, pct: 0.5 }], bounty: 45, leakDamage: 200, mechanic: 'Résiste au Physique (-50 %).',
+    abilities: [{ kind: 'resist', attack: 'phys', pct: 0.5 }, { kind: 'splash', radius: 1.3, pct: 0.5 }, { kind: 'slam', every: 10, windup: 1.5, radius: 2.2, dmg: 110, stun: 0.8, reach: 5 }], bounty: 45, leakDamage: 200,
+    mechanic: 'Résiste au Physique (-50 %), écrase le sol.', title: 'Le mur vivant',
     model: { shape: 'armored', color: 0x3a3a48, accent: 0xff7a2a, scale: 1.7 },
   },
   ingenieur_fele: {
     id: 'ingenieur_fele', name: 'Ingénieur Fêlé', description: 'Mini-boss qui lance des drones.', boss: true,
     hp: 3600, armor: 0.2, dmg: 45, atkSpeed: 0.9, range: 3.5, moveSpeed: 1.6, attack: 'perf', defense: 'mys',
-    abilities: [{ kind: 'resistSplash', pct: 0.6 }, { kind: 'spawn', unit: 'essaim', count: 2, every: 5 }], bounty: 50, leakDamage: 220, mechanic: 'Résiste aux explosions, lance des drones.',
+    abilities: [{ kind: 'resistSplash', pct: 0.6 }, { kind: 'spawn', unit: 'essaim', count: 2, every: 5 }], bounty: 50, leakDamage: 220, mechanic: 'Résiste aux explosions, lance des drones. Essaim de drones sous 50 %.', title: 'L\'artilleur de la faille',
+    phases: [{ at: 0.5, name: 'Essaim de drones', spawn: { unit: 'essaim', count: 5 } }],
     model: { shape: 'champion', color: 0x5a4a2a, accent: 0x9ffcff, scale: 1.6 },
   },
 };

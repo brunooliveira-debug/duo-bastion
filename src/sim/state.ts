@@ -1,10 +1,11 @@
 // GameState — the single source of truth, owned by the host. Pure data (JSON-serialisable).
 import type { Ability, AttackType, Branch, DefenseType, FactionId } from '../data/types';
 import type { RuneTile } from '../data/synergies';
+import type { ModuleId } from '../data/modules';
+import type { AnomalyId, RiftReward } from '../data/tactics';
 import { CORE, ECONOMY, GRID, TIMING } from '../data/economy';
-import { CoreUpgradeId } from '../data/economy';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export type Phase = 'build' | 'combat' | 'resolution' | 'ended';
 export type GameMode = 'vsai' | 'survival' | 'duel';
@@ -22,6 +23,11 @@ export interface Build {
   placedWave: number;
   value: number; // gold invested
   dmgTotal: number;
+  tanked: number; // lifetime damage absorbed (end-of-game analysis)
+  healed: number; // lifetime healing / shields given
+  ctrl: number; // lifetime crowd control applied (seconds of stun / slow)
+  fused: number; // fusions merged into this unit: each gives the "Éclat de fusion" bonus
+  rift: boolean; // assigned to close the secondary rift this wave
 }
 
 export interface PlayerStats {
@@ -51,6 +57,10 @@ export interface PlayerStats {
   firstLeakWave: number; // 0 = never leaked
   helpDmg: number; helpKills: number; // damage / kills in the partner's lane
   saves: number; // leaked enemies killed before reaching the Core
+  orders: number; // tactical orders given
+  resoGain: number; // Résonance charge brought to the team
+  riftsClosed: number;
+  etherModules: number; // Éther put into Bastion modules
 }
 
 export interface QueuedSend { r: string; to: number }
@@ -83,6 +93,14 @@ export interface PlayerState {
   fogUntil: number; // curses received: combat time until which they apply
   jamUntil: number;
   runes: RuneTile[];
+  hazards: { col: number; row: number }[]; // cells hurting the unit standing on them (Rune instable)
+  orders: number; // tactical order charges left this wave
+  orderCd: number; // combat time before the next order is allowed
+  anomalyVote: AnomalyId | null;
+  riftReward: boolean; // the rift of this lane was closed this wave (reward granted)
+  waveHelpKills: number; // kills in the partner's lane this wave (journal: "défense sauvée")
+  helpWave: number; // last wave a cross-army help effect was announced (one hint per wave)
+  souls: number; // Nécrose "Moisson": enemies slain this wave
   leakedThisWave: number;
   waveDmg: number;
   pauseVote: boolean;
@@ -92,10 +110,25 @@ export interface PlayerState {
 export interface CoreState {
   hp: number;
   maxHp: number;
-  up: Record<CoreUpgradeId, number>;
   cd: number;
-  powCd: number;
+  powCd: number; // Onde Bastion
+  beamCd: number; // Rayon Prismatique
+  chainCd: number; // Entrave
+  shield: number; // Égide (absorbs leak damage, refilled each wave)
+  portal: number; // Portail de Repli uses left this wave
+  repaired: number; // Rouages "Réparation" healing already received this wave
 }
+
+export interface ModuleSlot { id: ModuleId; lv: number }
+export interface Proposal {
+  by: number; // proposer pid
+  action: 'install' | 'upgrade' | 'remove';
+  module: ModuleId;
+  slot: number;
+  cost: number; // Éther escrowed by the proposer (0 for a removal)
+  at: number; // game time of the proposal (auto-accept after PROPOSAL_TIMEOUT)
+}
+export interface ResoCast { by: number; fireAt: number; sync: boolean; syncBy: number }
 
 export interface TeamState {
   id: number;
@@ -103,6 +136,17 @@ export interface TeamState {
   alive: boolean;
   dmgWaves: number; // Core damage taken from regular waves (analysis)
   dmgSends: number; // Core damage taken from opposing sends
+  reso: number; // Résonance DUO gauge (0..RESO_MAX)
+  resoCast: ResoCast | null; // channel in progress
+  resoUses: number;
+  resoFullSeen: boolean; // "gauge full" already announced
+  syncWave: number; // last wave a synchronised power pair granted charge
+  lastCast: { pid: number; t: number } | null;
+  modules: (ModuleSlot | null)[];
+  proposal: Proposal | null;
+  anomaly: { id: AnomalyId; until: number } | null;
+  anomalyOffer: AnomalyId[] | null;
+  bossBoost: number; // Fortune du Bastion: next boss HP multiplier
 }
 
 export interface Ent {
@@ -154,7 +198,7 @@ export interface Ent {
   dotMul: number;
   elite: boolean;
   expires: number; // temporary summons: combat time of disappearance (0 = never)
-  back: boolean; // placed in the back line (fog curse)
+  back: boolean; // placed in the back line (fog curse, Aura de Cadence)
   veilUntil: number; // untargetable (commander veil)
   buffUntil: number; // temporary damage buff
   buffDmg: number;
@@ -174,6 +218,20 @@ export interface Ent {
   bounty: number;
   leakDamage: number;
   src: number; // pid that sent this enemy (-1 = regular wave)
+  // v0.4
+  rift: boolean; // secondary rift (static objective, not a lane enemy)
+  task: number; // unit assigned to the rift of this pid (-1 = none)
+  markUntil: number; markPct: number; // takes +markPct damage
+  wetUntil: number; // soaked by an abyssal helper: lightning deals +30 %
+  focusUntil: number; focusBy: number; // FOCUS order target
+  rallyUntil: number; // inside a RALLIEMENT zone
+  retreatUntil: number; // REPLI
+  interceptUntil: number; // INTERCEPTION
+  tele: { x: number; z: number; r: number; at: number; dmg: number; stun: number } | null; // telegraphed boss attack
+  phase: number; // boss phase reached
+  ghost: boolean; // revived construct (Machine Interdite)
+  growth: number; // Ronces "Croissance": waves survived on the field
+  helped: number; // cross-army help effects already triggered by this unit this wave
 }
 
 export type GameEvent =
@@ -194,19 +252,29 @@ export type GameEvent =
   | { t: 'fuse'; pid: number; bid: number; col: number; row: number }
   | { t: 'curse'; pid: number; curse: string; to: number }
   | { t: 'hexed'; to: number; list: string[] }
-  | { t: 'bossIn'; arena: number; id: string }
+  | { t: 'bossIn'; arena: number; id: string; eid: number }
   | { t: 'powerUp'; pid: number; slot: number }
   | { t: 'sell'; pid: number }
   | { t: 'worker'; pid: number }
   | { t: 'raider'; pid: number; raider: string; to: number }
   | { t: 'sends'; from: number; to: number; list: string[] }
-  | { t: 'cast'; pid: number; power: string; arena: number; x: number; z: number }
-  | { t: 'coreUp'; pid: number; up: string }
+  | { t: 'cast'; pid: number; power: string; arena: number; x: number; z: number; assist: boolean }
   | { t: 'wave'; n: number; boss: boolean }
   | { t: 'combat' }
   | { t: 'income'; pid: number; gold: number }
   | { t: 'msg'; pid: number; text: string }
-  | { t: 'end'; result: string };
+  | { t: 'end'; result: string }
+  // v0.4
+  | { t: 'reso'; team: number; k: 'full' | 'start' | 'sync' | 'fire' | 'refund'; pid: number; ability: string; sync: boolean }
+  | { t: 'order'; pid: number; order: string; x: number; z: number; target: number; arena: number }
+  | { t: 'tele'; arena: number; id: number; x: number; z: number; r: number; dur: number }
+  | { t: 'slam'; arena: number; x: number; z: number; r: number }
+  | { t: 'bossPhase'; arena: number; id: number; def: string; phase: number }
+  | { t: 'module'; team: number; pid: number; k: 'propose' | 'accept' | 'refuse' | 'auto' | 'cancel'; module: string; action: string; lv: number }
+  | { t: 'anomaly'; team: number; k: 'offer' | 'vote' | 'pick'; id: string; pid: number }
+  | { t: 'rift'; pid: number; k: 'open' | 'closed' | 'faded'; reward: string; arena: number; x: number; z: number }
+  | { t: 'help'; pid: number; kind: string; arena: number; x: number; z: number }
+  | { t: 'portal'; arena: number; x: number; z: number; x2: number; z2: number };
 
 export interface HumanSlot { name: string; faction?: FactionChoice }
 
@@ -216,6 +284,7 @@ export interface GameSettings {
   difficulty: Difficulty;
   humans: HumanSlot[]; // 1 or 2 humans; missing partner = AI
   tutorial?: boolean;
+  challenge?: string; // 'daily:YYYY-MM-DD' — same seed, same world for everyone
 }
 
 export interface GameResult {
@@ -225,6 +294,15 @@ export interface GameResult {
   wave: number;
   reason: string;
 }
+
+/** Secondary rift of the current wave (same for every lane: fair in duels). */
+export interface RiftSpec { reward: RiftReward; hpMul: number; spawnMul: number; rewardMul: number }
+
+/** Deterministic game journal (end-of-game timeline / replay analysis). Compact on purpose. */
+export interface JournalEntry { w: number; k: string; p: number; a?: number | string; b?: number | string }
+
+/** A unit destroyed this combat (Machine Interdite revives them as ghosts). */
+export interface Fallen { owner: number; defId: string; level: number; branch: Branch | null; x: number; z: number }
 
 export interface GameState {
   v: number;
@@ -239,6 +317,7 @@ export interface GameState {
   timerMax: number;
   waveEvent: string | null; // random event of the current/next wave (announced during the preparation)
   lastEvent: string | null;
+  rift: RiftSpec | null; // secondary rift of the current/next wave
   ending: number; // > 0 during the end-of-game sequence
   combatTime: number;
   speed: number;
@@ -249,6 +328,8 @@ export interface GameState {
   nextId: number;
   events: GameEvent[];
   result: GameResult | null;
+  fallen: Fallen[];
+  journal: JournalEntry[];
 }
 
 export const DT = 1 / TIMING.tickRate;
@@ -272,22 +353,43 @@ export function cellCenter(slot: number, col: number, row: number) {
   return { x, z };
 }
 
+/** Where the secondary rift of a lane opens (lane edge, just in front of the grid). */
+export function riftPos(slot: number) {
+  const d = laneDir(slot);
+  return { x: -d * (LANE.gridFrontX + 2.2), z: slot === 0 ? -3.6 : 3.6 };
+}
+
 export function newStats(): PlayerStats {
   return {
     dmgDealt: 0, dmgTanked: 0, goldEarned: 0, etherProduced: 0, maxWorkers: ECONOMY.startWorkers,
     raidersSent: 0, leaks: 0, coreDamageCaused: 0, maxDps: 0, bestUnit: '', bestUnitDmg: 0,
     upgrades: 0, fusions: 0, casts: 0, kills: 0, unitsBuilt: 0, sentUnits: 0, curses: 0,
     goldArmy: 0, raiderEther: 0, raiderGold: 0, raiderCoreDmg: 0, powerDmg: 0, firstLeakWave: 0, helpDmg: 0, helpKills: 0, saves: 0,
+    orders: 0, resoGain: 0, riftsClosed: 0, etherModules: 0,
   };
 }
 
 export function newCore(): CoreState {
-  return { hp: CORE.hp, maxHp: CORE.hp, up: { atk: 0, regen: 0, def: 0, pow: 0 }, cd: 0, powCd: 7 };
+  return { hp: CORE.hp, maxHp: CORE.hp, cd: 0, powCd: 7, beamCd: 4, chainCd: 6, shield: 0, portal: 0, repaired: 0 };
+}
+
+export function newTeam(id: number): TeamState {
+  return {
+    id, core: newCore(), alive: true, dmgWaves: 0, dmgSends: 0,
+    reso: 0, resoCast: null, resoUses: 0, resoFullSeen: false, syncWave: 0, lastCast: null,
+    modules: [null, null, null], proposal: null, anomaly: null, anomalyOffer: null, bossBoost: 1,
+  };
 }
 
 export function teamCount(s: GameState) { return s.settings.mode === 'survival' ? 1 : 2; }
 
 export function playersOfTeam(s: GameState, team: number) { return s.players.filter(p => p.team === team); }
+
+/** The other player of p's team (co-op partner, AI partner in duels). */
+export function partnerOf(s: GameState, pid: number) {
+  const p = s.players[pid];
+  return s.players.find(o => o.team === p.team && o.pid !== pid) ?? null;
+}
 
 /** Opposing lane owners that pid may send to (vs-AI mode only). */
 export function opponents(s: GameState, pid: number): PlayerState[] {
@@ -307,5 +409,21 @@ export function raiderTarget(s: GameState, pid: number): PlayerState | null {
 export function humanPid(mode: GameMode, index: number) { return mode === 'duel' ? index * 2 : index; }
 
 export function humanPlayers(s: GameState) { return s.players.filter(p => !p.isAI); }
+
+/** Level of a Bastion module installed on a team's Core (0 = absent). */
+export function moduleLv(t: TeamState, id: ModuleId) {
+  for (const m of t.modules) if (m && m.id === id) return m.lv;
+  return 0;
+}
+
+/** Active anomaly of a team (null when none / expired). */
+export function anomalyOf(s: GameState, team: number): AnomalyId | null {
+  const a = s.teams[team]?.anomaly;
+  return a && s.wave <= a.until ? a.id : null;
+}
+
+export function journal(s: GameState, k: string, p: number, a?: number | string, b?: number | string) {
+  s.journal.push(a === undefined ? { w: s.wave, k, p } : b === undefined ? { w: s.wave, k, p, a } : { w: s.wave, k, p, a, b });
+}
 
 export { TIMING, ECONOMY };

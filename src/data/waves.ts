@@ -37,6 +37,16 @@ const ENDLESS_DIFF = 2.3;
 const ENDLESS_POOL = ['rampelin', 'essaim', 'coureur', 'cuirasse', 'tireur', 'mage_fele', 'bete_runique'];
 const ENDLESS_BOSSES = ['brute', 'alpha_runique', 'gardien_basalte', 'ingenieur_fele'];
 
+/**
+ * Smooth toughness of the enemies at wave n (≈ HP multiplier of a regular wave's enemies).
+ * Boss waves have a LOW hpMul (the boss itself is huge), so effects scaled with getWave(n).hpMul were ~8× weaker
+ * on the final boss than on wave 20: powers, Résonance, rifts and Core modules use this curve instead.
+ */
+export function waveToughness(n: number): number {
+  if (n <= WAVES.length) return 1.2 + 0.36 * (n - 1);
+  return Math.max(1.2 + 0.36 * (n - 1), getWave(n).hpMul * 0.8);
+}
+
 /** Wave definition for any number (survival mode goes past 21). */
 export function getWave(n: number): WaveDef {
   if (n <= WAVES.length) {

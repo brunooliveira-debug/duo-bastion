@@ -10,6 +10,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Frappe de loin, ralentit et achève. Récompense le placement soigné.',
     strengths: ['Très longue portée', 'Ralentissements + bonus contre les ralentis', 'Anti-boss (Lancière)'],
     weaknesses: ['Ligne de front fragile', 'Peu de dégâts de zone', 'Souffre contre les nuées rapides'],
+    doctrine: { name: 'Coordination', text: 'Les tirs à distance de l\'Ordre marquent leur cible : +10 % de dégâts subis de toutes les sources (3 s).' },
+    help: { name: 'Repérage', text: 'En aidant la voie partenaire, la marque monte à +20 % : ton allié en profite aussi.' },
     units: ['gardien_stellaire', 'loup_astral', 'tireuse_etoile', 'lanciere_eclair', 'harmoniste', 'astromancienne'],
   },
   rouages: {
@@ -18,6 +20,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Blindage, artillerie lourde et étourdissements. Lent mais inébranlable.',
     strengths: ['Unités très résistantes (Blindées)', 'Artillerie de zone à 8 m', 'Étourdissements'],
     weaknesses: ['Cher et lent à démarrer', 'Vulnérable aux attaques Énergie / Arcane', 'Peu de soins'],
+    doctrine: { name: 'Optimisation', text: 'Améliorations 10 % moins chères. Les unités en tour tirent 10 % plus vite.' },
+    help: { name: 'Réparation', text: 'Chaque ennemi éliminé dans la voie partenaire ou près du Core répare le Core (+0,4 % PV, 4 % max par vague).' },
     units: ['ferraille', 'foreuse', 'bombardiere', 'colosse_forge', 'mecanicienne', 'exarque_prisme'],
   },
   ronces: {
@@ -26,6 +30,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Poison qui ignore l\'armure, régénération, pousses invoquées et tireuse camouflée.',
     strengths: ['Poison : ignore l\'armure', 'Régénération et invocations', 'Embuscades camouflées'],
     weaknesses: ['Dégâts lents à monter', 'Organiques : craint Physique et Perforant', 'Faible burst contre les boss'],
+    doctrine: { name: 'Croissance', text: 'Chaque vague survécue sur le terrain : +3 % PV max pour l\'unité (jusqu\'à +24 %).' },
+    help: { name: 'Sève partagée', text: 'En aidant, tes unités laissent une zone de régénération : alliés proches +3 % PV/s pendant 3 s.' },
     units: ['gardien_ecorce', 'lame_ronce', 'rodeuse', 'semeuse', 'druidesse', 'ancien_racine'],
   },
   abysses: {
@@ -34,6 +40,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Ralentit, étourdit et protège. Les vagues se brisent sur tes colosses.',
     strengths: ['Ralentissements et étourdissements', 'Boucliers de groupe', 'Excellents contre les rapides'],
     weaknesses: ['Dégâts modestes', 'Lent à tuer les boss', 'Mystiques : craint l\'Arcane'],
+    doctrine: { name: 'Pression des fonds', text: 'Ennemis de ta voie 8 % plus lents. Tes unités gagnent +1 % de dégâts par seconde de combat (max +25 %).' },
+    help: { name: 'Courant', text: 'En aidant, tes coups trempent la cible (4 s) : ralentie de 15 %, elle subit +30 % des éclairs et rebonds.' },
     units: ['carapace_abysses', 'ondin', 'harponneuse', 'meduse', 'pretresse', 'kraken'],
   },
   solaires: {
@@ -42,6 +50,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Feu sur la durée, explosions et zone massive. Puissant mais fragile.',
     strengths: ['Brûlures sur la durée', 'Énormes dégâts de zone', 'Accélération des alliés'],
     weaknesses: ['Unités fragiles', 'Coûteux', 'Dépend de sa Paladine pour tenir la ligne'],
+    doctrine: { name: 'Ferveur', text: 'Tes unités sous 50 % PV infligent +20 % de dégâts. Un ennemi qui meurt en brûlant explose (1,6 m).' },
+    help: { name: 'Étincelle', text: 'En aidant, tes coups embrasent la cible pendant 3 s.' },
     units: ['paladin_aube', 'danse_flamme', 'arbaletriere', 'oracle_braise', 'vestale', 'elementaire'],
   },
   necrose: {
@@ -50,6 +60,8 @@ export const FACTIONS: Record<FactionId, FactionDef> = {
     style: 'Invocations gratuites, assassins camouflés, vol de vie et exécutions.',
     strengths: ['Invocations de squelettes', 'Camouflage et embuscades', 'Exécute les ennemis affaiblis'],
     weaknesses: ['Peu de vrais tanks', 'Invocations fragiles face à la zone', 'Unités légères'],
+    doctrine: { name: 'Pacte & Moisson', text: 'Chaque ennemi éliminé renforce tes ombres (+2 % dégâts, max +30 %, jusqu\'à la fin de la vague). Une unité qui tombe a 35 % de chances de se relever en squelette.' },
+    help: { name: 'Âmes errantes', text: 'Un ennemi tué dans la voie partenaire a 30 % de chances de se relever en squelette allié.' },
     units: ['garde_os', 'spectre_vif', 'archere_cendres', 'pestifere', 'invocatrice', 'abomination'],
   },
 };
@@ -367,7 +379,7 @@ export const UNITS: Record<string, UnitDef> = {
 
   // ======================================================== BRASIER SOLAIRE
   paladin_aube: def({
-    id: 'paladin_aube', name: 'Paladine de l\'Aube', faction: 'solaires', category: 'defense', cost: 105,
+    id: 'paladin_aube', name: 'Paladine de l\'Aube', faction: 'solaires', category: 'defense', cost: 100,
     hp: 700, armor: 0.2, dmg: 17, atkSpeed: 0.9, range: 1.2, moveSpeed: 2.2, attack: 'phys', defense: 'mys', roles: ['tank', 'support'],
     abilities: [{ kind: 'taunt', radius: 3 }, { kind: 'guardAura', radius: 2.5, pct: 0.12 }],
     description: 'Son bouclier solaire protège ceux qui l\'entourent.', passiveText: 'Provocation. Aura : alliés proches -12 % dégâts subis.',
@@ -379,7 +391,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'paladin', color: 0xd88a3a, accent: 0xfff2a0, scale: 1 }, fx: 'fire', sfx: 'metal',
   }),
   danse_flamme: def({
-    id: 'danse_flamme', name: 'Danse-Flamme', faction: 'solaires', category: 'rapide', cost: 90,
+    id: 'danse_flamme', name: 'Danse-Flamme', faction: 'solaires', category: 'rapide', cost: 85,
     hp: 310, armor: 0, dmg: 22, atkSpeed: 1.3, range: 1.1, moveSpeed: 3.2, attack: 'ener', defense: 'leg', roles: ['dps'],
     abilities: [{ kind: 'burn', dps: 9, duration: 3 }],
     description: 'Duelliste aux cimeterres incandescents.', passiveText: 'Brûlure : 9 dégâts/s pendant 3 s.',
@@ -391,7 +403,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'duelist', color: 0xd8572a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'slash',
   }),
   arbaletriere: def({
-    id: 'arbaletriere', name: 'Arbalétrière Solaire', faction: 'solaires', category: 'antiblindage', cost: 105, tower: 'archer',
+    id: 'arbaletriere', name: 'Arbalétrière Solaire', faction: 'solaires', category: 'antiblindage', cost: 100, tower: 'archer',
     hp: 240, armor: 0, dmg: 30, atkSpeed: 1.0, range: 5.5, moveSpeed: 2.3, attack: 'ener', defense: 'leg', roles: ['ranged', 'dps'],
     abilities: [{ kind: 'armorShred', pct: 0.15, duration: 3 }, { kind: 'burn', dps: 6, duration: 3 }],
     description: 'Carreaux chauffés à blanc.', passiveText: 'Ses carreaux fragilisent (+15 % dégâts subis) et brûlent.',
@@ -403,7 +415,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'xbow', color: 0xd86a2a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'arrow',
   }),
   oracle_braise: def({
-    id: 'oracle_braise', name: 'Oracle de Braise', faction: 'solaires', category: 'zone', tier: 3, cost: 150, tower: 'fire',
+    id: 'oracle_braise', name: 'Oracle de Braise', faction: 'solaires', category: 'zone', tier: 3, cost: 145, tower: 'fire',
     hp: 270, armor: 0, dmg: 42, atkSpeed: 0.65, range: 4.5, moveSpeed: 2.2, attack: 'arca', defense: 'mys', roles: ['mage', 'aoe'],
     abilities: [{ kind: 'splash', radius: 1.7, pct: 0.65 }, { kind: 'burn', dps: 8, duration: 3 }],
     description: 'Projette des fragments de soleil captif.', passiveText: 'Éclat solaire : 70 % des dégâts autour de la cible. Brûle.',
@@ -415,7 +427,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'mage', color: 0xd8572a, accent: 0xffd36a, scale: 1 }, fx: 'fire', sfx: 'fire',
   }),
   vestale: def({
-    id: 'vestale', name: 'Vestale du Feu Sacré', faction: 'solaires', category: 'soutien', cost: 100, tower: 'shrine',
+    id: 'vestale', name: 'Vestale du Feu Sacré', faction: 'solaires', category: 'soutien', cost: 95, tower: 'shrine',
     hp: 300, armor: 0, dmg: 12, atkSpeed: 1.0, range: 4, moveSpeed: 2.3, attack: 'arca', defense: 'mys', roles: ['support', 'aura'],
     abilities: [{ kind: 'hastePulse', every: 8, radius: 3.5, pct: 0.35, duration: 3.5 }, { kind: 'heal', every: 3.5, amount: 25, range: 4 }],
     description: 'Gardienne de la flamme qui embrase les cœurs.', skillText: 'Ferveur (8 s) : +35 % vitesse d\'attaque aux alliés proches pendant 3,5 s.', passiveText: 'Soin léger.',
@@ -427,7 +439,7 @@ export const UNITS: Record<string, UnitDef> = {
     model: { shape: 'priestess', color: 0xe8803a, accent: 0xfff2a0, scale: 1 }, fx: 'fire', sfx: 'chime',
   }),
   elementaire: def({
-    id: 'elementaire', name: 'Élémentaire Solaire', faction: 'solaires', category: 'speciale', tier: 4, cost: 220,
+    id: 'elementaire', name: 'Élémentaire Solaire', faction: 'solaires', category: 'speciale', tier: 4, cost: 210,
     hp: 760, armor: 0, dmg: 52, atkSpeed: 0.8, range: 3, moveSpeed: 2, attack: 'arca', defense: 'mys', roles: ['carry', 'aoe'],
     abilities: [{ kind: 'novaPulse', every: 4, radius: 3, dmg: 42, burn: 10 }],
     description: 'Un fragment de soleil vivant.', skillText: 'Nova (4 s) : explosion de feu autour de lui (45 + brûlure).', passiveText: '—',
@@ -479,8 +491,8 @@ export const UNITS: Record<string, UnitDef> = {
   pestifere: def({
     id: 'pestifere', name: 'Pestiféré', faction: 'necrose', category: 'zone', cost: 90, tower: 'poison',
     hp: 380, armor: 0, dmg: 14, atkSpeed: 0.85, range: 3.5, moveSpeed: 2, attack: 'ener', defense: 'org', roles: ['aoe'],
-    abilities: [{ kind: 'poison', dps: 12, duration: 4, radius: 2.1 }, { kind: 'armorShred', pct: 0.1, duration: 3 }],
-    description: 'Il balance un encensoir de miasmes.', passiveText: 'Miasme : poison de zone (2 m, 12/s, 4 s).',
+    abilities: [{ kind: 'poison', dps: 14, duration: 4, radius: 2.5 }, { kind: 'armorShred', pct: 0.1, duration: 3 }],
+    description: 'Il balance un encensoir de miasmes.', passiveText: 'Miasme : poison de zone (2,5 m, 14/s, 4 s).',
     pros: 'Affaiblit des groupes entiers.', cons: 'Courte portée.',
     branches: [
       { name: 'Seigneur de la Peste', text: 'Poison x2.', add: [{ kind: 'poison', dps: 18, duration: 4, radius: 2.3 }], color: 0x4a6a2a, accent: 0xc0ff4a },
@@ -549,6 +561,13 @@ export const UNITS: Record<string, UnitDef> = {
     hp: 700, armor: 0.15, dmg: 30, atkSpeed: 0.9, range: 2.6, moveSpeed: 0, attack: 'phys', defense: 'mys', roles: ['tank'],
     abilities: [{ kind: 'splash', radius: 1.8, pct: 0.5 }, { kind: 'stunOnHit', chance: 0.3, duration: 1 }, { kind: 'taunt', radius: 3 }], description: 'Invoqué (pouvoir).', passiveText: '—', pros: '', cons: '',
     model: { shape: 'kraken', color: 0x3a2a6a, accent: 0x9ffcff, scale: 1.8 }, fx: 'water', sfx: 'wave',
+  }),
+  leviathan: def({
+    id: 'leviathan', name: 'Léviathan Mécanique', faction: 'abysses', category: 'speciale', cost: 0, token: true,
+    hp: 1500, armor: 0.25, dmg: 46, atkSpeed: 0.8, range: 2.4, moveSpeed: 1.8, attack: 'ener', defense: 'bli', roles: ['tank'],
+    abilities: [{ kind: 'taunt', radius: 4.5 }, { kind: 'splash', radius: 2.2, pct: 0.6 }, { kind: 'stunOnHit', chance: 0.3, duration: 1 }, { kind: 'interceptor', radius: 14 }],
+    description: 'Invoqué (Résonance DUO).', passiveText: '—', pros: '', cons: '',
+    model: { shape: 'leviathan', color: 0x6a7a8a, accent: 0x5ad8ff, scale: 2.1 }, fx: 'water', sfx: 'boom',
   }),
 };
 

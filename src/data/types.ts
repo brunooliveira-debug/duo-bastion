@@ -52,7 +52,9 @@ export type Ability =
   | { kind: 'explode'; dmg: number; radius: number } // kamikaze on contact
   | { kind: 'enrage'; below: number; speed: number; atkSpeed: number } // boss: faster when wounded
   | { kind: 'spawn'; unit: string; count: number; every: number } // boss: calls minions
-  | { kind: 'resistSplash'; pct: number }; // boss: takes less area damage
+  | { kind: 'resistSplash'; pct: number } // boss: takes less area damage
+  /** boss: telegraphed slam on the densest group of units within reach (red zone on the ground during the windup) */
+  | { kind: 'slam'; every: number; windup: number; radius: number; dmg: number; stun: number; reach: number };
 
 export type Shape =
   // defenders
@@ -62,7 +64,9 @@ export type Shape =
   | 'duelist' | 'xbow' | 'elemental' | 'boneguard' | 'skeleton' | 'necro' | 'censer' | 'abom'
   // enemies
   | 'crawler' | 'fly' | 'runner' | 'armored' | 'gunner' | 'caster' | 'brute' | 'boss'
-  | 'ghost' | 'shaman' | 'blob' | 'sapper' | 'champion' | 'core';
+  | 'ghost' | 'shaman' | 'blob' | 'sapper' | 'champion' | 'core'
+  // v0.4: secondary rift objective, mechanical leviathan (Résonance)
+  | 'rift' | 'leviathan';
 
 export interface ModelDef {
   /** primitive silhouette archetype used by the renderer */
@@ -121,6 +125,16 @@ export interface UnitDef extends CombatStats {
   fx: string;
 }
 
+/** Boss phase: triggers once when its HP falls under `at` (fraction). */
+export interface BossPhase {
+  at: number;
+  name: string;
+  speed?: number; atkSpeed?: number; // permanent bonuses (fractions)
+  spawn?: { unit: string; count: number };
+  shield?: number; // fraction of max HP
+  slamFaster?: number; // slam cooldown multiplier
+}
+
 export interface EnemyDef extends CombatStats {
   id: string;
   name: string;
@@ -130,6 +144,9 @@ export interface EnemyDef extends CombatStats {
   boss?: boolean;
   /** mini-boss / boss mechanic shown in the alert */
   mechanic?: string;
+  /** short epithet shown in the boss introduction */
+  title?: string;
+  phases?: BossPhase[];
   description: string;
 }
 
@@ -179,5 +196,8 @@ export interface FactionDef {
   strengths: string[];
   weaknesses: string[];
   units: string[]; // 6 base unit ids
-
+  /** army-wide passive that defines its play style (v0.4) */
+  doctrine: { name: string; text: string };
+  /** effect of its units when they come to help the partner's lane (cross-army synergy, v0.4) */
+  help: { name: string; text: string };
 }

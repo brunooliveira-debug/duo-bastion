@@ -1,15 +1,23 @@
 // AISystem — opponents (and the optional AI partner) play through the same commands as humans,
 // using only public information: their own resources, their roster, the next wave and the recommendation indicator.
 // No cheating: same economy, same validation, same cooldowns.
-import { UNITS, BRANCH_LEVEL, MAX_LEVEL, upgradeCost, unitStats } from '../data/units';
+// v0.4: Bastion modules, anomalies, secondary rifts, tactical orders and the Résonance DUO (trigger / synchronise).
+import { UNITS, BRANCH_LEVEL, MAX_LEVEL, unitStats } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import { CORE, CURSES, DAMAGE_MATRIX, ECONOMY, GRID, RAIDERS, raiderPrice, raiderUnlock, curseUnlock, sendCap } from '../data/economy';
+import { getWave } from '../data/waves';
+import { CURSES, DAMAGE_MATRIX, ECONOMY, GRID, RAIDERS, raiderPrice, raiderUnlock, curseUnlock, sendCap } from '../data/economy';
 import { FACTION_POWERS, POWER_UP_COST, powerUnlock } from '../data/powers';
+import { MODULES, moduleCost, ModuleId } from '../data/modules';
+import { RESO_MAX } from '../data/resonance';
+import type { AnomalyId } from '../data/tactics';
 import { zoneOf, RuneKind } from '../data/synergies';
-import { applyCommand, armyValue, sameSends, workerCost } from './game';
+import { applyCommand, armyValue, buildPrice, riftThisWave, sameSends, upgradePrice, workerCost } from './game';
 import { fightRatio, groupStrength, recommendedValue, waveGroup } from './balance';
 import { previewSynergies } from './synergy';
 import type { AttackType, Branch, CombatStats, EnemyDef } from '../data/types';
+import type { Build, Difficulty, GameState, PlayerState, Personality } from './state';
+import { opponents, TIMING } from './state';
+import { rand } from './rng';
 
 const ATK: AttackType[] = ['phys', 'perf', 'ener', 'arca'];
 function resistOf(e: EnemyDef, at: AttackType) {
@@ -17,9 +25,6 @@ function resistOf(e: EnemyDef, at: AttackType) {
   for (const a of e.abilities) if (a.kind === 'resist' && a.attack === at) m *= 1 - a.pct;
   return m;
 }
-import type { Build, Difficulty, GameState, PlayerState } from './state';
-import { opponents, TIMING } from './state';
-import { rand } from './rng';
 
 interface DiffParams { target: number; smart: boolean; delay: number; eco: number; coreUse: boolean; powerSkill: number }
 const DIFF: Record<Difficulty, DiffParams> = {
@@ -53,6 +58,8 @@ const RUNE_FIT: Record<RuneKind, (id: string) => boolean> = {
   force: id => UNITS[id].category !== 'soutien' && !UNITS[id].roles.includes('tank'),
   vigueur: id => UNITS[id].roles.includes('tank'),
   celerite: () => true,
+  instable: id => UNITS[id].category !== 'soutien',
+  faille: id => UNITS[id].category !== 'soutien',
 };
 
 function bestCell(s: GameState, p: PlayerState, id: string, smart: boolean) {
@@ -66,7 +73,8 @@ function bestCell(s: GameState, p: PlayerState, id: string, smart: boolean) {
       score = Math.abs(c - want) * 1.5 + Math.abs(r - 3) * 0.7 + rand(s) * 0.6;
       score -= previewSynergies(id, c, r, p.builds).length * 1.6;
       const rune = p.runes.find(x => x.col === c && x.row === r);
-      if (rune && RUNE_FIT[rune.kind](id)) score -= 2.5;
+      if (rune && RUNE_FIT[rune.kind](id)) score -= rune.kind === 'instable' || rune.kind === 'faille' ? 4 : 2.5;
+      if (p.hazards.some(h => h.col === c && h.row === r)) score += 6;
       const z = zoneOf(c);
       if (z === 'back' && UNITS[id].range > 2) score -= 0.8;
       if (z === 'front' && UNITS[id].roles.includes('tank')) score -= 0.8;
@@ -93,6 +101,13 @@ export function runAI(s: GameState, force = false) {
 
 function statsOf(builds: Build[]): CombatStats[] { return builds.map(b => unitStats(b.defId, b.level, b.branch)); }
 
+const ANOMALY_PREF: Record<Personality, AnomalyId[]> = {
+  economic: ['fortune', 'pacte', 'arsenal', 'contrat', 'tempete', 'veille', 'rune_instable', 'eclipse', 'resonance_instable', 'sacrifice'],
+  aggressive: ['sacrifice', 'rune_instable', 'resonance_instable', 'pacte', 'tempete', 'fortune', 'arsenal', 'contrat', 'eclipse', 'veille'],
+  defensive: ['veille', 'eclipse', 'tempete', 'arsenal', 'resonance_instable', 'rune_instable', 'contrat', 'fortune', 'pacte', 'sacrifice'],
+  balanced: ['tempete', 'arsenal', 'veille', 'resonance_instable', 'rune_instable', 'eclipse', 'pacte', 'fortune', 'contrat', 'sacrifice'],
+};
+
 function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) {
   // passive power pick
   if (p.powerChoice) {
@@ -105,21 +120,36 @@ function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) 
     const pick = prefs[p.personality].find(x => p.powerChoice!.includes(x)) ?? p.powerChoice[0];
     applyCommand(s, p.pid, { c: 'power', power: pick });
   }
+  // anomaly vote (only decides in all-AI teams: a human teammate chooses for the team)
+  const team = s.teams[p.team];
+  if (team.anomalyOffer && !p.anomalyVote) {
+    const pick = ANOMALY_PREF[p.personality].find(a => team.anomalyOffer!.includes(a)) ?? team.anomalyOffer[0];
+    if (!s.players.some(o => o.team === p.team && !o.isAI)) applyCommand(s, p.pid, { c: 'anomaly', id: pick });
+  }
 
   const pers = p.personality;
   const targetMul = spendAll ? Infinity : prm.target * (pers === 'defensive' ? 1.12 : pers === 'economic' ? 0.92 : 1);
   const wave = waveGroup(s.wave);
   const ratio = (list: CombatStats[]) => list.length ? fightRatio(groupStrength(list.map(stats => ({ stats }))), wave) : 0;
+  // the strength model ignores the number of targets: read the coming wave like a player would
+  const wd = getWave(s.wave);
+  const count = wd.groups.reduce((t, g) => t + g.count, 0);
+  const fast = wd.groups.reduce((t, g) => t + ENEMIES[g.enemy].moveSpeed * g.count, 0) / Math.max(1, count) >= 3.2;
+  const fit = (id: string) => {
+    const u = UNITS[id];
+    let k = 1;
+    if (count >= 14 && u.abilities.some(a => a.kind === 'splash' || a.kind === 'poison' || a.kind === 'chain' || a.kind === 'novaPulse' || a.kind === 'slowPulse')) k *= 1.35;
+    if (fast && (u.range > 3 || u.abilities.some(a => a.kind === 'slowOnHit' || a.kind === 'slowPulse' || a.kind === 'interceptor' || a.kind === 'taunt'))) k *= 1.2;
+    return k;
+  };
 
   const wantWorkers = Math.min(ECONOMY.maxWorkers, 1 + Math.floor(s.wave * 0.9 * prm.eco * (pers === 'economic' ? 1.5 : pers === 'defensive' ? 0.6 : 1)));
 
-  // fusions: free consolidation once the lane gets crowded, or to reach a specialisation
+  // fusions are free and give the "Éclat de fusion" bonus: always worth it for a smart AI
   if (prm.smart) {
     for (let guard = 0; guard < 6; guard++) {
       const pair = findPair(p);
       if (!pair) break;
-      const crowded = p.builds.length >= 9;
-      if (!crowded && pair[0].level + 1 < BRANCH_LEVEL) break;
       const branch = pair[0].level + 1 === BRANCH_LEVEL ? pickBranch(s, p, pair[0], ratio) : undefined;
       if (applyCommand(s, p.pid, { c: 'fuse', bid: pair[0].bid, with: pair[1].bid, branch })) break;
     }
@@ -134,14 +164,21 @@ function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) 
     const others = p.builds.length - tanks;
     for (const id of p.draft) {
       const u = UNITS[id];
-      if (u.cost > p.gold) continue;
+      const price = buildPrice(s, p, id);
+      if (price > p.gold) continue;
       const gain = ratio([...statsOf(p.builds), unitStats(id)]) - cur;
       const isT = u.roles.includes('tank');
       let comp = 1;
       if (isT && tanks * 2 > others) comp *= 0.45;
       if (!isT && tanks === 0 && p.builds.length > 0) comp *= 0.6;
-      comp *= 1 / (1 + 0.12 * p.builds.filter(b => b.defId === id).length);
-      const score = prm.smart ? (gain / u.cost) * comp : rand(s);
+      const copies = p.builds.filter(b => b.defId === id).length;
+      comp *= 1 / (1 + 0.18 * copies);
+      // a balanced composition: a front line AND shooters behind it
+      const ranged = p.builds.filter(b => UNITS[b.defId].range > 2).length;
+      if (u.range > 2 && p.builds.length >= 3 && ranged < p.builds.length * 0.35) comp *= 1.25;
+      // a second copy of a level-1 unit can be fused next wave (+10 % bonus): slight preference
+      if (copies === 1 && p.builds.some(b => b.defId === id && b.level === 1)) comp *= 1.15;
+      const score = prm.smart ? (gain / price) * comp * fit(id) : rand(s);
       if (!best || score > best.score) best = { score, act: () => {
         const cell = bestCell(s, p, id, prm.smart);
         return cell ? applyCommand(s, p.pid, { c: 'build', unit: id, col: cell.col, row: cell.row }) : 'full';
@@ -150,7 +187,7 @@ function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) 
     for (const b of p.builds) {
       if (b.level >= MAX_LEVEL) continue;
       const next = b.level + 1;
-      const cost = upgradeCost(b.defId, next);
+      const cost = upgradePrice(s, p, b.defId, next);
       if (cost > p.gold) continue;
       const branch = next === BRANCH_LEVEL && UNITS[b.defId].branches ? pickBranch(s, p, b, ratio) : b.branch;
       const list = p.builds.map(x => (x === b ? unitStats(b.defId, next, branch) : unitStats(x.defId, x.level, x.branch)));
@@ -172,10 +209,19 @@ function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) 
 
   // safety: dump leftover gold into the army if still clearly below the recommendation
   const rec = recommendedValue(s.wave, p.builds, armyValue(p), 1);
-  if (armyValue(p) < rec && p.draft.some(id => UNITS[id].cost <= p.gold)) {
-    const id = p.draft.filter(x => UNITS[x].cost <= p.gold).sort((a, b) => UNITS[b].cost - UNITS[a].cost)[0];
+  if (armyValue(p) < rec && p.draft.some(id => buildPrice(s, p, id) <= p.gold)) {
+    const id = p.draft.filter(x => buildPrice(s, p, x) <= p.gold).sort((a, b) => UNITS[b].cost - UNITS[a].cost)[0];
     const cell = bestCell(s, p, id, prm.smart);
     if (cell) applyCommand(s, p.pid, { c: 'build', unit: id, col: cell.col, row: cell.row });
+  }
+
+  // secondary rift: close it when the army is comfortably above the need (risk / reward)
+  if (prm.smart && riftThisWave(s, p.team)) {
+    const cur = ratio(statsOf(p.builds));
+    const want = cur >= prm.target * 1.15 ? (s.wave >= 9 ? 2 : 1) : cur >= prm.target * 1.02 && pers !== 'defensive' ? 1 : 0;
+    const mobile = p.builds.filter(b => !UNITS[b.defId].tower && !UNITS[b.defId].roles.includes('tank') && UNITS[b.defId].category !== 'soutien')
+      .sort((a, b) => unitStats(b.defId, b.level, b.branch).dmg * unitStats(b.defId, b.level, b.branch).atkSpeed - unitStats(a.defId, a.level, a.branch).dmg * unitStats(a.defId, a.level, a.branch).atkSpeed);
+    for (const b of mobile.slice(0, want)) applyCommand(s, p.pid, { c: 'rift', bid: b.bid, on: true });
   }
 
   spendEther(s, p, prm);
@@ -200,24 +246,41 @@ function pickBranch(s: GameState, p: PlayerState, b: Build, ratio: (l: CombatSta
   return best;
 }
 
+const MODULE_PREF: Record<Personality, ModuleId[]> = {
+  defensive: ['rempart', 'egide', 'canon', 'restauration', 'givre', 'entrave'],
+  economic: ['forge', 'canon', 'tresor', 'rempart', 'onde', 'cadence'],
+  aggressive: ['canon', 'onde', 'cadence', 'rayon', 'orage', 'entrave'],
+  balanced: ['canon', 'rempart', 'cadence', 'onde', 'egide', 'entrave'],
+};
+
+/** Bastion modules: install / upgrade through a proposal (an AI partner accepts, a human validates). */
+function planModules(s: GameState, p: PlayerState, prm: DiffParams) {
+  const team = s.teams[p.team];
+  if (team.proposal || !prm.smart || s.wave < 3) return;
+  const core = team.core;
+  const pref = core.hp < core.maxHp * 0.55 ? ['rempart', 'restauration', 'egide', ...MODULE_PREF[p.personality]] as ModuleId[] : MODULE_PREF[p.personality];
+  const reserve = prm.coreUse ? 15 : 35;
+  // upgrade an installed module first (cheaper per effect), else install the next preferred one
+  for (const m of team.modules) {
+    if (!m || m.lv >= 3) continue;
+    const c = moduleCost(m.id, m.lv + 1);
+    if (s.wave >= 6 + m.lv * 3 && p.ether >= c + reserve && rand(s) < 0.5) { applyCommand(s, p.pid, { c: 'module', action: 'upgrade', module: m.id }); return; }
+  }
+  if (!team.modules.some(m => !m)) return;
+  const id = pref.find(x => !team.modules.some(m => m?.id === x) && MODULES[x]);
+  if (id && p.ether >= moduleCost(id, 1) + reserve && rand(s) < 0.6) applyCommand(s, p.pid, { c: 'module', action: 'install', module: id });
+}
+
 function spendEther(s: GameState, p: PlayerState, prm: DiffParams) {
   const pers = p.personality;
-  const core = s.teams[p.team].core;
-  // Core upgrades when in danger
-  if (prm.coreUse && (core.hp < core.maxHp * 0.6 || pers === 'defensive')) {
-    const order: ('def' | 'atk' | 'regen' | 'pow')[] = core.hp < core.maxHp * 0.5 ? ['regen', 'def', 'atk'] : ['atk', 'def', 'pow', 'regen'];
-    for (const up of order) {
-      const lvl = core.up[up];
-      const def = CORE.upgrades[up];
-      if (lvl < def.max && p.ether >= def.costs[lvl] + 10) { applyCommand(s, p.pid, { c: 'core', up }); break; }
-    }
-  }
+  planModules(s, p, prm);
   // commander power upgrades (smart AIs, mid game)
   if (prm.smart && s.wave >= 5 && p.ether > 120) {
     const slot = [2, 1, 0].find(i => p.powerLv[i] < 3 && powerUnlock(FACTION_POWERS[p.faction][i], s.settings.totalWaves) <= s.wave);
     if (slot !== undefined && p.ether >= POWER_UP_COST[p.powerLv[slot] + 1] + 40) applyCommand(s, p.pid, { c: 'powerUp', slot });
   }
   const opp = opponents(s, p.pid);
+  const core = s.teams[p.team].core;
   if (!opp.length) {
     if (p.ether >= ECONOMY.investChunk * 2 && !(prm.coreUse && core.hp < core.maxHp * 0.6)) applyCommand(s, p.pid, { c: 'invest' });
     return;
@@ -262,15 +325,46 @@ function spendEther(s: GameState, p: PlayerState, prm: DiffParams) {
   }
 }
 
-/** Combat-time decisions: commander powers (AIs use them like players would, with reaction noise). */
+/** Combat-time decisions: commander powers, tactical orders and the Résonance (with reaction noise). */
 export function aiCombat(s: GameState) {
+  // Résonance: AI-only teams trigger it when it matters; an AI partner synchronises the human's activation
+  for (const t of s.teams) {
+    const members = s.players.filter(p => p.team === t.id);
+    if (t.resoCast) {
+      const mate = members.find(p => p.pid !== t.resoCast!.by && p.isAI);
+      if (mate && !t.resoCast.sync && rand(s) < DIFF[difficultyOf(s, mate)].powerSkill + 0.35) applyCommand(s, mate.pid, { c: 'reso' });
+      continue;
+    }
+    if (t.reso < RESO_MAX || members.some(p => !p.isAI)) continue;
+    const prm = DIFF[difficultyOf(s, members[0])];
+    if (rand(s) > prm.powerSkill + 0.2) continue;
+    const foes = s.ents.filter(e => e.enemy && !e.dead && !e.rift && e.arena === t.id);
+    const boss = foes.some(e => e.boss && e.hp > e.maxHp * 0.4);
+    const leaking = foes.filter(e => e.leaked).length >= 3;
+    const danger = t.core.hp < t.core.maxHp * 0.45 && foes.length >= 6;
+    if (boss || leaking || danger) applyCommand(s, members[0].pid, { c: 'reso' });
+  }
   for (const p of s.players) {
     if (!p.isAI) continue;
     const prm = DIFF[difficultyOf(s, p)];
     if (rand(s) > prm.powerSkill) continue;
-    const foes = s.ents.filter(e => e.enemy && !e.dead && e.arena === p.team && e.owner === p.pid);
-    if (!foes.length) continue;
+    const foes = s.ents.filter(e => e.enemy && !e.dead && !e.rift && e.arena === p.team && e.owner === p.pid);
     const mine = s.ents.filter(e => !e.enemy && !e.dead && e.arena === p.team && e.owner === p.pid);
+    // tactical orders
+    if (p.orders > 0 && s.combatTime >= p.orderCd && prm.smart) {
+      const tele = s.ents.some(e => e.enemy && e.tele && e.arena === p.team && mine.filter(u => (u.x - e.tele!.x) ** 2 + (u.z - e.tele!.z) ** 2 <= e.tele!.r ** 2).length >= 2);
+      const leaked = s.ents.filter(e => e.enemy && !e.dead && e.leaked && e.arena === p.team).length;
+      const big = foes.find(e => (e.boss || e.elite) && e.focusUntil <= s.combatTime);
+      const hurt = mine.length ? mine.reduce((t, e) => t + e.hp / e.maxHp, 0) / mine.length : 1;
+      let order: 'retreat' | 'intercept' | 'purge' | 'focus' | 'rally' | null = null;
+      if (tele) order = 'retreat';
+      else if (leaked >= 2) order = 'intercept';
+      else if (s.combatTime < p.fogUntil || s.combatTime < p.jamUntil) order = 'purge';
+      else if (big) order = 'focus';
+      else if (hurt < 0.5 && foes.length >= 4) order = 'rally';
+      if (order) applyCommand(s, p.pid, { c: 'order', order });
+    }
+    if (!foes.length) continue;
     const boss = foes.some(e => e.boss || e.elite);
     const leaking = foes.some(e => e.leaked);
     const hurt = mine.length ? mine.reduce((t, e) => t + e.hp / e.maxHp, 0) / mine.length : 1;

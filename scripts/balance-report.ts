@@ -146,19 +146,24 @@ const vs: Record<string, Record<string, { g: number; w: number }>> = {};
 for (const a of FACTION_IDS) { vs[a] = {}; for (const b of FACTION_IDS) vs[a][b] = { g: 0, w: 0 }; }
 const causes: Record<string, number> = { 'Défense débordée (vagues)': 0, 'Pression des envois': 0, 'PV du Core à la vague finale': 0 };
 let decidedEarly = 0, totalWaves = 0;
+const stalls: Record<number, number> = {}; // combats that reached the 80 s cap, per wave
+let resoUses = 0;
 const avgLevel = (p: GameState['players'][number]) => p.builds.length ? p.builds.reduce((t, b) => t + b.level, 0) / p.builds.length : 0;
 for (let g = 0; g < GAMES; g++) {
   const s: GameState = createGame({ mode: 'duel', totalWaves: 21, difficulty: 'normal', humans: [] }, 1000 + g * 7919);
   const snap: Record<number, Record<number, { army: number; lvl: number }>> = {};
-  let n = 0, lastW = 0;
+  let n = 0, lastW = 0, prev = s.phase;
   while (s.phase !== 'ended' && n++ < 20 * 60 * 60) {
     step(s); drainEvents(s);
+    if (s.phase === 'resolution' && prev === 'combat' && s.combatTime >= 79.9) stalls[s.wave] = (stalls[s.wave] ?? 0) + 1;
+    prev = s.phase;
     if (s.phase === 'combat' && s.wave !== lastW) {
       lastW = s.wave;
       if (lastW === 5 || lastW === 10 || lastW === 15) snap[lastW] = Object.fromEntries(s.players.map(p => [p.pid, { army: armyValue(p), lvl: avgLevel(p) }]));
     }
   }
   if (!s.result) continue;
+  resoUses += s.teams.reduce((t, x) => t + ((x as { resoUses?: number }).resoUses ?? 0), 0);
   if (s.teams.some(t => !t.alive)) decidedEarly++;
   totalWaves += s.wave;
   const loser = s.teams.find(t => t.id !== s.result!.winner) as (GameState['teams'][number] & { dmgSends?: number; dmgWaves?: number }) | undefined;
@@ -194,6 +199,10 @@ log('|---|---|---|---|');
 for (const f of byRate) log(`| ${N(f)} | ${acc[f].games} | ${acc[f].wins} | ${Math.round((acc[f].wins / Math.max(1, acc[f].games)) * 100)} % |`);
 log();
 log(`Parties décidées par la destruction d'un Core : ${Math.round((decidedEarly / GAMES) * 100)} % · durée moyenne ${(totalWaves / GAMES).toFixed(1)} vagues`);
+log();
+const stallList = Object.entries(stalls).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w, n]) => `V${w} : ${Math.round((n / GAMES) * 100)} %`);
+log(`Combats bloqués jusqu'au temps maximum (80 s) : ${stallList.join(' · ') || 'aucun'}`);
+log(`Résonance DUO : ${(resoUses / GAMES / 2).toFixed(1)} déclenchements par équipe et par partie`);
 log();
 log('### 3a. Cause principale de victoire');
 for (const [k, v] of Object.entries(causes)) log(`- ${k} : ${Math.round((v / Math.max(1, GAMES)) * 100)} %`);

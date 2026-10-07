@@ -30,13 +30,16 @@ export const ZONE_TEXT: Record<Zone, string> = {
   back: 'Arrière : unités à distance +0,6 m de portée.',
 };
 
-export type RuneKind = 'force' | 'vigueur' | 'celerite';
+export type RuneKind = 'force' | 'vigueur' | 'celerite' | 'instable' | 'faille';
 export const RUNES: Record<RuneKind, { name: string; text: string; color: number }> = {
   force: { name: 'Rune de Force', text: '+20 % dégâts', color: 0xff6a4a },
   vigueur: { name: 'Rune de Vigueur', text: '+25 % PV', color: 0x6aff8a },
   celerite: { name: 'Rune de Célérité', text: '+20 % cadence', color: 0x6ad8ff },
+  instable: { name: 'Rune Instable', text: '+50 % dégâts, +30 % cadence', color: 0xff4aff },
+  faille: { name: 'Rune de Faille', text: '+35 % dégâts, +20 % cadence', color: 0xc07aff },
 };
-export interface RuneTile { col: number; row: number; kind: RuneKind }
+/** until: last wave of a temporary rune (anomaly / rift reward). */
+export interface RuneTile { col: number; row: number; kind: RuneKind; until?: number }
 
 // ---------------------------------------------------------------- tags
 const ELEMENT: Record<string, string> = { water: 'water', fire: 'fire', lightning: 'lightning', poison: 'poison', shadow: 'shadow', star: 'star', leaf: 'leaf', spark: 'spark', shell: 'spark', note: 'star' };
