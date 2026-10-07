@@ -8,12 +8,15 @@ import { RUNES } from '../data/synergies';
 import { LANE, cellCenter } from '../sim/state';
 import type { GameEvent } from '../sim/state';
 import type { Branch, FactionId } from '../data/types';
-import { toonMaterial } from './models';
+import { litMaterial, buildEnvMap, createLook, Look, PerfOverlay, sharedEnvMap, setMaterialTier } from './look';
+import { DEBUG } from '../config';
 import { Batcher, Rig } from './characters';
 import { TowerRig } from './towers';
 import { Fx, ProjKind } from './fx';
 import { DamageNumbers } from './numbers';
 import { buildEnvironment, Env } from './environment';
+import { FACTION_LOOK } from './terrain';
+import { runeCircleTexture } from './textures';
 import { glowTexture, starTexture } from './textures';
 import { EntView, F_BURN, F_ELITE, F_ENEMY, F_HASTE, F_POISON, F_SHIELD, F_SLOW, F_STEALTH, F_STUN, F_MARK, F_WET, F_FOCUS, F_RIFT, F_GHOST, F_TASK, F_RALLY, MetaView, ViewState } from '../net/snapshot';
 import { ALL_DUO_ABILITIES } from '../data/resonance';
@@ -45,7 +48,7 @@ const LIGHTNING = new Set(['exarque_prisme', 'meduse', 'lanciere_eclair']);
 
 interface EntVis {
   rig: Rig;
-  defId: string; level: number; branch: Branch | null;
+  defId: string; level: number; branch: Branch | null; phase: number;
   x: number; z: number;
   face: number;
   lunge: number; lungeX: number; lungeZ: number;
@@ -62,26 +65,21 @@ export interface DragGhost { defId: string; col: number; row: number; valid: boo
 
 function defOf(id: string) { return UNITS[id] ?? ENEMIES[id]; }
 
-/** Toon material with a soft rim light (reads well against busy backgrounds). */
-function rimToon(opts: { transparent?: boolean; opacity?: number } = {}) {
-  const m = toonMaterial(opts);
-  m.onBeforeCompile = sh => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
-      float rimF = 1.0 - max(0.0, dot(normalize(vViewPosition), normal));
-      gl_FragColor.rgb += vec3(1.0, 0.95, 0.85) * pow(rimF, 3.0) * 0.32;`);
-  };
-  return m;
-}
+/** Height of the Bastion's reactor crystal (bolts, hits and the destruction sequence aim at it). */
+const CORE_Y = 6.2;
 
 export class Renderer {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   camera: THREE.PerspectiveCamera;
   quality: Quality;
-  private mat = rimToon();
-  private glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-  private ghostMat = toonMaterial({ transparent: true, opacity: 0.55 });
-  private ghostGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6 });
+  private mat = litMaterial({ rim: 0.5, reflect: true }); // stronger cold rim: units read against the dark flagstones
+  // emissive parts are rendered in HDR (> 1) so the bloom makes crystals, runes and magic glow
+  private glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, color: new THREE.Color(1.55, 1.55, 1.55) });
+  private ghostMat = litMaterial({ transparent: true, opacity: 0.55, reflect: true });
+  private ghostGlow = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, color: new THREE.Color(1.8, 1.8, 1.8) });
+  look: Look;
+  private perf: PerfOverlay | null = null;
   private batch: Batcher;
   fx: Fx;
   private numbers: DamageNumbers;
@@ -114,7 +112,7 @@ export class Renderer {
   target = new THREE.Vector3(-16, 0, 1.2);
   dist = 26;
   yaw = 0;
-  private pitch = THREE.MathUtils.degToRad(50);
+  private pitch = THREE.MathUtils.degToRad(46); // a bit lower than v0.4: more depth, still a clear tactical view
   private ray = new THREE.Raycaster();
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), -GROUND_Y);
   arenas = 1;
@@ -127,21 +125,36 @@ export class Renderer {
   private chevrons: THREE.InstancedMesh;
   private hazardMesh: THREE.InstancedMesh;
   private resoStars: { group: THREE.Group; core: THREE.Mesh; halo: THREE.Sprite; k: number }[] = [];
-  private modGroups: { key: string; group: THREE.Group }[] = [];
   private hitStop = 0;
   private zoomPulse = 0;
+  // Résonance DUO cinematic: faction colours converge on the reactor during the channel, the grade warms toward the
+  // ability colour, then a flash + an expanding rune glyph on impact
+  private resoCh: ({ t: number; c: [number, number]; color: number; emit: number } | null)[] = [];
+  private gradeFlash = 0;
+  private gradeFlashC = new THREE.Color();
+  private gradeTint = new THREE.Color(1, 1, 1);
+  private glyphs: { m: THREE.Mesh; t: number }[] = [];
 
   constructor(private canvas: HTMLCanvasElement, quality: Quality) {
     this.quality = quality;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: quality === 'high', powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    // material tier first (BAS = Lambert), then the shared unit materials
+    setMaterialTier(quality);
+    this.mat = litMaterial({ rim: 0.5, reflect: true });
+    this.ghostMat = litMaterial({ transparent: true, opacity: 0.55, reflect: true });
+    // no native MSAA: ÉLEVÉ / MOYEN render through the post chain (FXAA in the final pass), BAS stays raw for speed
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: false });
     this.applyQuality();
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1200);
+    this.camera = new THREE.PerspectiveCamera(35, 1, 0.5, 1200);
     if (quality === 'high') {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     }
     const s = this.scene;
+    this.look = createLook(this.renderer, s, this.camera, quality);
+    buildEnvMap(this.renderer); // reflections only on the materials that ask for them (see look.ts)
+    this.renderer.info.autoReset = false;
+    if (DEBUG) this.perf = new PerfOverlay();
     this.batch = new Batcher(s, this.mat, this.glowMat, quality === 'high');
     this.fx = new Fx(s, this.camera, quality);
     this.numbers = new DamageNumbers();
@@ -222,7 +235,7 @@ export class Renderer {
         for (let r = 0; r <= GRID.rows; r++) { const z = z0 - GRID.rows / 2 + r; pts.push(xs[0], y, z, xs[1], y, z); }
         for (let c = 0; c <= GRID.cols; c++) { const x = xs[0] + c; pts.push(x, y, z0 - GRID.rows / 2, x, y, z0 + GRID.rows / 2); }
         const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-        const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.35 }));
+        const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: this.quality === 'battery' ? 0.6 : 0.35 })); // BAS: no bloom / AA, thicker read
         this.scene.add(lines);
         this.gridLines.push(lines);
         // placement zones: front line (warm) and back line (cool), visible while building
@@ -247,15 +260,12 @@ export class Renderer {
       group.visible = false;
       this.scene.add(group);
       this.resoStars.push({ group, core, halo, k: 0 });
-      const mods = new THREE.Group();
-      mods.position.set(0, 0, z0);
-      this.scene.add(mods);
-      this.modGroups.push({ key: '', group: mods });
     }
   }
 
   resize(w: number, h: number) {
     this.renderer.setSize(w, h, false);
+    this.look.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.fx.setViewport(h * this.renderer.getPixelRatio(), this.camera.fov);
@@ -317,10 +327,11 @@ export class Renderer {
     return { x: (v.x * 0.5 + 0.5) * el.clientWidth, y: (-v.y * 0.5 + 0.5) * el.clientHeight };
   }
 
-  private newRig(defId: string, level = 1, branch: Branch | null = null) {
+  private newRig(defId: string, level = 1, branch: Branch | null = null, phase = 1) {
     const st = UNITS[defId] ? unitStats(defId, level, branch) : null;
     const model = st ? st.model : ENEMIES[defId].model;
-    return new Rig(defId, model, level, branch);
+    // bosses evolve visually with their phase (the Primordial has 3 distinct looks)
+    return phase > 1 ? new Rig(defId + '#' + phase, { ...model, phase }, level, branch) : new Rig(defId, model, level, branch);
   }
   private newTower(defId: string, faction: FactionId, level: number, branch: Branch | null) {
     const u = UNITS[defId];
@@ -336,7 +347,7 @@ export class Renderer {
     this.time += dt;
     const meta = view.meta;
     this.env?.update(dt, this.time);
-    if (!meta) { this.renderer.render(this.scene, this.camera); return; }
+    if (!meta) { this.renderer.info.reset(); this.look.render(); return; }
     const combat = meta.phase === 'combat';
     const me = meta.players[opts.localPid];
     if (me) this.localTeam = me.team;
@@ -406,8 +417,10 @@ export class Renderer {
       let v = this.ents.get(e.id);
       const wx = e.x, wz = e.z + arenaZ(e.arena);
       const enemy = !!(e.flags & F_ENEMY);
-      if (!v || v.level !== e.level || v.branch !== e.branch) {
-        const rig = this.newRig(e.defId, e.level, e.branch);
+      const bossDef = enemy ? ENEMIES[e.defId] : undefined;
+      const phase = bossDef?.boss ? (e.hp > 0.66 ? 1 : e.hp > 0.33 ? 2 : 3) : 1;
+      if (!v || v.level !== e.level || v.branch !== e.branch || v.phase !== phase) {
+        const rig = this.newRig(e.defId, e.level, e.branch, phase);
         let tower: TowerRig | null = null;
         if (!enemy && UNITS[e.defId]?.tower) {
           const owner = meta.players[e.owner];
@@ -416,7 +429,7 @@ export class Renderer {
           tower = b ? this.builds.get(`${owner.pid}:${b.bid}`)?.tower ?? null : null;
         }
         const face0 = enemy ? (e.x < 0 ? Math.PI / 2 : -Math.PI / 2) : (e.x < 0 ? -Math.PI / 2 : Math.PI / 2);
-        v = { rig, defId: e.defId, level: e.level, branch: e.branch, x: wx, z: wz, face: v?.face ?? face0, lunge: 0, lungeX: 0, lungeZ: 0, flash: 0, enemy, tower, fxT: Math.random(), speed: 0 };
+        v = { rig, defId: e.defId, level: e.level, branch: e.branch, phase, x: wx, z: wz, face: v?.face ?? face0, lunge: 0, lungeX: 0, lungeZ: 0, flash: 0, enemy, tower, fxT: Math.random(), speed: 0 };
         this.ents.set(e.id, v);
       }
       const dx = wx - v.x, dz = wz - v.z;
@@ -450,6 +463,7 @@ export class Renderer {
       if (f & F_WET) this.tint.multiply(new THREE.Color(0.75, 0.95, 1.35));
       if (f & F_GHOST) this.tint.multiply(new THREE.Color(0.75, 0.7, 1.6));
       if (f & F_RIFT) this.tint.setRGB(1.2 + Math.sin(this.time * 4) * 0.25, 1, 1.4);
+      if (e.defId === 'primordial') this.tint.multiplyScalar(0.6); // black rock: keep it dark under the rim light
       if (v.flash > 0) this.tint.setRGB(3, 3, 3);
       rig.submit(this.batch, this.tint);
       // status particles (throttled)
@@ -463,6 +477,16 @@ export class Renderer {
         if (f & F_HASTE) this.fx.rise(p.x, p.y + 0.2, p.z, 0xffe060, 1, 0.14, 0.4);
         if (f & F_RIFT) this.fx.rise(p.x, p.y + 0.6, p.z, 0xc07aff, 2, 0.22, 0.9);
         if (f & F_GHOST) this.fx.rise(p.x, p.y + hgt * 0.5, p.z, 0xb090ff, 1, 0.18, 0.4);
+        // bosses: embers + smoke rising off the body, arcs of rift energy (stronger in later phases)
+        if (bossDef?.boss) {
+          const ec = phase === 1 ? 0xc07aff : phase === 2 ? 0xff5aa0 : 0xff6a2a;
+          this.fx.rise(p.x + (Math.random() - 0.5) * hgt * 0.4, p.y + hgt * (0.3 + Math.random() * 0.5), p.z + (Math.random() - 0.5) * hgt * 0.3, ec, 1 + phase, 0.2, 1.2);
+          if (Math.random() < 0.35) this.fx.smoke(p.x + (Math.random() - 0.5) * hgt * 0.3, p.y + hgt * 0.8, p.z, 1, 1.4, 0.18);
+          if (Math.random() < 0.12 * phase) {
+            const a = Math.random() * Math.PI * 2, r = hgt * 0.35;
+            this.fx.bolt(new THREE.Vector3(p.x, p.y + hgt * 0.62, p.z), new THREE.Vector3(p.x + Math.cos(a) * r, p.y + hgt * (0.3 + Math.random() * 0.6), p.z + Math.sin(a) * r), ec);
+          }
+        }
       }
     }
     for (const [id, v] of this.ents) {
@@ -526,6 +550,7 @@ export class Renderer {
       return v ? v.rig.root.position.clone().setY(v.rig.root.position.y + v.rig.height * 0.5) : null;
     });
     this.numbers.update(dt, (x, y, z) => this.worldToScreen(x, y, z));
+    this.updateResoCinematic(dt);
 
     // ---------- Core health look + destruction sequence ----------
     this.env?.coreCrystals.forEach((c, i) => {
@@ -533,14 +558,16 @@ export class Renderer {
       const k = t ? t.hp / t.maxHp : 1;
       c.rotation.y += dt * (0.6 + (1 - k) * 2);
       const mat = c.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.45 + 0.9 * k + (k < 0.3 ? Math.abs(Math.sin(this.time * 6)) * 0.9 : 0);
+      const alarm = k < 0.3 ? Math.abs(Math.sin(this.time * 6)) : 0;
+      mat.emissiveIntensity = 0.5 + 0.7 * k + alarm * 0.8;
+      this.env!.bastions[i]?.setHealth(k);
       const l = this.env!.coreLights[i];
-      if (l) l.intensity = 18 + 22 * k + (k < 0.3 ? Math.abs(Math.sin(this.time * 6)) * 20 : 0);
+      if (l) l.intensity = 4 + 7 * k + alarm * 8;
       const z0 = arenaZ(i);
-      if (k < 0.35 && Math.random() < dt * 4) this.fx.smoke((Math.random() - 0.5) * 4, 2.5, z0 + (Math.random() - 0.5) * 4, 1, 1.2, 0.25);
+      if (k < 0.35 && Math.random() < dt * 4) this.fx.smoke((Math.random() - 0.5) * 3, 4 + Math.random() * 3, z0 + (Math.random() - 0.5) * 4, 1, 1.2, 0.25);
       if (t && t.hp <= 0 && meta.ending > 0) {
         this.coreFx[i] = (this.coreFx[i] ?? 0) + dt;
-        c.position.y = Math.max(0.5, 3.9 - this.coreFx[i] * 1.2);
+        c.position.y = Math.max(1, CORE_Y - this.coreFx[i] * 1.6);
         c.scale.set(1 - Math.min(0.9, this.coreFx[i] * 0.3), 1.7 * (1 - Math.min(0.9, this.coreFx[i] * 0.3)), 1);
         if (Math.random() < dt * 9) {
           const a = Math.random() * Math.PI * 2, r = 1 + Math.random() * 3;
@@ -566,7 +593,9 @@ export class Renderer {
       const half = Math.min(45, this.dist * 0.9);
       if (Math.abs(sc.right - half) > 1) { sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix(); }
     }
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.info.reset();
+    this.look.render();
+    this.perf?.update(dt, this.renderer, this.scene, () => this.fx.add.active + this.fx.smokeL.active);
   }
 
   private bossFlag = false;
@@ -825,7 +854,7 @@ export class Renderer {
       }
       case 'coreShot': {
         const b = this.posOf(ev.b, view, 0.5);
-        if (b) this.fx.bolt(new THREE.Vector3(0, 3.9, arenaZ(ev.team)), b, 0x7fd8ff);
+        if (b) this.fx.bolt(new THREE.Vector3(0, CORE_Y, arenaZ(ev.team)), b, 0x7fd8ff);
         break;
       }
       case 'die': {
@@ -854,7 +883,7 @@ export class Renderer {
           this.fx.bolt(new THREE.Vector3(0, 4.4, arenaZ(ev.arena)), new THREE.Vector3(x, GROUND_Y + 0.8, z), 0xffffff);
           this.fx.flash(x, 0.9, z, 0xbff8ff, 3, 0.2); this.fx.sparks(x, 0.9, z, 0xffffff, 14, 4);
         } else if (ev.fx === 'chain') {
-          this.fx.ring(x, z, 1.8, 0xffd27a, 0.5); this.fx.sparks(x, 1.2, z, 0xffd27a, 12, 3); this.fx.bolt(new THREE.Vector3(0, 3.9, arenaZ(ev.arena)), new THREE.Vector3(x, 1, z), 0xffd27a);
+          this.fx.ring(x, z, 1.8, 0xffd27a, 0.5); this.fx.sparks(x, 1.2, z, 0xffd27a, 12, 3); this.fx.bolt(new THREE.Vector3(0, CORE_Y, arenaZ(ev.arena)), new THREE.Vector3(x, 1, z), 0xffd27a);
         } else if (ev.fx === 'leaf') {
           this.fx.ring(x, z, ev.r, 0x7dffb0, 0.5); this.fx.rise(x, 0.4, z, 0x9aff9a, 6, 0.22, ev.r);
         } else if (ev.fx === 'missile') {
@@ -887,8 +916,8 @@ export class Renderer {
       case 'summon': { const z = ev.z + arenaZ(ev.arena); this.fx.ring(ev.x, z, 1.4, 0xb07aff, 0.5); this.fx.rise(ev.x, 0.3, z, 0xc48bff, 8, 0.24, 1); break; }
       case 'coreHit': {
         this.fx.ring(0, arenaZ(ev.team), 3.5, 0xff3a3a, 0.5);
-        this.fx.sparks(0, 3.9, arenaZ(ev.team), 0xff5a5a, 16, 5);
-        this.fx.flash(0, 3.9, arenaZ(ev.team), 0xff6a6a, 3, 0.2);
+        this.fx.sparks(0, CORE_Y, arenaZ(ev.team), 0xff5a5a, 16, 5);
+        this.fx.flash(0, CORE_Y, arenaZ(ev.team), 0xff6a6a, 3, 0.2);
         if (ev.team === this.localTeam) this.shake = Math.min(1, this.shake + 0.35);
         break;
       }
@@ -1011,8 +1040,22 @@ export class Renderer {
     const z0 = arenaZ(ev.team);
     const rs = this.resoStars[ev.team];
     if (ev.k === 'start' && rs && ab) { (rs.halo.material as THREE.SpriteMaterial).color.setHex(ab.color); (rs.core.material as THREE.MeshBasicMaterial).color.setHex(ab.color2); this.fx.ring(0, z0, 4, ab.color, 0.8); }
+    if (ev.k === 'start' && ab) {
+      const pl = meta.players.filter(p => p && p.team === ev.team).sort((a, b) => a.slot - b.slot);
+      const fc = pl.map(p => FACTION_LOOK[p.faction].glow);
+      this.resoCh[ev.team] = { t: 0, c: [fc[0] ?? ab.color, fc[1] ?? fc[0] ?? ab.color2], color: ab.color, emit: 0 };
+    }
+    if (ev.k === 'refund') this.resoCh[ev.team] = null;
     if (ev.k === 'sync') this.fx.ring(0, z0, 6, 0xffffff, 0.6);
     if (ev.k !== 'fire' || !ab) return;
+    this.resoCh[ev.team] = null;
+    if (ev.team === this.localTeam && save.prefs.flash !== false) { this.gradeFlash = 1; this.gradeFlashC.setHex(ab.color2); }
+    // ground glyph: a rune circle in the ability colour expanding from the Bastion over the whole arena
+    const gm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: runeCircleTexture(), color: new THREE.Color(ab.color).multiplyScalar(2), transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    gm.position.set(0, GROUND_Y + 0.05, z0);
+    gm.renderOrder = 5;
+    this.scene.add(gm);
+    this.glyphs.push({ m: gm, t: 0 });
     const big = ev.team === this.localTeam;
     for (const x of [-18, -9, 0, 9, 18]) this.fx.ring(x, z0, 10, x % 18 === 0 ? ab.color : ab.color2, 0.9);
     this.fx.flash(0, 9, z0, ab.color, 14, 0.5);
@@ -1022,19 +1065,48 @@ export class Renderer {
     void meta;
   }
 
-  /** The Core shows its modules: one piece per slot, bigger with the level. */
-  private updateModules(meta: MetaView, dt: number) {
-    meta.teams.forEach((t, i) => {
-      const mg = this.modGroups[i];
-      if (!mg) return;
-      const key = t.modules.map(m => (m ? m.id + m.lv : '-')).join(',');
-      if (mg.key !== key) {
-        mg.key = key;
-        mg.group.clear();
-        t.modules.forEach((m, slot) => { if (m) mg.group.add(moduleMesh(m.id, m.lv, slot)); });
+  private updateResoCinematic(dt: number) {
+    this.resoCh.forEach((ch, team) => {
+      const b = this.env?.bastions[team];
+      if (!ch) { b?.surge(0); return; }
+      ch.t += dt; ch.emit -= dt;
+      const k = Math.min(1, ch.t / 2.2);
+      b?.surge(k, ch.color);
+      if (ch.emit <= 0) {
+        ch.emit = 0.1;
+        const z0 = arenaZ(team);
+        ([[0, -1], [1, 1]] as [number, number][]).forEach(([i, sg]) => {
+          const from = new THREE.Vector3(sg * (14 + Math.random() * 16), 0.8, z0 + (Math.random() - 0.5) * 7);
+          const col = ch.c[i];
+          this.fx.shoot('orb', from, new THREE.Vector3(0, CORE_Y, z0), -1, col, 1, p => this.fx.flash(p.x, p.y, p.z, col, 2.2, 0.15));
+        });
       }
-      mg.group.children.forEach((c, k) => { c.rotation.y += dt * (0.4 + k * 0.15); });
     });
+    // grade: the local team's channel warms the image toward the ability colour; the impact flashes it
+    const lc = this.resoCh[this.localTeam];
+    const tk = lc ? Math.min(1, lc.t / 1.5) * 0.22 : 0;
+    const target = lc ? new THREE.Color(lc.color).lerp(new THREE.Color(1, 1, 1), 0.55) : new THREE.Color(1, 1, 1);
+    const want = new THREE.Color(1, 1, 1).lerp(target.multiplyScalar(1.15), tk / 0.22 * 0.6);
+    this.gradeTint.lerp(want, Math.min(1, dt * 4));
+    this.look.setTint(this.gradeTint.r, this.gradeTint.g, this.gradeTint.b);
+    this.gradeFlash = Math.max(0, this.gradeFlash - dt * 1.8);
+    this.look.setFlash(this.gradeFlash * this.gradeFlash * 0.55, this.gradeFlashC);
+    for (let i = this.glyphs.length - 1; i >= 0; i--) {
+      const g = this.glyphs[i];
+      g.t += dt;
+      const k = g.t / 1.4;
+      g.m.scale.setScalar(3 + (1 - Math.pow(1 - Math.min(1, k), 3)) * 34);
+      g.m.rotation.y += dt * 0.6;
+      (g.m.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - k);
+      if (k >= 1) { this.scene.remove(g.m); g.m.geometry.dispose(); (g.m.material as THREE.Material).dispose(); this.glyphs.splice(i, 1); }
+    }
+  }
+
+  /** The Bastion shows its modules: one piece per slot (family silhouette, level size) + a family banner. */
+  private updateModules(meta: MetaView, _dt: number) {
+    meta.teams.forEach((t, i) => { this.env?.bastions[i]?.setModules(t.modules); });
+    // each lane wears its player's faction (decor + ambient particles)
+    for (const p of meta.players) if (p) this.env?.setLaneFaction(p.team, p.slot, p.faction);
   }
 
   /** Chevrons pointing from the rifts to the Core: where the enemies will walk. */
@@ -1108,7 +1180,8 @@ export class Renderer {
     const scene = new THREE.Scene();
     scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
     const d = new THREE.DirectionalLight(0xffffff, 2.2); d.position.set(2, 4, 3); scene.add(d);
-    const mat = rimToon(), glow = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const mat = litMaterial(), glow = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.6, 1.6, 1.6) });
+    scene.environment = sharedEnvMap();
     const rig = this.newRig(defId, level, branch);
     rig.attachMeshes(mat, glow);
     const tower = this.newTower(defId, faction, level, branch);
@@ -1153,45 +1226,7 @@ export class Renderer {
 
   get drawCalls() { return this.renderer.info.render.calls; }
 
-  dispose() { this.numbers.dispose(); this.renderer.dispose(); }
-}
-
-/** A small procedural piece on the Bastion for an installed module (slot → position, level → size). */
-function moduleMesh(id: ModuleId, lv: number, slot: number): THREE.Object3D {
-  const d = MODULES[id];
-  const col = new THREE.Color(FAMILY_COLORS[d.family]);
-  const g = new THREE.Group();
-  const ang = -Math.PI / 2 + slot * (Math.PI * 2 / 3);
-  const k = 0.75 + lv * 0.18;
-  const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.25 + lv * 0.15, roughness: 0.4, metalness: 0.3, flatShading: true });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x3a3a46, roughness: 0.7, flatShading: true });
-  const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.x = rx; g.add(me); return me; };
-  switch (d.family) {
-    case 'defense':
-      for (let i = 0; i < lv + 1; i++) { const a = (i / (lv + 1)) * Math.PI * 2; add(new THREE.BoxGeometry(0.5, 0.7, 0.08), mat, Math.cos(a) * 0.9, 0.2, Math.sin(a) * 0.9).rotation.y = -a; }
-      if (id === 'egide') { const dome = add(new THREE.SphereGeometry(3.4, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.05 + lv * 0.03, depthWrite: false }), 0, -2.9, 0); dome.renderOrder = 4; }
-      break;
-    case 'artillerie':
-      add(new THREE.CylinderGeometry(0.35, 0.45, 0.4, 8), dark, 0, 0, 0);
-      if (id === 'rayon') add(new THREE.OctahedronGeometry(0.35, 0), new THREE.MeshBasicMaterial({ color: 0xbff8ff }), 0, 0.6, 0);
-      else if (id === 'orage') for (let i = 0; i < lv + 1; i++) add(new THREE.TorusGeometry(0.28 - i * 0.04, 0.05, 6, 16), mat, 0, 0.35 + i * 0.22, 0, Math.PI / 2);
-      else if (id === 'onde') add(new THREE.TorusGeometry(0.45, 0.07, 6, 20), mat, 0, 0.3, 0, Math.PI / 2);
-      else { const b = add(new THREE.CylinderGeometry(0.12, 0.16, 0.9, 8), mat, 0, 0.35, 0.3); b.rotation.x = Math.PI / 2.6; }
-      break;
-    case 'soutien':
-      add(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 5), dark, 0, 0.5, 0);
-      if (id === 'tresor') add(new THREE.BoxGeometry(0.5, 0.35, 0.35), new THREE.MeshStandardMaterial({ color: 0xe0b040, emissive: 0x6a4a10, flatShading: true }), 0, 0, 0.3);
-      else add(new THREE.BoxGeometry(0.04, 0.45, 0.6), mat, 0, 0.9, 0.3);
-      add(new THREE.SphereGeometry(0.12 + lv * 0.03, 8, 6), new THREE.MeshBasicMaterial({ color: col }), 0, 1.25, 0);
-      break;
-    case 'controle':
-      for (let i = 0; i < lv + 2; i++) { const c = add(new THREE.ConeGeometry(0.14, 0.6 + i * 0.1, 5), mat, Math.cos(i * 2) * 0.35, 0.15, Math.sin(i * 2) * 0.35); c.rotation.z = (i % 2 ? 0.3 : -0.3); }
-      if (id === 'portail') add(new THREE.TorusGeometry(0.42, 0.06, 6, 20, Math.PI), new THREE.MeshBasicMaterial({ color: 0xc07aff }), 0, 0.3, 0);
-      break;
-  }
-  g.scale.setScalar(k);
-  g.position.set(Math.cos(ang) * 2.2, 2.85, Math.sin(ang) * 2.2);
-  return g;
+  dispose() { this.numbers.dispose(); this.perf?.dispose(); this.renderer.dispose(); }
 }
 
 function easeOutBack(x: number) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }

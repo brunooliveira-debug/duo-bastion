@@ -61,6 +61,9 @@ function offhand(kind: Offhand, L: number, A: number, C: number): Part[] {
   }
 }
 
+/** Angular rock chunk (boss bodies): a dodecahedron reads as hewn stone, not as a smooth ball. */
+const rockChunk = (r: number) => new THREE.DodecahedronGeometry(r, 0);
+
 // ---------------------------------------------------------------- parametric humanoid
 type Head = 'bare' | 'hood' | 'helm' | 'horned' | 'goblin' | 'skull' | 'hat' | 'antlers' | 'flame' | 'fish' | 'beak' | 'ogre' | 'orc' | 'crown';
 interface Hum {
@@ -428,6 +431,55 @@ export function shapeDef(m: ModelDef): RigDef {
         arms: [{ pivot: [-0.66, 1.58, 0], parts: arm }, { pivot: [0.66, 1.58, 0], parts: arm }],
         legs: [mirror(leg), leg],
       };
+    }
+    case 'primordial': {
+      // THE DISSONANT PRIMORDIAL: black faceted rock held together by rift energy. A core burns in a gap of the chest,
+      // cracks glow, a crown of crystal shards, boulder shoulders with spikes, rocks orbiting. Phase 1 violet,
+      // phase 2 violet-red with crystal wings, phase 3 red, white-hot core, more cracks / shards / rocks.
+      const ph = m.phase ?? 1;
+      const crack = ph === 1 ? 0xb04aff : ph === 2 ? 0xff3a9a : 0xff4a22;
+      const coreC = ph === 3 ? 0xffe0b0 : ph === 2 ? 0xff9ad8 : 0xe0b0ff;
+      const R1 = 0x0e0b12, R2 = 0x18131e, R3 = 0x241c2a;
+      const body: Part[] = [
+        { g: rockChunk(0.42), c: R2, p: [0, 0.9, 0], s: [1.2, 0.8, 1] }, // pelvis
+        { g: rockChunk(0.38), c: R1, p: [0, 1.28, -0.05], s: [1.1, 0.9, 0.9] }, // belly
+        { g: rockChunk(0.36), c: R2, p: [0.38, 1.68, 0.08], r: [0.3, 0.5, 0.2], s: [1, 1.1, 0.9] }, { g: rockChunk(0.36), c: R1, p: [-0.38, 1.68, 0.08], r: [0.2, 1.2, 0.4], s: [1, 1.1, 0.9] }, // chest halves (a gap shows the core)
+        { g: rockChunk(0.36), c: R3, p: [0, 1.82, -0.26], s: [1.3, 1, 1] }, // hunched back
+        { g: sph(0.25, 1), c: coreC, p: [0, 1.62, 0.3], glow: true }, // the core, burning in the gap
+        { g: tor(0.31, 0.045), c: crack, p: [0, 1.62, 0.32], glow: true },
+        { g: oct(0.22), c: R1, p: [0, 1.98, 0.3], s: [1.15, 0.85, 1.1] }, // head, sunk low between the shoulders
+        { g: box(0.22, 0.045, 0.02), c: coreC, p: [0, 1.99, 0.53], glow: true }, // eye slit
+        { g: rockChunk(0.5), c: R2, p: [0.72, 1.98, 0], r: [0.4, 0.2, 0.7] }, { g: rockChunk(0.5), c: R1, p: [-0.72, 1.98, 0], r: [0.7, 0.9, 0.1] }, // boulder shoulders
+      ];
+      // glowing cracks across the rock (more with each phase)
+      const cracks: [number, number, number, number, number][] = [[0.18, 1.28, 0.33, 0.5, 0.3], [-0.2, 1.2, 0.32, -0.6, 0.26], [0.1, 0.92, 0.38, 0.2, 0.34], [0.32, 1.7, 0.28, 1.1, 0.22], [-0.34, 1.72, 0.27, -1.0, 0.24],
+        [0.0, 1.0, 0.44, 1.4, 0.4], [0.62, 2.0, 0.33, 0.6, 0.3], [-0.6, 2.0, 0.33, -0.7, 0.3], [0.12, 2.12, 0.2, 1.0, 0.16], [-0.24, 1.42, 0.3, 0.3, 0.3], [0.3, 0.86, 0.3, -1.2, 0.3], [-0.5, 1.82, 0.2, 2.1, 0.26]];
+      cracks.slice(0, 5 + ph * 2).forEach(([x, y, z, rz, l]) => body.push({ g: box(0.055, l * 1.2, 0.03), c: crack, p: [x * 1.1, y, z + 0.06], r: [0, 0, rz], glow: true }));
+      // crown of crystal shards + shoulder spikes
+      const nCrown = 3 + (ph - 1) * 2;
+      for (let i = 0; i < nCrown; i++) { const a = (i / (nCrown - 1 || 1) - 0.5) * 2.2; body.push({ g: cone(0.07 + ph * 0.012, 0.46 + ph * 0.1 - Math.abs(a) * 0.08, 4), c: crack, p: [Math.sin(a) * 0.24, 2.22 + Math.cos(a) * 0.06, 0.22 - Math.cos(a) * 0.04], r: [-0.25, 0, -a * 0.5], glow: true }); }
+      for (const sx of [-1, 1]) for (let k = 0; k < 1 + ph; k++) body.push({ g: cone(0.09, 0.44 + k * 0.1, 4), c: k % 2 ? crack : R3, p: [sx * (0.74 + k * 0.1), 2.4 + k * 0.04, -0.1 + k * 0.08], r: [k * 0.2, 0, -sx * (0.35 + k * 0.25)], glow: k % 2 === 1 });
+      // phase 2+: crystal wings of the rift on the back; phase 3: a burning halo behind the head
+      if (ph >= 2) for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) body.push({ g: oct(0.16), c: crack, p: [sx * (0.55 + k * 0.32), 1.95 + k * 0.28, -0.45 - k * 0.08], s: [0.35, 1.9 - k * 0.3, 0.35], r: [0, 0, -sx * (0.5 + k * 0.25)], glow: true });
+      if (ph >= 3) body.push({ g: tor(0.5, 0.035), c: 0xff7a3a, p: [0, 2.2, -0.35], glow: true });
+      const arm = (sx: number): Limb => ({ pivot: [sx * 0.82, 1.9, 0.05], parts: [
+        { g: rockChunk(0.24), c: R1, p: [0, -0.32, 0], s: [0.9, 1.4, 0.9] },
+        { g: rockChunk(0.26), c: R2, p: [0, -0.78, 0.04], s: [1, 1.3, 1], r: [0.4, 0.3, 0] },
+        { g: box(0.46, 0.4, 0.46), c: R1, p: [0, -1.12, 0.06], r: [0.2, 0.4, 0.1], w: true }, // fist
+        { g: box(0.035, 0.36, 0.02), c: crack, p: [0, -0.8, 0.27], r: [0, 0, sx * 0.4], glow: true },
+        { g: oct(0.07), c: coreC, p: [0, -1.12, 0.3], glow: true },
+        ...(ph >= 2 ? [{ g: cone(0.06, 0.3, 4), c: crack, p: [sx * 0.2, -0.6, -0.1] as V3, r: [0, 0, -sx * 1.2] as V3, glow: true }] : []),
+      ] });
+      const leg = (sx: number): Limb => ({ pivot: [sx * 0.3, 0.8, 0], parts: [
+        { g: rockChunk(0.26), c: R2, p: [0, -0.3, 0], s: [1, 1.3, 1] },
+        { g: box(0.42, 0.3, 0.52), c: R1, p: [0, -0.66, 0.06], r: [0, sx * 0.3, 0] },
+        { g: box(0.03, 0.3, 0.02), c: crack, p: [0, -0.3, 0.26], r: [0, 0, sx * 0.5], glow: true },
+      ] });
+      const orbit: Part[] = [];
+      const nRocks = 3 + ph * 2;
+      for (let i = 0; i < nRocks; i++) { const a = (i / nRocks) * Math.PI * 2; const rr = 1.15 + (i % 3) * 0.2; orbit.push({ g: sph(0.1 + (i % 3) * 0.05, 0), c: i % 2 ? R2 : R1, p: [Math.cos(a) * rr, 1.2 + Math.sin(a * 3) * 0.5, Math.sin(a) * rr], r: [i, i * 2, i * 3] }); }
+      for (let i = 0; i < ph + 1; i++) { const a = (i / (ph + 1)) * Math.PI * 2 + 0.6; orbit.push({ g: oct(0.08), c: crack, p: [Math.cos(a) * 1.35, 1.9, Math.sin(a) * 1.35], s: [0.6, 1.6, 0.6], glow: true }); }
+      return { kind: 'biped', attack: 'slam', height: 2.6, body, arms: [arm(-1), arm(1)], legs: [leg(-1), leg(1)], orbit };
     }
     // ======================= v0.4 =======================
     case 'rift': return {

@@ -19,6 +19,8 @@ class ParticleLayer {
   private s0: Float32Array; private s1: Float32Array; private a0: Float32Array; private grav: Float32Array; private drag: Float32Array;
   private next = 0;
   readonly n: number;
+  /** live particles (debug overlay) */
+  get active() { let c = 0; for (let i = 0; i < this.n; i++) if (this.life[i] > 0) c++; return c; }
   uniforms: { uScale: { value: number }; map: { value: THREE.Texture } };
 
   constructor(n: number, tex: THREE.Texture, additive: boolean) {

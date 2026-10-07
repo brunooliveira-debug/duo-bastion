@@ -106,3 +106,12 @@ src/ui        Hud, screens, Tutorial, icons, styles
 src/audio     AudioSystem (sons procéduraux)
 src/save      SaveSystem (profil, préférences, records, défi du jour)
 ```
+
+
+## 17. Direction artistique (v0.5 « Crépuscule »)
+- **Ambiance** : crépuscule → heure bleue → nuit magique selon la vague ; ombres bleu nuit, lumière chaude rasante, contre-jour froid ; tout ce qui est magique est émissif en HDR et fait briller l'image (halo lumineux).
+- **Lisibilité** : champ de bataille plat et dégagé (dalles), décor sur les bords et au fond, côté caméra bas, liseré froid sur les unités, zones télégraphiées au-dessus de tout.
+- **Bastion** (`src/render/bastion.ts`) : monument vertical ; ses 3 modules changent la silhouette (forme par famille, taille par niveau, bannière).
+- **Factions** (`src/render/terrain.ts`, `characters.ts`) : décor de voie, particules ambiantes, signature sur chaque unité, palettes des tours.
+- **Boss** : le Primordial évolue visuellement à 66 % et 33 % de PV ; les portails passent au rouge pendant les vagues de boss.
+- **Qualité** : ÉLEVÉ (PBR, ombres, halo ½ rés.), MOYEN (PBR sur les héros, halo ⅓ rés.), BAS (Lambert, sans post-traitement).

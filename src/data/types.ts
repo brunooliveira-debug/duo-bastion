@@ -66,7 +66,9 @@ export type Shape =
   | 'crawler' | 'fly' | 'runner' | 'armored' | 'gunner' | 'caster' | 'brute' | 'boss'
   | 'ghost' | 'shaman' | 'blob' | 'sapper' | 'champion' | 'core'
   // v0.4: secondary rift objective, mechanical leviathan (Résonance)
-  | 'rift' | 'leviathan';
+  | 'rift' | 'leviathan'
+  // v0.5: the final boss gets its own model (3 visual phases)
+  | 'primordial';
 
 export interface ModelDef {
   /** primitive silhouette archetype used by the renderer */
@@ -74,6 +76,8 @@ export interface ModelDef {
   color: number;
   accent: number;
   scale: number;
+  /** render only: boss phase (1..3) — the model evolves */
+  phase?: number;
 }
 
 export interface CombatStats {

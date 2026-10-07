@@ -1,8 +1,9 @@
 # PROJECT_STATUS — DUO BASTION
 
-**VERSION ACTUELLE :** 0.4.0-alpha (« Résonance » : Résonance DUO, modules du Bastion, ordres tactiques, boss télégraphiés, failles, anomalies, journal, défi du jour)
+**VERSION ACTUELLE :** 0.5.0-alpha (« Crépuscule » : refonte graphique cinématique — rapport : `docs/RAPPORT_v0.5.md`)
 **URL PUBLIQUE (GitHub Pages) :** https://brunooliveira-debug.github.io/duo-bastion/
-**DERNIER TEST :** 2026-10-07
+**DERNIER TEST :** 2026-10-08
+- v0.5 : `vitest` 55/55 (48 + 7 tests v0.5 : modèles, Primordial 3 phases, signatures de faction, branches A/B, champ de bataille plat, décor hors voie, rendu sans effet sur la simulation). `npm run build` OK. Navigateur : PC 1280×720 en ÉLEVÉ / MOYEN / BAS, téléphone paysage 812×375 et portrait 375×812 (émulés), 6 factions, Résonance, vague du Primordial. Performances mesurées au chronomètre GPU (voir le rapport, section 11).
 - `vitest` 48/48 OK : les 22 tests v0.3 + 26 tests v0.4 (Résonance : charge, plafond, jamais avec le temps, déclenchement, double déclenchement, synchronisation, remboursement, pouvoir d'assistance ; modules : séquestre, validation, cofinancement, refus, accord tacite, 3 emplacements, amélioration, démontage, effets ; ordres : charges, recharge, phase, cible, repli, purge ; failles : affectation, tours refusées, récompense, nombre d'ennemis limité ; anomalies : vote commun, effets, offre réelle ; boss : zone télégraphiée, impact, interruption par étourdissement ; graine : reproductibilité, monde indépendant des actions ; fusion : éclat ; réseau hôte/invité : module commun, vote d'anomalie, anti-rejeu, synchronisation de Résonance).
 - Équilibrage : `npx tsx scripts/balance-report.ts 300` → `BALANCE_REPORT.md` (section 4 = avant/après). Ligue v0.4 : Ronces 54 %, Rouages 52 %, Brasier 52 %, Nécrose 49 %, Abysses 49 %, Astral 43 % (v0.3 : 42–61 %). Résonance : 2,8 déclenchements par équipe et par partie.
 - Navigateur (dev) : PC 1280×720, téléphone paysage 844×390, portrait 390×844 : construction, fusion, faille, anomalie, Bastion (module installé), combat, ordres (FOCUS), introduction de boss, Résonance DUO synchronisée, écran de fin (timeline, moments forts).
@@ -13,6 +14,14 @@
 - Clé client : clé *publishable* Supabase (publique par conception, RLS). Aucune clé secrète dans le code.
 
 ## TERMINÉ
+- v0.5 — « Crépuscule » (refonte graphique, moteur inchangé, 100 % procédural) :
+  - Post-traitement HDR (halo lumineux, ACES, étalonnage, vignette, FXAA) ; 3 niveaux de matériaux (PBR / mixte / Lambert) ; reflets réservés aux héros.
+  - **Bastion monumental** (paliers, tour gothique, cage dorée, réacteur, flèches, colonne de lumière) ; modules visibles par famille et niveau, avec bannières.
+  - **Terrain** : dalles à bords organiques, murets en ruine, lanternes, arches, statues, ponts de pierre, grands portails de faille, abîme brumeux.
+  - **Décor et particules par faction** sur chaque voie ; signature de faction sur chaque unité ; branches A et B distinctes ; palettes des tours refaites.
+  - **Primordial** : modèle dédié en 3 phases visuelles, braises, fumée, arcs ; portails rouges en vague de boss.
+  - **Résonance cinématique** : couleurs des deux armées qui convergent, embrasement du Bastion, étalonnage, flash, glyphe au sol.
+  - Interface vitrée bleu nuit à liserés dorés ; compteur de performance de debug.
 - v0.4 — « Deux joueurs, deux armées, un seul Bastion » (détails : `docs/GDD.md`) :
   - **Résonance DUO** : jauge commune chargée uniquement par la coopération ; 21 capacités de paire data-driven ; synchronisation +30 % ; IA partenaire qui synchronise.
   - **Modules du Bastion** : 3 emplacements, 13 modules / 4 familles / 3 niveaux, proposition → validation (cofinancement) / refus / accord tacite 15 s ; visibles sur le château.
@@ -27,7 +36,7 @@
 - v0.3 et avant : 6 armées × 6 unités, niveaux 1→5 + spécialisations, synergies, pouvoirs, envois, malédictions, duel, rendu 3D procédural (îles flottantes, tours, effets), multijoueur hôte autoritaire, PWA, tutoriel, survie.
 
 ## À FAIRE
-- **Refonte graphique** d'après les planches de référence (demande du 2026-10-07) : post-traitement, éclairage cinématique, Bastion monumental, terrains, boss, failles, Résonance.
+- Graphismes (suite v0.5) : resculpter les maillages des unités, modèles dédiés pour les autres boss, résolution dynamique, effets d'impact par faction.
 - Duels : la pression offensive reste faible (envois surtout économiques, 15 % des duels finis par destruction d'un Core) → aperçu des envois entrants + IA plus offensive.
 - IA : certaines unités à distance coûteuses restent rarement choisies (Lancière, Astromancienne, Bombardière, Harponneuse, Méduse, Arbalétrière, Archère des Cendres).
 - Classement en ligne du défi du jour (appliquer `002_daily_challenge.sql`), rejouer le journal côté serveur pour valider les scores.

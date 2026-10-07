@@ -9,12 +9,15 @@ import { Batcher, Part, Piece, V3, box, cone, cyl, mergeParts, mix, oct, shade, 
 
 interface Pal { stone: number; stoneD: number; trim: number; roof: number; banner: number; glow: number; wood: number }
 export const TOWER_PAL: Record<FactionId, Pal> = {
-  astreens: { stone: 0x9aa0b8, stoneD: 0x6a7088, trim: 0xe8c050, roof: 0x3a5ad8, banner: 0x3a5ad8, glow: 0x9fd8ff, wood: 0x8a5a32 },
-  rouages: { stone: 0x9a8a78, stoneD: 0x6a5a4a, trim: 0xe0902a, roof: 0xc8402a, banner: 0xc8402a, glow: 0xffc070, wood: 0x7a4a2a },
-  ronces: { stone: 0x8a9478, stoneD: 0x5a6a4a, trim: 0x9a7a3a, roof: 0x4a8a3a, banner: 0x4a9a3a, glow: 0xb4ff6a, wood: 0x6a4a28 },
-  abysses: { stone: 0x7a98a0, stoneD: 0x4a6a74, trim: 0xd8a08a, roof: 0x2a9aa0, banner: 0x2a8aa0, glow: 0x7ff6ff, wood: 0x6a5a48 },
-  solaires: { stone: 0xc0a888, stoneD: 0x8a7458, trim: 0xf0c040, roof: 0xd8502a, banner: 0xd8402a, glow: 0xffd36a, wood: 0x8a5a32 },
-  necrose: { stone: 0x5a5468, stoneD: 0x3a3448, trim: 0xd8d0c0, roof: 0x6a3a9a, banner: 0x6a2a8a, glow: 0xc48bff, wood: 0x4a3a3a },
+  // v0.5 palettes from the art direction: Astral silver / blue / cyan, Rouages bronze / copper / steel / orange,
+  // Ronces brown / green / jade, Abysses deep blue / turquoise / black / violet, Solaire sandstone / red / gold,
+  // Necrose violet / black / bone / spectral green.
+  astreens: { stone: 0xaab4cc, stoneD: 0x6e7896, trim: 0xdce6f4, roof: 0x2a48c0, banner: 0x3a5ad8, glow: 0x8fe4ff, wood: 0x7a86a4 },
+  rouages: { stone: 0x8a7a6a, stoneD: 0x54483e, trim: 0xd08a3a, roof: 0x7a3a22, banner: 0xc8502a, glow: 0xffa040, wood: 0x5a3a24 },
+  ronces: { stone: 0x7a846a, stoneD: 0x4a5640, trim: 0x8a6a3a, roof: 0x3a7a32, banner: 0x3a8a3a, glow: 0x8affa0, wood: 0x5a3e24 },
+  abysses: { stone: 0x4a6a78, stoneD: 0x24384a, trim: 0x8a6ad8, roof: 0x1a6a7a, banner: 0x2a7a9a, glow: 0x3affe0, wood: 0x2e3a48 },
+  solaires: { stone: 0xb89a78, stoneD: 0x7a5e44, trim: 0xf0c040, roof: 0xc8401a, banner: 0xd8402a, glow: 0xffa040, wood: 0x6a3a22 },
+  necrose: { stone: 0x4a4458, stoneD: 0x2a2436, trim: 0xd8d0c0, roof: 0x3a2a5a, banner: 0x5a2a7a, glow: 0x9aff6a, wood: 0x3a2e34 },
 };
 const GOLD = 0xe8c050, DARKW = 0x2a1e18, IRON = 0x2e2e36;
 

@@ -77,7 +77,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     ], mechanic: 'Régénère, résiste aux explosions, fracture le sol. 3 phases.', title: 'La faille incarnée',
     phases: [{ at: 0.66, name: 'Fracture', spawn: { unit: 'bete_runique', count: 3 }, shield: 0.12 }, { at: 0.33, name: 'Dissonance absolue', slamFaster: 0.6, speed: 0.25 }],
     bounty: 400, leakDamage: 800,
-    model: { shape: 'boss', color: 0x1a0a3a, accent: 0xb04aff, scale: 2.8 },
+    model: { shape: 'primordial', color: 0x16121c, accent: 0xb04aff, scale: 2.8 },
   },
 
   // ---- Secondary rift (static objective, v0.4) ----

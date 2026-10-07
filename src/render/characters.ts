@@ -8,10 +8,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Branch, ModelDef } from '../data/types';
 import { shapeDef } from './shapes';
+import { setPbr } from './look';
+import { UNITS } from '../data/units';
+import type { FactionId } from '../data/types';
 
 export type V3 = [number, number, number];
 /** One coloured primitive. glow = unlit emissive part; w = weapon (upgraded with level). */
-export interface Part { g: THREE.BufferGeometry; c: number; p?: V3; r?: V3; s?: V3; glow?: boolean; w?: boolean }
+export interface Part { g: THREE.BufferGeometry; c: number; p?: V3; r?: V3; s?: V3; glow?: boolean; w?: boolean; pbr?: [number, number] }
 
 export const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
 export const sph = (r: number, d = 1) => new THREE.IcosahedronGeometry(r, d);
@@ -24,7 +27,7 @@ export function shade(c: number, k: number) { return new THREE.Color(c).multiply
 export function mix(a: number, b: number, k: number) { return new THREE.Color(a).lerp(new THREE.Color(b), k).getHex(); }
 
 /** Merge coloured parts into one flat-shaded geometry (keeps uv only if every part has one and keepUv). */
-export function mergeParts(parts: Part[], keepUv = false): THREE.BufferGeometry {
+export function mergeParts(parts: Part[], keepUv = false, matte = false): THREE.BufferGeometry {
   const col = new THREE.Color();
   const geos = parts.map(p => {
     const g = p.g.index ? p.g.toNonIndexed() : p.g.clone();
@@ -41,6 +44,7 @@ export function mergeParts(parts: Part[], keepUv = false): THREE.BufferGeometry 
     const arr = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    setPbr(g, p.c, p.pbr, matte);
     return g;
   });
   const merged = mergeGeometries(geos)!;
@@ -69,16 +73,61 @@ export interface RigDef {
 
 const GOLD = 0xe8c050, STEEL = 0xd8dde8;
 
+/**
+ * Faction signature — every unit of an army carries its mark, readable from the tactical camera:
+ * Astral silver pauldrons + orbiting star shard, Rouages brass pack with gear and chimney, Ronces leaf pauldrons,
+ * thorns and a spore, Abysses fin crest and bioluminescent dots, Solaire flame pauldrons, Necrose bone spikes + a soul.
+ */
+function factionSig(d: RigDef, f: FactionId | undefined) {
+  if (!f || d.kind === 'static') return;
+  const H = d.height, hum = d.kind === 'biped' || d.kind === 'robe';
+  const sy = H * 0.66, sx = hum ? 0.27 : 0.18, back = hum ? -0.19 : -0.12;
+  const add = (p: Part) => d.body.push(p);
+  switch (f) {
+    case 'astreens':
+      if (hum) for (const s of [-1, 1]) add({ g: sph(0.1, 0), c: 0xdce6f4, p: [s * sx, sy + 0.05, 0], s: [1.35, 0.6, 1.15], pbr: [0.85, 0.28] });
+      d.orbit = [...(d.orbit ?? []), { g: oct(0.075), c: 0xbff4ff, p: [0.44, H * 0.86, 0], s: [0.45, 1.6, 0.45], glow: true }, { g: oct(0.075), c: 0xbff4ff, p: [0.44, H * 0.86, 0], s: [1.6, 0.45, 0.45], glow: true }];
+      break;
+    case 'rouages':
+      add({ g: box(0.26, 0.3, 0.14), c: 0x8a5a2a, p: [0, sy - 0.08, back - 0.04], pbr: [0.8, 0.38] });
+      add({ g: tor(0.1, 0.03), c: 0xd09040, p: [0, sy - 0.05, back - 0.13], pbr: [0.85, 0.35] });
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; add({ g: box(0.04, 0.04, 0.03), c: 0xd09040, p: [Math.cos(a) * 0.135, sy - 0.05 + Math.sin(a) * 0.135, back - 0.13], r: [0, 0, a] }); }
+      add({ g: cyl(0.035, 0.045, 0.24, 6), c: 0x3a3a42, p: [0.09, sy + 0.15, back - 0.04], pbr: [0.7, 0.5] });
+      add({ g: sph(0.04, 0), c: 0xff9a3a, p: [0.09, sy + 0.28, back - 0.04], glow: true });
+      break;
+    case 'ronces':
+      if (hum) for (const s of [-1, 1]) add({ g: cone(0.13, 0.24, 4), c: 0x4a8a3a, p: [s * sx, sy + 0.06, 0], r: [0, 0, -s * 1.1], s: [1, 1, 0.5] });
+      for (let i = 0; i < 3; i++) add({ g: cone(0.03, 0.16, 4), c: 0x4a3a26, p: [(i - 1) * 0.08, sy - 0.05 + i * 0.03, back - 0.02], r: [-1.2, 0, 0] });
+      add({ g: sph(0.045, 0), c: 0x9aff9a, p: [-sx * 0.7, sy + 0.13, 0.05], glow: true });
+      break;
+    case 'abysses':
+      add({ g: box(0.025, 0.28, 0.24), c: 0x2ab8b8, p: [0, sy + 0.05, back - 0.02] });
+      for (const s of [-1, 1]) add({ g: sph(0.032, 0), c: 0x6affe8, p: [s * sx * 0.9, sy + 0.02, 0.06], glow: true });
+      add({ g: sph(0.028, 0), c: 0xb07aff, p: [0, sy - 0.12, back * 0.2 + 0.18], glow: true });
+      break;
+    case 'solaires':
+      if (hum) for (const s of [-1, 1]) add({ g: cone(0.065, 0.22, 5), c: 0xffa040, p: [s * sx, sy + 0.13, -0.02], r: [0, 0, -s * 0.3], glow: true });
+      else add({ g: cone(0.09, 0.28, 5), c: 0xffa040, p: [0, H * 0.82, back], glow: true });
+      break;
+    case 'necrose':
+      for (const s of [-1, 1]) add({ g: cone(0.03, 0.22, 4), c: 0xe0d8c8, p: [s * sx, sy + 0.11, back * 0.5], r: [-0.3, 0, -s * 0.5] });
+      d.orbit = [...(d.orbit ?? []), { g: sph(0.055, 0), c: 0x9aff6a, p: [0.38, H * 0.72, 0], glow: true }];
+      break;
+  }
+}
+
 /** Level / branch decorations — the visual power ladder. */
-function decorate(def: RigDef, m: ModelDef, level: number, branch: Branch | null): RigDef {
-  if (level <= 1) return def;
+function decorate(def: RigDef, m: ModelDef, level: number, branch: Branch | null, faction?: FactionId): RigDef {
   const d: RigDef = { ...def, body: def.body.slice(), arms: def.arms?.map(a => ({ pivot: a.pivot, parts: a.parts.slice() })), orbit: def.orbit?.slice() };
+  factionSig(d, faction);
+  if (level <= 1) return d;
   const A = m.accent, H = def.height;
+  const wk = branch === 'A' && level >= 4 ? 1.3 : 1.12; // branch A (offense) carries a visibly bigger weapon
   const upgradeWeapon = (p: Part): Part => {
     if (!p.w) return p;
     const s = p.s ?? [1, 1, 1];
     const c = level >= 3 ? mix(p.c, A, 0.55) : mix(p.c, STEEL, 0.5);
-    return { ...p, c: level >= 5 ? mix(c, GOLD, 0.4) : c, s: [s[0] * 1.12, s[1] * 1.12, s[2] * 1.12], glow: level >= 4 || p.glow };
+    return { ...p, c: level >= 5 ? mix(c, GOLD, 0.4) : c, s: [s[0] * wk, s[1] * wk, s[2] * wk], glow: level >= 5 || p.glow };
   };
   d.body = d.body.map(upgradeWeapon);
   if (d.arms) for (const a of d.arms) a.parts = a.parts.map(upgradeWeapon);
@@ -98,6 +147,14 @@ function decorate(def: RigDef, m: ModelDef, level: number, branch: Branch | null
       d.body.push({ g: box(0.36, 0.06, 0.42), c: shade(trim, 0.85), p: [0, H * 0.62, 0] });
       d.body.push({ g: oct(0.07), c: trim, p: [0, H * 0.7, 0.12] });
     }
+  }
+  // ★★★★ branch silhouettes: A = spiked crest + shoulder blades (offense), B = halo + aura ring (defense / support)
+  if (level >= 4 && branch === 'A') {
+    d.body.push({ g: cone(0.05, 0.28, 4), c: A, p: [0.07, H + 0.07, -0.02], r: [0, 0, -0.35] }, { g: cone(0.05, 0.28, 4), c: A, p: [-0.07, H + 0.07, -0.02], r: [0, 0, 0.35] });
+    if (humanoid) for (const s of [-1, 1]) d.body.push({ g: cone(0.05, 0.24, 4), c: shade(A, 0.9), p: [s * 0.34, H * 0.7, 0], r: [0, 0, -s * 1.2] });
+  } else if (level >= 4 && branch === 'B') {
+    d.body.push({ g: tor(0.21, 0.02), c: A, p: [0, H - 0.02, -0.17], glow: true });
+    d.body.push({ g: tor(0.44, 0.016), c: A, p: [0, 0.03, 0], r: [Math.PI / 2, 0, 0], glow: true });
   }
   // ★★★★ cape + glowing branch emblem
   if (level >= 4) {
@@ -138,7 +195,7 @@ const compiled = new Map<string, Compiled>();
 function compile(key: string, m: ModelDef, level: number, branch: Branch | null): Compiled {
   let c = compiled.get(key);
   if (c) return c;
-  const def = decorate(shapeDef(m), m, level, branch);
+  const def = decorate(shapeDef(m), m, level, branch, UNITS[key.split('|')[0]]?.faction);
   c = {
     def,
     body: piece(def.body),
@@ -229,7 +286,7 @@ export class Rig {
     const c = compile(`${key}|${level}|${branch ?? ''}`, m, level, branch);
     this.def = c.def;
     this.level = level;
-    this.scale = visualScale(m);
+    this.scale = visualScale(m) * (1 + 0.035 * (level - 1)); // higher level = a bit taller
     this.root.scale.setScalar(this.scale);
     this.root.add(this.body);
     const add = (o: THREE.Object3D, p: Piece) => {

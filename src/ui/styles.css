@@ -522,3 +522,16 @@ h2 { font-family: var(--display); letter-spacing: 0.05em; }
   .anomaly { bottom: calc(var(--round) + var(--card-h) + 50px + var(--sab)); }
   .proposal { bottom: calc(var(--round) + var(--card-h) + 50px + var(--sab)); }
 }
+
+/* debug performance overlay */
+.perf { position: fixed; left: 50%; bottom: 2px; transform: translateX(-50%); z-index: 60; pointer-events: none; font: 700 11px/1.2 ui-monospace, monospace; color: #9fffc8; background: rgba(0,0,0,0.55); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+
+/* ---------- v0.5 cinematic UI polish: night-blue glass, warm gold edges, soft depth ---------- */
+:root { --panel: rgba(9, 11, 26, 0.82); --panel2: #161a34; --line: #3c4268; --glass-hi: rgba(255, 236, 200, 0.10); --edge: rgba(214, 186, 128, 0.8); }
+.screen { background: radial-gradient(120% 80% at 50% 108%, rgba(255, 150, 90, 0.22), transparent 55%), radial-gradient(90% 60% at 50% -5%, rgba(90, 140, 255, 0.2), transparent 60%), linear-gradient(180deg, #060818 0%, #0e1430 45%, #1e1c44 78%, #3a2c50 100%); }
+.logo { text-shadow: 0 2px 0 #7a5a2a, 0 4px 0 #3a2a14, 0 0 30px rgba(120, 200, 255, 0.45), 0 0 64px rgba(255, 181, 71, 0.35); }
+.pill { background: linear-gradient(180deg, rgba(24, 28, 56, 0.9), rgba(8, 10, 24, 0.88)); border-color: rgba(168, 145, 106, 0.42); box-shadow: inset 0 1px 0 var(--glass-hi), 0 2px 10px rgba(0, 0, 0, 0.35); }
+.card { background: linear-gradient(180deg, rgba(20, 24, 50, 0.93), rgba(9, 11, 26, 0.93)); border-color: rgba(168, 145, 106, 0.42); box-shadow: inset 0 1px 0 var(--glass-hi), 0 12px 32px rgba(0, 0, 0, 0.45); }
+.btn { background: linear-gradient(180deg, #262c58, #11142c); border-color: var(--edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 0 #05060f, 0 8px 18px rgba(0, 0, 0, 0.3); }
+.ucard { background: linear-gradient(180deg, #252c56 0%, #151a36 58%, #0d1026 100%); border-color: var(--edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 0 #05060f, 0 8px 16px rgba(0, 0, 0, 0.42); }
+.ucard::before { content: ''; position: absolute; inset: 0; border-radius: 10px; background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.07) 50%, transparent 62%); pointer-events: none; }
