@@ -1,82 +1,108 @@
-# DUO BASTION — Game Design Document technique (v0.1)
+# DUO BASTION — Game Design Document (v0.4 « Résonance »)
 
-> Nom de travail, centralisé dans `src/config.ts`, `index.html`, `public/manifest.webmanifest`.
+> **Deux joueurs, deux armées, un seul Bastion.**
+> Nom de travail centralisé dans `src/config.ts`, `index.html`, `public/manifest.webmanifest`.
 
 ## 1. Pitch
-Tower-defense / auto-battler **coopératif à deux** sur téléphone. Chaque joueur défend sa voie ; les deux partagent un **Core**. On construit entre les vagues, le combat est automatique. Dilemme central : **économie (ouvriers, Raiders → revenu) vs défense immédiate**. Inspiré des *principes* du genre « Legion TD » — aucun nom, asset, texte, carte ou code repris.
+Tower-defense / auto-battler **coopératif à deux** sur téléphone (paysage). Chaque joueur défend sa voie avec sa propre armée ; les deux partagent un **Bastion** (le Core). On construit entre les vagues, le combat est automatique — avec quelques décisions fortes pendant le combat (pouvoirs, ordres, Résonance DUO). Inspiré des *principes* du genre « Legion TD » — aucun nom, asset, texte, carte ou code repris.
 
-## 2. Univers (original)
-Science-fantasy : la **Faille** vomit les *Dissonants* (créatures fêlées). Six factions défendent les Bastions : **Astréens** (chevaliers stellaires), **Concordat des Rouages** (machines conscientes), **Les Ronces** (forêt-qui-marche), **Marée Abyssale** (colosses des fosses), **Ordre Solaire** (mages à soleils captifs), **Voile Nécrose** (ombres liées par serment).
+Le mot **DUO** est une mécanique : la jauge de **Résonance** ne se remplit que lorsque les deux joueurs s'entraident, et elle libère une capacité propre à **leur paire d'armées**.
+
+## 2. Univers
+La **Faille** vomit les *Dissonants*. Six armées défendent les Bastions : **Ordre Astral**, **Concordat des Rouages**, **Les Ronces**, **Marée Abyssale**, **Brasier Solaire**, **Voile Nécrose**.
 
 ## 3. Boucle de jeu
-Partie = 10 (courte) ou 21 vagues (+ infini en Survie). Chaque round :
-1. **Préparation** (45 s puis 35 s, finit plus tôt si tout le monde est PRÊT) : acheter / placer / déplacer / vendre / faire évoluer des unités, ouvriers, Raiders, Core, pings.
-2. **Combat** (auto, max 80 s) : unités à partir de leur case, ciblage, capacités. Ennemis qui franchissent la ligne de fuite → zone du Core ; un ennemi qui atteint le Core explose (dégâts de fuite).
-3. **Résolution** (3 s) : revenu + bonus « voie tenue » (+10), régénération du Core, statistiques.
+Partie = 10 (courte) ou 21 vagues ; Survie infinie ; Duel 1 contre 1 ; Défi du jour (graine commune).
+1. **Préparation** (60 s puis 43 → 54 s, +8 s avant un boss ; finit dès que tout le monde appuie sur LANCER) : acheter / placer / déplacer / vendre / améliorer / fusionner, ouvriers, envois, malédictions, **modules du Bastion**, **anomalie** (vagues clés), **affectation à la Faille secondaire**.
+2. **Combat** (auto, max 80 s) : pouvoirs de commandant (3), **ordres tactiques** (2 charges), **Résonance DUO**.
+3. **Résolution** (4 s) : revenu, bonus « voie tenue », régénération du Core, journal.
 
-**Entraide** : tant que des ennemis sont dans ta voie, tes unités la défendent ; dès qu'elle est vide, elles sont **libres** et traversent vers la voie du partenaire / le Core.
+**Entraide** : tant que des ennemis sont dans ta voie, tes unités la défendent ; dès qu'elle est vide, elles aident la voie partenaire / le Core — et appliquent l'**effet d'entraide** de leur armée.
 
-## 4. Ressources & économie (`src/data/economy.ts`)
-| | Valeur |
+## 4. Les 6 armées (`src/data/units.ts`)
+6 unités par armée (catégories : défense, lourde, longue portée, anti-blindage, zone, soutien, rapide, spéciale), niveaux 1 → 5, spécialisation A/B définitive au niveau 4, 3 pouvoirs de commandant (`src/data/powers.ts`).
+
+| Armée | Philosophie | Doctrine (passif v0.4) | Entraide (aide au partenaire) |
+|---|---|---|---|
+| Ordre Astral | précision, contrôle, coordination | Coordination : les tirs marquent la cible (+10 % dégâts subis, 3 s) | Repérage : marque +20 % |
+| Concordat des Rouages | machines, cadence, optimisation | Optimisation : améliorations -10 %, tours +10 % cadence | Réparation : chaque ennemi éliminé chez le partenaire / près du Core répare le Core (4 %/vague max) |
+| Les Ronces | régénération, poison, croissance | Croissance : +3 % PV max par vague survécue (max +24 %) | Sève partagée : zone de soin autour de l'aidant |
+| Marée Abyssale | tank, contrôle, puissance lente | Pression des fonds : ennemis de la voie -8 % vitesse ; +1 % dégâts / s de combat (max +25 %) | Courant : cible trempée (ralentie, +30 % des éclairs) |
+| Brasier Solaire | explosions, risque, agressivité | Ferveur : +20 % dégâts sous 50 % PV ; un ennemi qui meurt en brûlant explose | Étincelle : embrase la cible |
+| Voile Nécrose | invocations, exécution, sacrifice | Pacte & Moisson : chaque élimination +2 % dégâts (max +30 %, la vague) ; une unité tombée a 35 % de se relever en squelette | Âmes errantes : 30 % qu'un ennemi tué chez le partenaire se relève en squelette allié |
+
+**Fusion** : 2 unités identiques (même niveau, même spécialisation) → 1 unité niveau +1, l'excédent d'or est remboursé, une case est libérée et l'unité gagne un **Éclat de fusion** (+10 % PV et dégâts, cumulable 3×). Visibilité : cartes ✨ (une 2e copie permet de fusionner), anneau violet pulsant sous les paires, pastille « Fusion ×N » → liste en un geste.
+
+## 5. RÉSONANCE DUO (`src/data/resonance.ts`, `src/sim/resonance.ts`, `fireResonance` dans `src/sim/combat.ts`)
+Jauge **commune à l'équipe**, 0 → 100. **Jamais de gain avec le temps.**
+
+| Source | Charge |
 |---|---|
-| Or de départ | 250 |
-| Revenu de départ | 30 / vague |
-| Ouvrier | 50 or (+10 par ouvrier possédé), 1 Éther / 10 s, max 20 |
-| Vente | 100 % si posée cette vague, sinon 50 % |
-| Raiders | Éther → +revenu permanent + pression sur la voie adverse |
-| Investir (Survie) | 20 Éther → +4 revenu |
+| Une de tes unités élimine un ennemi de la voie partenaire | +1,4 (élite +6) |
+| Dégâts infligés à un boss de la voie partenaire | +16 par 100 % de ses PV |
+| Fuyard abattu avant le Core | +2 (+3,5 s'il venait de la voie partenaire) |
+| Les deux voies tenues sans aucune fuite | +12 |
+| Pouvoir lancé alors que ta voie est vide → il frappe la voie partenaire | +7 |
+| Deux pouvoirs de l'équipe à moins de 4 s d'écart (1×/vague) | +6 |
+| Combo d'entraide (éclair sur cible trempée…) | +0,8 (1×/2 s/unité) |
+| Faille fermée grâce aux unités du partenaire | +8 |
 
-## 5. Combat
-- Attaques : Physique, Perforant, Énergétique, Arcanique. Défenses : Légère, Organique, Blindée, Mystique.
-- Matrice 80–120 % (chaque attaque : un ↑ 120 %, un ↑ 110 %, un ↓ 90 %, un ↓ 80 %) — pas de hard-counter.
-- Armure = réduction plate en %. Provocation (tanks), ralentissements, auras, zone, rebonds, exécution, vol de vie, boucliers.
+**Déclenchement** (combat uniquement) : l'un des deux appuie sur DUO → canalisation de 2,2 s (étoile au-dessus du Bastion), la jauge est vidée. L'autre peut appuyer sur **SYNCHRO** pendant la canalisation : effet **+30 %**. Si la vague se termine avant l'impact, la jauge est rendue. Une IA partenaire synchronise ; une équipe 100 % IA déclenche en cas de boss, de fuites ou de Core en danger.
 
-## 6. Unités MVP (8 + 8 évolutions)
-| Unité | Rôle | T | Coût | Évolution |
-|---|---|---|---|---|
-| Sentinelle Ferraille | Tank éco (provocation) | 1 | 60 | Bastion Ferraille (épines) |
-| Lame-Ronce | DPS mêlée (frénésie) | 1 | 75 | Faucheuse-Ronce (vol de vie) |
-| Tireuse d'Étoiles | Distance (+25 % vs ralentis) | 2 | 95 | Chasseresse Nova |
-| Carapace des Abysses | Tank lourd (onde ralentissante) | 3 | 150 | Léviathan des Fosses |
-| Oracle de Braise | Mage zone | 3 | 145 | Gardienne du Soleil Captif |
-| Harmoniste Astral | Soutien (aura vitesse + soin) | 2 | 100 | Grand Harmoniste (boucliers) |
-| Spectre Vif | Assassin (saut + exécution) | 2 | 85 | Voile Écarlate |
-| Exarque Prisme | Carry (éclairs en chaîne) | 5 | 300 | Exarque Ascendant (T6) |
+**21 capacités** (15 paires + 6 « échos » si les deux joueurs ont la même armée), composées de blocs d'effets data-driven (`stun`, `slow`, `push`, `mark`, `nova`, `burn`, `poison`, `execute`, `haste`, `dmg`, `heal`, `shield`, `coreHeal`, `raise`, `summon`, `revive`, `dark`). Puissance indexée sur la difficulté lissée de la vague (`waveToughness`) : forte, jamais une vague gagnée automatiquement (exécution limitée aux ennemis affaiblis, boss -5 à -8 %).
+Exemples : Astral + Rouages **Matrice Stellaire** (gel 2 s + surcharge), Ronces + Abysses **Mangrove Primordiale**, Solaire + Nécrose **Éclipse Totale**, Astral + Solaire **Supernova**, Rouages + Nécrose **Machine Interdite** (les unités détruites de la vague reviennent en fantômes), Abysses + Rouages **Léviathan Mécanique**.
 
-Synergies émergentes : Carapace (ralentit) → Tireuse (+dégâts vs ralentis) ; Harmoniste (aura) → Lame-Ronce (frénésie).
+## 6. MODULES DU BASTION (`src/data/modules.ts`)
+Le Core a **3 emplacements**. 13 modules, 4 familles, 3 niveaux, payés en Éther (35–50 puis 50–80 puis 80–120).
+- **Défense** : Rempart (-12/20/28 % dégâts de fuite), Égide (bouclier rechargé chaque vague), Restauration (+PV par vague).
+- **Artillerie** : Canon du Bastion (+40/80/130 % dégâts, portée), Rayon Prismatique (frappe l'ennemi le plus robuste), Chaîne d'Orage (rebonds), Onde Bastion (choc de zone).
+- **Soutien** : Aura de Cadence (arrière-ligne +10/18/26 % cadence), Forge d'Éther (+Éther pour les deux), Trésor (+or par vague pour les deux).
+- **Contrôle** : Champ de Givre (ralentit près du Core), Portail de Repli (renvoie les premiers fuyards au début de la voie), Entrave (étourdit / interrompt les boss).
 
-## 7. Draft
-6 unités / joueur / partie (≥1 tank, ≥1 DPS, ≥2 unités ≤100 or), 1 relance avant la première construction.
+**Décision commune** : un joueur **propose** (son Éther est mis en séquestre), le partenaire **valide** (et paie la moitié s'il le peut) ou **refuse** (remboursement). Sans réponse : **accord tacite après 15 s**. Un partenaire IA répond immédiatement. Démonter rend 50 % de l'Éther investi. Le Bastion affiche visuellement ses modules (une pièce par emplacement, plus grande avec le niveau ; dôme pour l'Égide).
 
-## 8. Vagues
-21 vagues data-driven (`src/data/waves.ts`) + générateur infini (Survie). Boss : V5 Brute, V10 Colosse Fêlé, V14 double Brute, V15 Reine-Essaim, V19 quatre Brutes, V21 Dissonant Primordial.
+## 7. ORDRES TACTIQUES (`src/data/tactics.ts`, `applyOrder`)
+2 charges par vague (3 avec l'anomalie Veille), 4 s entre deux ordres. Bouton ORDRES → 5 icônes ; les ordres ciblés attendent un toucher sur le terrain pendant 2,5 s, sinon ils choisissent eux-mêmes la meilleure cible.
+FOCUS (cible prioritaire, +15 % dégâts, 7 s) · RALLIEMENT (zone 3,5 m : -25 % dégâts subis, +15 % cadence, 6 s) · REPLI (unités mobiles reculent de 3 m, -30 % dégâts, 5 s — esquive des attaques télégraphiées) · INTERCEPTION (chasse aux fuyards, +30 % vitesse, 8 s) · PURGE (retire brouillard/brouillage et les effets négatifs, +10 % PV).
 
-## 9. Raiders (4 MVP)
-Grignoteur (10 ✨, +3), Griffe-Zéphyr (20 ✨, +5, rapide), Mur-Coquille (40 ✨, +6, tank), Béhémoth Fendeur (80 ✨, +6, zone). Envoyés à la voie adverse correspondante à la vague suivante.
+## 8. BOSS
+Introduction courte (épithète, nom, mécanique, assombrissement, léger zoom), barre de boss. **Attaques télégraphiées** (`slam`) : une zone rouge se remplit sur le groupe d'unités le plus dense, l'impact tombe après 1,5–1,8 s ; **un étourdissement interrompt l'attaque** (Gel, IEM, Entrave, Résonance…). **Phases** (`phases` dans `src/data/enemies.ts`) : bouclier, invocations, accélération, attaques plus fréquentes (Colosse, Reine-Essaim, Primordial 3 phases, Alpha Runique, Ingénieur). Les brûlures / poisons **coupent la régénération** des ennemis (contre-jeu des boss régénérants).
 
-## 10. Core
-2500 PV, 70 dégâts Arcanique, portée 8, +40 PV/vague. Améliorations communes en Éther : Attaque, Régénération, Défense, Puissance (Onde Bastion).
+## 9. FAILLES SECONDAIRES
+32 % des vagues non-boss à partir de la vague 4 (3 en partie courte), même vague et même récompense pour toutes les voies. Une Faille s'ouvre au bord de chaque voie : **ignorée**, elle crache 6 ennemis ; **fermée** par 1–2 unités mobiles affectées pendant la préparation (les tours ne bougent pas) : or, Éther, +22 Résonance, rune de faille temporaire ou pouvoirs rechargés. Risque : ces unités quittent la défense.
 
-## 11. Pouvoirs
-Offerts à la vague 11 (6 en partie courte) : 3 au choix parmi 12 (Surcharge, Investissement, Bouclier du Core, Résonance, Mutation, Fureur, Régénération, Fortune, Contremaître, Rempart, Précision, Éclat).
+## 10. ANOMALIES (vagues 4, 8, 12, 16, 20 ; 3, 6, 9 en partie courte)
+3 anomalies proposées (mêmes pour tout le monde), effet pendant 3 vagues, **choix commun** (désaccord → le hasard tranche entre les deux votes). 10 anomalies : Pacte de la Faille, Tempête d'Éther, Rune Instable, Fortune du Bastion, Sacrifice du Core, Éclipse, Résonance Instable, Arsenal, Veille Tactique, Contrat de Faille.
 
-## 12. Modèle d'équilibrage (`src/sim/balance.ts`)
-- DPS effectif = dégâts × vitesse × bonus capacités ; PV effectifs = PV/(1-armure) + soins/boucliers.
-- Force d'un groupe (Lanchester) = √(ΣDPS × ΣPVeff), corrigée par la matrice ATT/DEF.
-- **Valeur conseillée** = valeur armée × 1,25 / ratio de combat → vert ≥ 100 %, orange ≥ 80 %, rouge sinon.
-- Validation : `npx tsx scripts/simulate.ts vsai 21 normal 3` (parties 100 % IA headless).
+## 11. Graines, journal, défi du jour
+- Le **monde** (runes, événements, Failles, offres d'anomalies) est tiré par `worldRand(seed, …)` : il ne dépend **que** de la graine, jamais des actions des joueurs. `?seed=123` rejoue un monde en solo.
+- **Journal déterministe** (`GameState.journal`) : achats, améliorations, fusions, ventes, envois majeurs, malédictions, modules, anomalies, Failles, Résonance, premières fuites, dégâts au Core par vague, défenses sauvées, résultat. Fin de partie : **timeline** + moments forts (MVP, dégâts, encaissé, soins, contrôle, meilleur investissement) + une piste bienveillante.
+- **Défi du jour** : Survie, graine et armées du jour, record local. Classement en ligne prêt (`supabase/migrations/002_daily_challenge.sql`, non appliqué).
 
-## 13. IA (`src/sim/ai.ts`)
-Mêmes commandes et mêmes informations que les humains (pas de triche). 5 difficultés (Initiation→Maître : ratio cible, placement, délai, usage Core) × 4 personnalités (Défensive, Économique, Agressive, Équilibrée).
+## 12. Économie (`src/data/economy.ts`)
+Or (unités, ouvriers), Éther (ouvriers, Forge : envois, malédictions, modules, pouvoirs). Revenu par vague + primes + bonus voie tenue + Trésor. Envois : prix +30 % par copie, plafond par vague, recharges ; **v0.4 : leur puissance suit la courbe des vagues et ils marchent avec la vague**.
 
-## 14. Architecture
+## 13. Réseau (hôte autoritaire)
+L'invité envoie des **commandes** numérotées ; l'hôte **valide** (coûts, phases, recharges, propriétaire, cibles), **applique**, puis diffuse le méta-état (≤ 3 Hz) et les entités (≈ 8 Hz). v0.4 :
+- toutes les nouvelles actions sont des commandes validées par `applyCommand` (`reso`, `order`, `module`, `moduleVote`, `anomaly`, `rift`) ;
+- **anti-rejeu / double-clic** : numéro de commande croissant par joueur, l'hôte ignore tout numéro déjà vu ; **anti-spam** : 15 commandes/s max ;
+- états de décision (proposition de module, votes, canalisation de Résonance) stockés dans l'état de jeu : une reconnexion retrouve la décision en cours ; accord tacite et résolution forcée au lancement de la vague évitent tout blocage ;
+- la Résonance ne peut pas être déclenchée deux fois (la jauge est vidée au premier ordre ; un second appui du partenaire = synchronisation, au-delà : refus).
+
+## 14. Équilibrage
+`npx tsx scripts/balance-report.ts 300` → `BALANCE_REPORT.md` : efficacité analytique des unités, banc PvE par voie, budget minimum pour tenir chaque vague, ligue de duels IA instrumentée (économie, défense, envois, pouvoirs, progression, synergies, fusions, mécaniques v0.4, matchups, cause de victoire, combats bloqués, Résonance). Outils : `scripts/calibrate.ts` (biais du modèle par armée), `scripts/leaks-by-wave.ts`, `scripts/army-mix.ts`, `scripts/trace-stall.ts`.
+Modèle : force ≈ √(ΣDPS × ΣPV effectifs), PV effectifs des tireurs ×1,6 (ils combattent derrière la ligne de front).
+
+## 15. Confort et lisibilité
+Options : graphismes ÉLEVÉ / MOYEN / BAS, secousses (normales / réduites / aucune), flashs, vibrations. Micro-ralentis visuels (jamais de la simulation) sur les gros impacts. Flèches de direction des ennemis en préparation, zones rouges télégraphiées, anneaux de couleur (cible FOCUS, unités affectées à la Faille, ralliement, paires fusionnables), cases dangereuses.
+
+## 16. Architecture
 ```
-src/data      données (unités, ennemis, vagues, économie, Raiders, Core, pouvoirs, matrice)
-src/sim       GameState, combat (Combat/Targeting/Ability), game (Wave/Economy/Draft/Raider/Core + commandes), ai, balance, rng
-src/net       snapshot (état de vue + interpolation), transport (Supabase Realtime / BroadcastChannel), Session (Lobby + sync), backend (Supabase)
-src/render    Renderer (Three.js), models (silhouettes procédurales)
-src/ui        Hud (HUD, gestes tactiles, panneaux), screens (menus, lobby, options), Tutorial
-src/audio     AudioSystem (sons + musique procéduraux WebAudio)
-src/save      SaveSystem (profil, préférences, records, reprise de partie)
+src/data      données (unités, ennemis, vagues, économie, pouvoirs, résonance, modules, ordres/anomalies/failles, synergies)
+src/sim       GameState, game (commandes, phases, modules, anomalies, journal), combat (combat, ciblage, capacités, Core, ordres, Résonance), ai, balance, resonance, synergy, rng
+src/net       snapshot (vue + interpolation), transport (Supabase Realtime / BroadcastChannel), Session (lobby, synchro, anti-rejeu), backend
+src/render    Renderer, environment, characters/shapes/towers (modèles procéduraux), fx (particules), numbers
+src/ui        Hud, screens, Tutorial, icons, styles
+src/audio     AudioSystem (sons procéduraux)
+src/save      SaveSystem (profil, préférences, records, défi du jour)
 ```
-**Réseau** : hôte autoritaire. L'invité envoie des commandes ; l'hôte valide (anti-triche : or, Éther, draft, cases, phases) et diffuse : méta-état (≤3 Hz, si changé), entités compactées (8 entiers/entité, ~8 Hz en combat), événements. L'invité interpole avec ~230 ms de tampon. Aucune écriture SQL temps réel : 1 sauvegarde Postgres par vague (reprise).

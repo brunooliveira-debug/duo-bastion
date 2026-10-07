@@ -9,13 +9,16 @@ import {
 } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_CD, POWER_MAX_LEVEL, POWER_UP_COST, powerUnlock } from '../data/powers';
 import { SYNERGIES, ZONE_TEXT, RUNES, zoneOf } from '../data/synergies';
+import { MODULES, MODULE_IDS, FAMILY_NAMES, FAMILY_COLORS, MODULE_REFUND, PROPOSAL_TIMEOUT, moduleCost, moduleValue, ModuleFamily } from '../data/modules';
+import { RESO_MAX, RESO_GAIN, duoAbility, ALL_DUO_ABILITIES } from '../data/resonance';
+import { ORDERS, ORDER_IDS, OrderId, ANOMALIES, AnomalyId, RIFT_REWARDS, RIFT_MAX_UNITS, RIFT_MINIONS } from '../data/tactics';
 import type { Ability, AttackType, Branch, DefenseType } from '../data/types';
-import type { CoreUpgradeId } from '../data/economy';
 import { recommendedValue, riskOf, powerBucket } from '../sim/balance';
 import { buildBonuses, previewSynergies } from '../sim/synergy';
-import type { Build, GameEvent } from '../sim/state';
-import type { Command } from '../sim/game';
-import { Renderer, DragGhost } from '../render/Renderer';
+import type { Build, GameEvent, JournalEntry } from '../sim/state';
+import { unitPrice, levelPrice, type Command } from '../sim/game';
+import { FUSION_BONUS } from '../sim/combat';
+import { Renderer, DragGhost, ARENA_GAP } from '../render/Renderer';
 import type { Session } from '../net/Session';
 import type { MetaView, PlayerView } from '../net/snapshot';
 import { audio } from '../audio/AudioSystem';
@@ -25,7 +28,7 @@ import { h, clear, fmt, vibrate } from './dom';
 import { icon, categoryIcon } from './icons';
 import { Tutorial } from './Tutorial';
 
-type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | 'opp' | 'syn' | null;
+type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | 'opp' | 'syn' | 'reso' | 'rift' | 'fusion' | null;
 
 export interface HudCallbacks { exit(): void; rematch(): void }
 
@@ -62,6 +65,13 @@ export class Hud {
   private target: number | null = null;
   private lastCount = -1;
   private bossIds = new Set<string>();
+  // v0.4
+  private pendingOrder: { id: OrderId; until: number; timer: number } | null = null;
+  private orderOpen = false;
+  private modFamily: ModuleFamily = 'defense';
+  private anomalyMin = false;
+  private hints = new Set<string>();
+  private teleWarned = 0;
 
   constructor(private session: Session, private r: Renderer, private cb: HudCallbacks) {
     this.root = h('div', { id: 'hud' });
@@ -117,7 +127,11 @@ export class Hud {
     E.next = h('button', { class: 'pill small next', onclick: () => { E.nextDetail.style.display = E.nextDetail.style.display === 'none' ? 'block' : 'none'; } });
     E.nextDetail = h('div', { class: 'next-detail', style: 'display:none' });
     E.syn = h('button', { class: 'pill small synpill', onclick: () => this.openSheet('syn') });
-    E.left = h('div', { class: 'hud-left' }, h('div', { class: 'hud-row2' }, E.army, E.next, E.syn), E.nextDetail);
+    E.reso = h('button', { class: 'pill small reso', 'aria-label': 'Résonance DUO', onclick: () => this.openSheet('reso') });
+    E.fuseChip = h('button', { class: 'pill small fusechip', style: 'display:none', onclick: () => this.openSheet('fusion') });
+    E.riftChip = h('button', { class: 'pill small riftchip', style: 'display:none', onclick: () => this.openSheet('rift') });
+    E.anomChip = h('button', { class: 'pill small anomchip', style: 'display:none', onclick: () => { this.anomalyMin = false; this.els.anomaly.dataset.k = ''; } });
+    E.left = h('div', { class: 'hud-left' }, h('div', { class: 'hud-row2' }, E.reso, E.army, E.next, E.syn, E.fuseChip, E.riftChip, E.anomChip), E.nextDetail);
     // boss bar (top centre, combat)
     E.bossName = h('b'); E.bossMech = h('small'); E.bossFill = h('i');
     E.boss = h('div', { class: 'bossbar', style: 'display:none' }, h('div', { class: 'bb-head' }, h('span', { html: icon('crown', 18, '#FFC233') }), E.bossName, E.bossMech), h('div', { class: 'bb-bar' }, E.bossFill));
@@ -133,27 +147,41 @@ export class Hud {
     };
     const w = round('worker', 'pick', '#FFD27A', 'Ouvrier', () => { if (this.cmd({ c: 'worker' })) { audio.play('worker'); this.tutorial?.on('worker'); } });
     const r = round('raider', 'swords', '#FF9AA6', 'Attaquer', () => this.openSheet('raiders'));
-    const c = round('corebtn', 'core', '#9FE9FF', 'Core', () => this.openSheet('core'));
+    const c = round('corebtn', 'core', '#9FE9FF', 'Bastion', () => this.openSheet('core'));
     E.workerBtn = w.btn; E.workerBadge = w.badge; E.workerSub = w.sub;
     E.raiderBtn = r.btn; E.raiderBadge = r.badge; E.raiderSub = r.sub; E.raiderWrap = r.wrap;
     E.coreBtn = c.btn; c.badge.style.display = 'none';
     E.readyLabel = h('span', { class: 'rl' }); E.readySub = h('small', { class: 'rs' });
     E.ready = h('button', { class: 'ready', onclick: () => this.toggleReady() }, h('span', { class: 'ring' }), E.readyLabel, E.readySub);
-    const bottom = h('div', { class: 'hud-bottom' }, E.cards, E.powers, h('div', { class: 'actions' }, w.wrap, r.wrap, c.wrap, E.ready));
+    // combat: tactical orders + DUO button next to the commander powers
+    E.ordersBtn = h('button', { class: 'obtn', 'aria-label': 'Ordres tactiques', onclick: () => { this.orderOpen = !this.orderOpen; this.renderOrders(); audio.play('click'); } });
+    E.duo = h('button', { class: 'duobtn', style: 'display:none', 'aria-label': 'Résonance DUO', onclick: () => { if (this.cmd({ c: 'reso' })) { vibrate([30, 40, 60]); } } });
+    E.combatExtra = h('div', { class: 'combat-extra', style: 'display:none' }, E.ordersBtn, E.duo);
+    E.orderStrip = h('div', { class: 'orderstrip', style: 'display:none' });
+    const bottom = h('div', { class: 'hud-bottom' }, E.cards, E.powers, E.combatExtra, h('div', { class: 'actions' }, w.wrap, r.wrap, c.wrap, E.ready));
     E.sheet = h('div', { class: 'sheet', style: 'display:none' });
+    E.sheet.addEventListener('pointerdown', () => { this.sheetHold = true; });
+    const release = () => { if (!this.sheetHold) return; this.sheetHold = false; this.lastSheetKey = ''; };
+    E.sheet.addEventListener('pointerup', () => setTimeout(release, 60));
+    E.sheet.addEventListener('pointercancel', release);
+    E.sheet.addEventListener('pointerleave', release);
     E.toasts = h('div', { class: 'toasts' });
     E.vignette = h('div', { class: 'vignette' });
     E.countdown = h('div', { class: 'countdown', style: 'display:none' });
     E.placeTip = h('div', { class: 'placetip', style: 'display:none' });
     E.overlay = h('div', { class: 'overlay-msg', style: 'display:none' });
     E.rotate = h('div', { class: 'rotate' }, '↻ Tourne ton téléphone en mode paysage pour mieux jouer');
-    this.root.append(E.vignette, top, E.left, E.boss, bottom, E.sheet, E.toasts, E.countdown, E.placeTip, E.overlay, E.rotate);
+    E.anomaly = h('div', { class: 'anomaly', style: 'display:none' });
+    E.proposal = h('div', { class: 'proposal', style: 'display:none' });
+    E.flash = h('div', { class: 'screenflash' });
+    this.root.append(E.vignette, E.flash, top, E.left, E.boss, bottom, E.orderStrip, E.anomaly, E.proposal, E.sheet, E.toasts, E.countdown, E.placeTip, E.overlay, E.rotate);
     if (DEBUG) this.root.append(this.debugPanel());
   }
 
   private debugPanel() {
     const b = (label: string, action: string) => h('button', { onclick: () => this.cmd({ c: 'debug', action }) }, label);
     return h('div', { class: 'debug' }, b('+500 or', 'gold'), b('+100 éther', 'ether'), b('Vague +1', 'wave'), b('Lancer', 'skip'), b('Tuer tout', 'kill'), b('Core 100%', 'core'), b('Pouvoirs', 'cd'), b('Événement', 'event'),
+      b('Résonance', 'reso'), b('Faille', 'rift'), b('Anomalie', 'anomaly'),
       h('button', { onclick: () => this.cmd({ c: 'speed', speed: 3 }) }, 'x3'), h('button', { onclick: () => this.cmd({ c: 'speed', speed: 1 }) }, 'x1'));
   }
 
@@ -219,6 +247,10 @@ export class Hud {
       E.army.innerHTML = `${icon('shield', 16, risk === 'green' ? '#7DFFB0' : risk === 'orange' ? '#FFB03A' : '#FF5A6A')}<span>Armée ${fmt(value)}</span><span class="rec">· conseillé ${fmt(rec)}</span>`;
     }
     this.renderNext(m);
+    this.renderReso(m, me);
+    this.renderChips(m, me);
+    this.renderAnomaly(m, me);
+    this.renderProposal(m, me);
     // synergies chip
     const bb = buildBonuses(me.builds, me.runes ?? []);
     const synCount = new Set([...bb.values()].flatMap(b => b.syn)).size;
@@ -253,7 +285,8 @@ export class Hud {
     const combat = m.phase === 'combat';
     E.cards.style.display = combat ? 'none' : '';
     E.powers.style.display = combat ? '' : 'none';
-    if (combat) this.renderPowers(me, m); else this.renderCards(me, m);
+    E.combatExtra.style.display = combat ? '' : 'none';
+    if (combat) { this.renderPowers(me, m); this.renderCombatExtra(me, m); } else { this.renderCards(me, m); if (this.orderOpen) { this.orderOpen = false; this.renderOrders(); } }
     // round actions
     const wc = ECONOMY.workerBaseCost + ECONOMY.workerCostStep * (me.workers - ECONOMY.startWorkers);
     E.workerBadge.textContent = String(me.workers);
@@ -287,7 +320,22 @@ export class Hud {
       E.overlay.append(h('div', { class: 'col' }, '⏸ PAUSE', h('button', { class: 'btn primary', onclick: () => this.cmd({ c: 'pause', value: false }) }, 'Reprendre')));
     } else if (waiting) E.overlay.textContent = this.session.role === 'host' ? '📡 Joueur déconnecté — en attente de reconnexion…' : '📡 CONNEXION… (reconnexion à l\'hôte)';
     if (me.powerChoice && !document.querySelector('.power-modal')) this.showPowerChoice(me.powerChoice);
-    if (this.sheet && this.sheet !== 'pings' && this.sheet !== 'menu' && this.sheet !== 'info') this.renderSheet();
+    // live sheets are rebuilt only when what they show changes, and never under a finger
+    // (a button replaced between pointerdown and pointerup loses the tap on phones)
+    if (this.sheet && this.sheet !== 'pings' && this.sheet !== 'menu' && this.sheet !== 'info' && !this.sheetHold) {
+      const k = this.sheetKey(m, me);
+      if (k !== this.lastSheetKey) { this.lastSheetKey = k; this.renderSheet(); }
+    }
+  }
+  private sheetHold = false;
+  private lastSheetKey = '';
+  private sheetKey(m: MetaView, me: PlayerView) {
+    const t = m.teams[me.team];
+    return [this.sheet, this.sheetArg, m.phase, m.wave, Math.floor(me.gold), Math.floor(me.ether), me.income, me.workers,
+      me.builds.map(b => `${b.bid}${b.level}${b.branch ?? ''}${b.rift ? 'r' : ''}${b.col}${b.row}`).join(','), me.raiderQueue.length, me.curseQueue.length,
+      me.powerLv.join(), t.modules.map(x => (x ? x.id + x.lv : '-')).join(), t.proposal ? t.proposal.module + t.proposal.by : '', Math.floor(t.reso), t.resoUses,
+      Math.round(t.hp / 50), this.raiderTab, this.target, this.modFamily, this.pendingFuse,
+      this.sheet === 'opp' || this.sheet === 'stats' ? Math.floor(m.time / 2) : 0].join('|');
   }
 
   private renderNext(m: MetaView) {
@@ -345,11 +393,17 @@ export class Hud {
     const E = this.els;
     const key = me.draft.join(',') + '|' + me.faction;
     if (E.cards.dataset.key === key) {
+      const anom = this.anomalyOf(m);
       for (const el of Array.from(E.cards.children) as HTMLElement[]) {
         const id = el.dataset.id;
         if (!id) continue;
-        el.classList.toggle('poor', me.gold < UNITS[id].cost);
+        const price = unitPrice(id, anom);
+        el.classList.toggle('poor', me.gold < price);
         el.classList.toggle('sel', this.selCard === id);
+        const l1 = me.builds.filter(b => b.defId === id && b.level === 1).length;
+        el.classList.toggle('twin', l1 === 1);
+        const ct = el.querySelector('.ct') as HTMLElement | null;
+        if (ct && ct.dataset.p !== String(price)) { ct.dataset.p = String(price); ct.innerHTML = `${icon('coin', 12, '#FFC233', 3)}${price}`; }
       }
       return;
     }
@@ -436,17 +490,49 @@ export class Hud {
         const p = m.players[ev.pid];
         const d = p ? FACTION_POWERS[p.faction].find(x => x.id === ev.power) : null;
         if (!d) break;
-        if (ev.pid === me.pid) this.flashPower(d.name);
-        else if (p.team === me.team) this.toast(`${p.name} : ${d.name} !`, 'ping');
+        if (ev.pid === me.pid) { this.flashPower(d.name); if (ev.assist) this.toast(`↪ Ta voie était libre : ${d.name} frappe la voie de ton partenaire (+Résonance)`, 'info'); }
+        else if (p.team === me.team && (!p.isAI || ev.assist)) this.toast(`${p.name} : ${d.name}${ev.assist ? ' sur ta voie' : ''} !`, 'ping');
         audio.play('pulse');
         break;
       }
-      case 'bossIn': if (ev.arena === me.team && !this.bossIds.has(ev.id + m.wave)) { this.bossIds.add(ev.id + m.wave); const d = ENEMIES[ev.id]; this.bossAlert(d.name, d.mechanic ?? d.description); } break;
-      case 'coreUp': {
-        if (m.players[ev.pid]?.team === me.team) { audio.play('ether'); if (ev.pid !== me.pid) this.toast(`${m.players[ev.pid].name} améliore le Core : ${CORE.upgrades[ev.up as CoreUpgradeId].name}`); }
-        if (ev.pid === me.pid) this.tutorial?.on('core');
+      case 'bossIn': if (ev.arena === me.team && !this.bossIds.has(ev.id + m.wave)) { this.bossIds.add(ev.id + m.wave); this.bossIntro(ev.id); } break;
+      case 'bossPhase': if (ev.arena === me.team) { const d = ENEMIES[ev.def]; const ph = d?.phases?.[ev.phase - 1]; if (ph) { this.banner(`PHASE ${ev.phase + 1}`, `${d.name} — ${ph.name}`, true); audio.play('boss'); this.haptic([40, 60, 40]); } } break;
+      case 'tele': if (ev.arena === me.team && ev.dur > 0) { audio.play('warn'); if (performance.now() - this.teleWarned > 20000) { this.teleWarned = performance.now(); this.toast('⚠ Attaque de boss dans la zone rouge : ordre REPLI pour l\'esquiver !', 'error'); } } break;
+      case 'slam': if (ev.arena === me.team) { audio.play('boom'); this.haptic(50); } break;
+      case 'reso': this.onReso(ev, m); break;
+      case 'order': {
+        const p = m.players[ev.pid];
+        if (!p || p.team !== me.team) break;
+        audio.play('order');
+        if (ev.pid !== me.pid && !p.isAI) this.toast(`${p.name} : ordre ${ORDERS[ev.order as OrderId]?.name ?? ev.order}`, 'ping');
         break;
       }
+      case 'module': {
+        if (ev.team !== me.team) break;
+        const d = MODULES[ev.module as keyof typeof MODULES];
+        const who = m.players[ev.pid]?.name ?? '';
+        if (ev.k === 'propose') { if (ev.pid !== me.pid) { this.toast(`🏰 ${who} propose : ${d.name}`, 'ping'); audio.play('ping'); this.haptic(40); } }
+        else if (ev.k === 'accept' || ev.k === 'auto') { audio.play('ether'); this.toast(ev.action === 'remove' ? `🏰 Module démonté : ${d.name}` : `🏰 ${d.name} ${'★'.repeat(ev.lv)} installé sur le Bastion`, 'info'); this.tutorial?.on('core'); }
+        else if (ev.k === 'refuse') this.toast(`🏰 ${who} a refusé : ${d.name} (Éther rendu)`, 'error');
+        break;
+      }
+      case 'anomaly': {
+        if (ev.team !== me.team) break;
+        if (ev.k === 'pick') { const a = ANOMALIES[ev.id as AnomalyId]; this.banner(`✦ ${a.name}`, `${a.good} — ${a.bad}`, false, 'event'); audio.play('wave'); this.anomalyMin = false; }
+        else if (ev.k === 'vote' && ev.pid !== me.pid) { this.toast(`${m.players[ev.pid]?.name} vote : ${ANOMALIES[ev.id as AnomalyId]?.name}`, 'ping'); }
+        else if (ev.k === 'offer') { audio.play('ping'); }
+        break;
+      }
+      case 'rift': {
+        const p = m.players[ev.pid];
+        if (!p || p.team !== me.team) break;
+        const rw = RIFT_REWARDS[ev.reward as keyof typeof RIFT_REWARDS];
+        if (ev.k === 'closed') { audio.play('upgrade'); this.toast(`⚡ Faille fermée${ev.pid === me.pid ? '' : ' (' + p.name + ')'} : ${rw.text(m.wave)}`, 'info'); this.haptic([30, 30, 30]); }
+        else if (ev.k === 'faded' && ev.pid === me.pid) this.toast('La Faille s\'est refermée seule : pas de récompense.', 'info');
+        break;
+      }
+      case 'help': if (m.players[ev.pid]?.team === me.team) this.helpHint(ev.kind, m.players[ev.pid].faction, ev.pid === me.pid ? '' : m.players[ev.pid].name); break;
+      case 'portal': if (ev.arena === me.team && !this.hints.has('portal')) { this.hints.add('portal'); this.toast('🌀 Portail de Repli : un fuyard renvoyé au début de la voie !', 'info'); } break;
       case 'powerUp': if (ev.pid === me.pid) audio.play('upgrade'); break;
       case 'income': if (ev.pid === me.pid && ev.gold > 0) { audio.play('coin'); this.toast(`+${ev.gold} 🪙`, 'info'); } break;
       case 'ping': {
@@ -457,8 +543,8 @@ export class Hud {
       }
       case 'msg': this.toast(ev.text, 'info'); break;
       case 'leak': if (ev.arena === me.team) { audio.play('leak'); if (ev.pid === me.pid) this.flashLeak(); } break;
-      case 'coreHit': if (ev.team === me.team) { audio.play('coreHit'); this.els.vignette.classList.add('hit'); setTimeout(() => this.els.vignette.classList.remove('hit'), 180); if (save.prefs.vibrate) vibrate(40); } break;
-      case 'die': if (ev.boss && ev.arena === me.team) { audio.play('bossDie'); this.banner('BOSS VAINCU !', ''); } else if (ev.arena === me.team && Math.random() < 0.5) audio.play('die'); break;
+      case 'coreHit': if (ev.team === me.team) { audio.play('coreHit'); if (save.prefs.flash) { this.els.vignette.classList.add('hit'); setTimeout(() => this.els.vignette.classList.remove('hit'), 180); } this.haptic(40); } break;
+      case 'die': if (ev.boss && ev.arena === me.team) { audio.play('bossDie'); this.banner('BOSS VAINCU !', ''); this.haptic([60, 40, 90]); } else if (ev.arena === me.team && Math.random() < 0.5) audio.play('die'); break;
       case 'atk': if (Math.random() < 0.22) audio.play(ev.crit ? 'crit' : Math.random() < 0.5 ? 'hit' : 'shot'); break;
       case 'explode': audio.play('boom'); break;
       case 'pulse': if (ev.arena === me.team && Math.random() < 0.4) audio.play('pulse'); break;
@@ -732,6 +818,7 @@ export class Hud {
     if (!m || !me) return;
     const p = this.r.pick(x, y);
     if (!p) return;
+    if (this.pendingOrder && m.phase === 'combat') { this.sendOrder(this.pendingOrder.id, p.x, p.z - me.team * ARENA_GAP); return; }
     if (this.selCard && m.phase === 'build') {
       const c = Renderer.cellAt(me.slot, me.team, p.x, p.z);
       if (c) {
@@ -779,17 +866,7 @@ export class Hud {
     switch (this.sheet) {
       case 'raiders': this.renderAttack(S, title, m, me); break;
       case 'core': {
-        const core = m.teams[me.team];
-        S.append(title('🔷 Core & pouvoirs'), h('p', { class: 'muted small' }, `Investissement en Éther. Core commun : PV ${fmt(core.hp)}/${fmt(core.maxHp)}`));
-        for (const id of Object.keys(CORE.upgrades) as CoreUpgradeId[]) {
-          const u = CORE.upgrades[id];
-          const lvl = core.up[id];
-          const max = lvl >= u.max;
-          S.append(h('button', { class: 'opt', disabled: max || me.ether < u.costs[lvl], onclick: () => this.cmd({ c: 'core', up: id }) },
-            h('div', { style: 'font-size:22px' }, u.icon),
-            h('div', { class: 't' }, h('b', {}, `${u.name} ${lvl}/${u.max}`), h('br'), u.text),
-            h('div', { class: 'p e' }, max ? 'MAX' : `${u.costs[lvl]}✨`)));
-        }
+        this.renderBastion(S, title, m, me);
         S.append(h('div', { class: 'sect' }, `Pouvoirs de commandant — ${FACTIONS[me.faction].name}`));
         FACTION_POWERS[me.faction].forEach((d, slot) => {
           const lv = me.powerLv[slot];
@@ -841,6 +918,9 @@ export class Hud {
         break;
       }
       case 'opp': this.renderOpp(S, title, m); break;
+      case 'reso': this.renderResoSheet(S, title, m, me); break;
+      case 'rift': this.renderRiftSheet(S, title, m, me); break;
+      case 'fusion': this.renderFusionSheet(S, title, m, me); break;
       case 'syn': {
         S.append(title('🤝 Synergies & placement'));
         const bb = buildBonuses(me.builds, me.runes ?? []);
@@ -909,13 +989,21 @@ export class Hud {
       for (const s of bb.syn) tags.push(SYNERGIES[s].name);
       if (tags.length) S.append(h('div', { class: 'tags' }, ...tags.map(t => h('span', {}, t))));
     }
-    S.append(h('div', { class: 'muted small', style: 'margin:4px 0' }, `Valeur ${fmt(b.value)} 🪙 · dégâts infligés ${fmt(b.dmgTotal)}`));
+    if (b.fused) S.append(h('div', { class: 'tags fz' }, h('span', {}, `✦ Éclat de fusion ×${Math.min(3, b.fused)} : +${Math.round(FUSION_BONUS * 100 * Math.min(3, b.fused))} % PV et dégâts`)));
+    S.append(h('div', { class: 'muted small', style: 'margin:4px 0' }, `Valeur ${fmt(b.value)} 🪙 · dégâts infligés ${fmt(b.dmgTotal)} · absorbés ${fmt(b.tanked)}`));
     if (m.phase !== 'build') { S.append(h('div', { class: 'muted small' }, 'Améliorations possibles pendant la préparation.')); return; }
+    if (this.riftActive(m) && !u.tower) {
+      const assigned = me.builds.filter(x => x.rift).length;
+      S.append(h('button', { class: `opt rift${b.rift ? ' on' : ''}`, disabled: !b.rift && assigned >= RIFT_MAX_UNITS, onclick: () => this.cmd({ c: 'rift', bid: b.bid, on: !b.rift }) },
+        h('div', { html: icon('portal', 24, '#C8A0FF', 2.4) }),
+        h('div', { class: 't' }, h('b', {}, b.rift ? 'Affectée à la Faille ✓ (retirer)' : 'Affecter à la Faille secondaire'), h('br'), `Elle quittera ta voie pour fermer la Faille (${assigned}/${RIFT_MAX_UNITS}).`)));
+    }
     const twin = me.builds.find(o => o.bid !== b.bid && o.defId === b.defId && o.level === b.level && o.branch === b.branch);
     const fuseWith = this.pendingFuse ?? twin?.bid ?? null;
     // level-up / specialisation
+    const anom = this.anomalyOf(m);
     if (next === BRANCH_LEVEL && u.branches) {
-      const cost = upgradeCost(b.defId, next);
+      const cost = levelPrice(b.defId, next, me.faction, anom);
       S.append(h('div', { class: 'sect' }, fuseWith !== null && this.pendingFuse !== null ? 'Fusion : choisis la spécialisation (définitive)' : `Spécialisation — niveau ${BRANCH_LEVEL} (définitive)`));
       const row = h('div', { class: 'branches' });
       (['A', 'B'] as Branch[]).forEach((br, i) => {
@@ -929,7 +1017,7 @@ export class Hud {
       });
       S.append(row);
     } else if (next) {
-      const cost = upgradeCost(b.defId, next);
+      const cost = levelPrice(b.defId, next, me.faction, anom);
       S.append(h('button', { class: 'opt up', disabled: me.gold < cost, onclick: () => { this.cmd({ c: 'upgrade', bid: b.bid }); } },
         h('div', { html: icon('up', 26, '#FFC233', 3) }),
         h('div', { class: 't' }, h('b', { html: `Améliorer → ${stars(next)}` }), h('br'), next === 5 ? 'Unité d\'élite : couronne et runes.' : next === 3 ? 'Armure supplémentaire, +stats.' : 'Meilleure arme, +stats.'),
@@ -939,7 +1027,7 @@ export class Hud {
       const extra = Math.max(0, b.value + (me.builds.find(o => o.bid === fuseWith)?.value ?? 0) - unitValueAt(b.defId, next));
       S.append(h('button', { class: 'opt', onclick: () => { this.cmd({ c: 'fuse', bid: b.bid, with: fuseWith }); } },
         h('div', { html: icon('merge', 26, '#C8A0FF', 2.6) }),
-        h('div', { class: 't' }, h('b', { html: `Fusionner avec l'autre ${esc(u.name)} → ${stars(next)}` }), h('br'), 'Libère une case. Gratuit' + (extra ? ` et rembourse ${extra} 🪙.` : '.')),
+        h('div', { class: 't' }, h('b', { html: `Fusionner avec l'autre ${esc(u.name)} → ${stars(next)}` }), h('br'), `Gratuit${extra ? `, rembourse ${extra} 🪙` : ''}, libère une case et ajoute un Éclat de fusion (+${Math.round(FUSION_BONUS * 100)} % PV et dégâts).`),
         h('div', { class: 'p' }, 'GRATUIT')));
     }
     S.append(h('button', { class: 'opt', onclick: () => { this.cmd({ c: 'sell', bid: b.bid }); this.closeSheet(); } },
@@ -1048,6 +1136,14 @@ export class Hud {
       return h('div', { class: 'small' }, label, inp);
     };
     S.append(vol('🔊 Effets', save.prefs.sfx, v => { save.prefs.sfx = v; audio.setVolumes(v, save.prefs.music); save.flush(); }));
+    const segc = <T extends string | number>(label: string, opts: [T, string][], cur: T, set: (v: T) => void) => {
+      const g = h('div', { class: 'seg' });
+      for (const [v, l] of opts) g.append(h('button', { class: v === cur ? 'on' : '', onclick: () => { set(v); save.flush(); this.renderSheet(); } }, l));
+      return h('div', { class: 'small', style: 'margin:4px 0' }, label, g);
+    };
+    S.append(segc('🎥 Secousses', [[1, 'Normales'], [0.4, 'Réduites'], [0, 'Aucune']], save.prefs.shake ?? 1, v => (save.prefs.shake = v)));
+    S.append(segc('⚡ Flashs', [['on', 'Oui'], ['off', 'Non']], save.prefs.flash === false ? 'off' : 'on', v => (save.prefs.flash = v === 'on')));
+    S.append(segc('📳 Vibrations', [['on', 'Oui'], ['off', 'Non']], save.prefs.vibrate ? 'on' : 'off', v => (save.prefs.vibrate = v === 'on')));
     S.append(vol('🎵 Musique', save.prefs.music, v => { save.prefs.music = v; audio.setVolumes(save.prefs.sfx, v); save.flush(); }));
     S.append(h('button', { class: 'opt', onclick: () => this.openSheet('stats') }, h('div', { html: icon('stats', 22) }), h('div', { class: 't' }, h('b', {}, 'Statistiques & matrice ATT/DEF'))));
     S.append(h('div', { class: 'row', style: 'gap:6px;margin:6px 0' },
@@ -1077,6 +1173,380 @@ export class Hud {
     this.root.append(modal);
   }
 
+  // ------------------------------------------------------------------ v0.4: Résonance, orders, Bastion, rifts, anomalies
+  private anomalyOf(m: MetaView): AnomalyId | null {
+    const a = m.teams[this.me!.team]?.anomaly;
+    return a && m.wave <= a.until ? a.id : null;
+  }
+  private riftActive(m: MetaView) { return m.phase === 'build' && (!!m.rift || this.anomalyOf(m) === 'contrat'); }
+  private haptic(p: number | number[]) { if (save.prefs.vibrate) vibrate(p); }
+  private flashScreen(color: string) {
+    if (save.prefs.flash === false) return;
+    const f = this.els.flash;
+    f.style.background = color;
+    f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  }
+
+  /** Shared gauge, always visible: what fills it is cooperation, never time. */
+  private renderReso(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    const t = m.teams[me.team];
+    const ab = duoAbility(me.faction, this.partner(m).faction);
+    const full = t.reso >= RESO_MAX;
+    const key = `${Math.floor(t.reso)}|${t.resoCast ? t.resoCast.by + ':' + t.resoCast.sync : ''}|${ab.id}`;
+    if (E.reso.dataset.k === key) return;
+    E.reso.dataset.k = key;
+    E.reso.className = `pill small reso${full ? ' full' : ''}${t.resoCast ? ' cast' : ''}`;
+    E.reso.style.setProperty('--c1', hex(ab.color));
+    E.reso.style.setProperty('--c2', hex(ab.color2));
+    const label = t.resoCast ? (t.resoCast.sync ? 'SYNCHRO !' : 'RÉSONANCE…') : full ? 'DUO PRÊTE' : 'Résonance';
+    E.reso.innerHTML = `${icon('duo', 16, full ? '#FFF6C0' : '#C8A0FF', 2.6)}<span class="rn">${label}</span><span class="rbar"><i style="width:${Math.min(100, (t.reso / RESO_MAX) * 100)}%"></i></span><b>${Math.floor(t.reso)}</b>`;
+  }
+
+  private fusionPairs(me: PlayerView): [Build, Build][] {
+    const out: [Build, Build][] = [];
+    const used = new Set<number>();
+    for (const a of me.builds) for (const b of me.builds) {
+      if (a.bid >= b.bid || used.has(a.bid) || used.has(b.bid)) continue;
+      if (a.defId === b.defId && a.level === b.level && a.branch === b.branch && a.level < MAX_LEVEL) { out.push([a, b]); used.add(a.bid); used.add(b.bid); }
+    }
+    return out;
+  }
+
+  /** Build-phase chips: fusions available, secondary rift, anomaly to choose. */
+  private renderChips(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    const build = m.phase === 'build';
+    const pairs = build ? this.fusionPairs(me) : [];
+    E.fuseChip.style.display = pairs.length ? '' : 'none';
+    if (pairs.length) { const k = String(pairs.length); if (E.fuseChip.dataset.k !== k) { E.fuseChip.dataset.k = k; E.fuseChip.innerHTML = `${icon('merge', 16, '#E8C8FF', 2.6)}<span>Fusion ×${pairs.length}</span>`; } }
+    const rift = this.riftActive(m);
+    E.riftChip.style.display = rift ? '' : 'none';
+    if (rift) {
+      const n = me.builds.filter(b => b.rift).length;
+      const reward = m.rift?.reward ?? 'gold';
+      const k = `${n}|${reward}|${m.wave}`;
+      if (E.riftChip.dataset.k !== k) {
+        E.riftChip.dataset.k = k;
+        E.riftChip.className = `pill small riftchip${n ? ' on' : ''}`;
+        E.riftChip.innerHTML = `${icon('portal', 16, '#E0B0FF', 2.6)}<span>Faille : ${RIFT_REWARDS[reward].name} · ${n}/${RIFT_MAX_UNITS}</span>`;
+      }
+    }
+    const offer = build ? m.teams[me.team].anomalyOffer : null;
+    E.anomChip.style.display = offer && this.anomalyMin ? '' : 'none';
+    if (offer && this.anomalyMin) E.anomChip.innerHTML = `${icon('sparkle', 16, '#FFE08A', 2.6)}<span>${me.anomalyVote ? 'Anomalie votée' : 'Anomalie à choisir !'}</span>`;
+  }
+
+  /** Combat bar extras: tactical orders and the DUO button. */
+  private renderCombatExtra(me: PlayerView, m: MetaView) {
+    const E = this.els;
+    const t = m.teams[me.team];
+    const cdLeft = Math.max(0, me.orderCd - m.combatTime);
+    const ok = me.orders > 0 && cdLeft <= 0 && m.ending <= 0;
+    const ok2 = `${me.orders}|${Math.ceil(cdLeft)}|${this.orderOpen}`;
+    if (E.ordersBtn.dataset.k !== ok2) {
+      E.ordersBtn.dataset.k = ok2;
+      E.ordersBtn.className = `obtn${ok ? '' : ' off'}${this.orderOpen ? ' open' : ''}`;
+      E.ordersBtn.innerHTML = `${icon('flag', 24, '#FFE08A', 2.4)}<b>ORDRES</b><small>${'●'.repeat(me.orders)}${'○'.repeat(Math.max(0, 2 - me.orders))}${cdLeft > 0 ? ` ${Math.ceil(cdLeft)}s` : ''}</small>`;
+    }
+    const cast = t.resoCast;
+    const canSync = !!cast && cast.by !== me.pid && !cast.sync;
+    const show = t.reso >= RESO_MAX || !!cast;
+    E.duo.style.display = show ? '' : 'none';
+    if (show) {
+      const ab = duoAbility(me.faction, this.partner(m).faction);
+      const label = canSync ? 'SYNCHRO !' : cast ? (cast.sync ? 'SYNCHRO ✓' : 'EN COURS') : 'DUO';
+      const k = `${label}|${ab.id}`;
+      if (E.duo.dataset.k !== k) {
+        E.duo.dataset.k = k;
+        E.duo.className = `duobtn${canSync ? ' is-sync' : cast ? ' is-busy' : ' is-ready'}`;
+        E.duo.style.setProperty('--c1', hex(ab.color)); E.duo.style.setProperty('--c2', hex(ab.color2));
+        E.duo.innerHTML = `${icon('duo', 30, '#FFFFFF', 2.6)}<b>${label}</b><small>${ab.name}</small>`;
+      }
+      (E.duo as HTMLButtonElement).disabled = !!cast && !canSync;
+    }
+  }
+
+  private renderOrders() {
+    const E = this.els, me = this.me, m = this.meta;
+    E.orderStrip.style.display = this.orderOpen && m?.phase === 'combat' ? '' : 'none';
+    if (!this.orderOpen || !me || !m) return;
+    clear(E.orderStrip);
+    for (const id of ORDER_IDS) {
+      const o = ORDERS[id];
+      const b = h('button', { class: `ochip${this.pendingOrder?.id === id ? ' sel' : ''}`, 'aria-label': o.name, onclick: () => this.selectOrder(id) },
+        h('span', { html: icon(o.icon, 22, '#FFE08A', 2.4) }), h('b', {}, o.name));
+      let lp: number | null = null;
+      b.onpointerdown = () => { lp = window.setTimeout(() => { this.toast(`${o.name} : ${o.text}`, 'info'); lp = null; }, 450); };
+      b.onpointerup = b.onpointercancel = () => { if (lp) clearTimeout(lp); };
+      E.orderStrip.append(b);
+    }
+  }
+  /** Targeted orders wait for a tap on the battlefield (2.5 s), otherwise they pick the best target themselves. */
+  private selectOrder(id: OrderId) {
+    const me = this.me;
+    if (!me) return;
+    if (me.orders <= 0) { this.toast('Plus de charge d\'ordre pour cette vague.', 'error'); audio.play('error'); return; }
+    if (this.pendingOrder) clearTimeout(this.pendingOrder.timer);
+    this.pendingOrder = null;
+    if (!ORDERS[id].target) { this.sendOrder(id); return; }
+    const timer = window.setTimeout(() => { if (this.pendingOrder?.id === id) this.sendOrder(id); }, 2500);
+    this.pendingOrder = { id, until: performance.now() + 2500, timer };
+    this.toast(id === 'focus' ? '🎯 Touche l\'ennemi à abattre (sinon : le plus dangereux)' : '🚩 Touche la zone à tenir (sinon : là où ça chauffe)', 'info');
+    this.renderOrders();
+  }
+  private sendOrder(id: OrderId, x?: number, z?: number) {
+    if (this.pendingOrder) clearTimeout(this.pendingOrder.timer);
+    this.pendingOrder = null;
+    if (this.cmd({ c: 'order', order: id, x, z })) { this.haptic(25); this.orderOpen = false; }
+    this.renderOrders();
+  }
+
+  /** Anomaly choice (risk / reward) before key waves — a joint choice in co-op. */
+  private renderAnomaly(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    const offer = m.phase === 'build' ? m.teams[me.team].anomalyOffer : null;
+    const partner = this.partner(m);
+    const key = offer && !this.anomalyMin ? `${offer.join()}|${me.anomalyVote}|${partner.anomalyVote}|${partner.isAI}` : '';
+    if (!key) { E.anomaly.style.display = 'none'; E.anomaly.dataset.k = ''; return; }
+    if (E.anomaly.dataset.k === key) return;
+    E.anomaly.dataset.k = key;
+    E.anomaly.style.display = '';
+    clear(E.anomaly);
+    const humanPartner = !partner.isAI;
+    E.anomaly.append(h('div', { class: 'an-head' },
+      h('b', {}, '✦ ANOMALIE — 3 vagues'),
+      h('span', { class: 'muted small' }, humanPartner ? 'Choisissez ensemble (en cas de désaccord, le hasard tranche)' : 'Ton choix vaut pour l\'équipe'),
+      h('button', { class: 'x', 'aria-label': 'Réduire', onclick: () => { this.anomalyMin = true; E.anomaly.dataset.k = ''; this.renderAnomaly(m, me); } }, '▾')));
+    const row = h('div', { class: 'an-row' });
+    for (const id of offer!) {
+      const a = ANOMALIES[id];
+      const votes = [me.anomalyVote === id ? 'toi' : '', humanPartner && partner.anomalyVote === id ? partner.name : ''].filter(Boolean);
+      row.append(h('button', { class: `an-card${me.anomalyVote === id ? ' on' : ''}`, onclick: () => { if (this.cmd({ c: 'anomaly', id })) { audio.play('click'); this.haptic(20); if (partner.isAI || partner.anomalyVote) this.anomalyMin = true; } } },
+        h('div', { class: 'an-ic', html: icon(a.icon, 22, '#FFE08A', 2.4) }),
+        h('b', {}, a.name),
+        h('span', { class: 'good' }, '+ ', a.id === 'fortune' ? a.good.replace('X', String(60 + m.wave * 12)) : a.good),
+        h('span', { class: 'bad' }, '− ', a.bad),
+        votes.length ? h('small', { class: 'votes' }, '✓ ' + votes.join(' + ')) : null));
+    }
+    E.anomaly.append(row);
+  }
+
+  /** Module proposal waiting for the partner (or for us). Auto-accepted after PROPOSAL_TIMEOUT. */
+  private renderProposal(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    const pr = m.teams[me.team].proposal;
+    if (!pr) { if (E.proposal.style.display !== 'none') { E.proposal.style.display = 'none'; E.proposal.dataset.k = ''; } return; }
+    const left = Math.max(0, PROPOSAL_TIMEOUT - (m.time - pr.at));
+    const d = MODULES[pr.module];
+    const mine = pr.by === me.pid;
+    const proposer = m.players[pr.by];
+    const key = `${pr.by}|${pr.module}|${pr.action}|${Math.ceil(left)}`;
+    if (E.proposal.dataset.k === key) return;
+    E.proposal.dataset.k = key;
+    E.proposal.style.display = '';
+    clear(E.proposal);
+    const act = pr.action === 'install' ? 'installer' : pr.action === 'upgrade' ? 'améliorer' : 'démonter';
+    const half = Math.floor(pr.cost / 2);
+    E.proposal.append(
+      h('div', { class: 'pp-t', html: `${icon('core', 18, '#9FE9FF', 2.4)}<span>${mine ? `Proposé : <b>${act} ${esc(d.name)}</b> — en attente de ${esc(this.partner(m).name)}` : `${esc(proposer.name)} propose de <b>${act} ${esc(d.name)}</b>${pr.cost ? ` (${pr.cost} ✨)` : ''}`}</span>` }),
+      h('div', { class: 'pp-bar' }, h('i', { style: `width:${(left / PROPOSAL_TIMEOUT) * 100}%` })),
+      h('div', { class: 'pp-b' },
+        mine ? h('button', { class: 'btn small', onclick: () => this.cmd({ c: 'moduleVote', accept: false }) }, 'Annuler')
+          : h('button', { class: 'btn small primary', onclick: () => { this.cmd({ c: 'moduleVote', accept: true }); audio.play('ready'); } }, pr.cost && me.ether >= half ? `Valider (−${half} ✨)` : 'Valider'),
+        mine ? null : h('button', { class: 'btn small', onclick: () => this.cmd({ c: 'moduleVote', accept: false }) }, 'Refuser'),
+        h('small', { class: 'muted' }, `accord tacite dans ${Math.ceil(left)} s`)));
+  }
+
+  /** The Bastion: 3 module slots + catalogue by family. */
+  private renderBastion(S: HTMLElement, title: (t: string) => HTMLElement, m: MetaView, me: PlayerView) {
+    const team = m.teams[me.team];
+    S.append(title('🏰 Bastion'),
+      h('p', { class: 'muted small', style: 'margin:0 0 6px' }, `Core ${fmt(team.hp)} / ${fmt(team.maxHp)} PV${team.shield ? ` · Égide ${fmt(team.shield)}` : ''}. 3 emplacements de modules, payés en Éther. Chaque choix se propose : ton partenaire valide et paie la moitié s'il le peut. Sans réponse, accord tacite en ${PROPOSAL_TIMEOUT} s.`));
+    if (team.proposal) {
+      const pr = team.proposal;
+      S.append(h('div', { class: 'tags' }, h('span', {}, `⏳ En attente : ${MODULES[pr.module].name} (${pr.action === 'install' ? 'installation' : pr.action === 'upgrade' ? 'amélioration' : 'démontage'})`)));
+    }
+    const slots = h('div', { class: 'slots' });
+    team.modules.forEach((sl, i) => {
+      if (!sl) { slots.append(h('div', { class: 'slot empty' }, h('b', {}, `Emplacement ${i + 1}`), h('small', { class: 'muted' }, 'libre'))); return; }
+      const d = MODULES[sl.id];
+      const up = sl.lv < 3 ? moduleCost(sl.id, sl.lv + 1) : 0;
+      slots.append(h('div', { class: 'slot', style: `--fc:${FAMILY_COLORS[d.family]}` },
+        h('div', { class: 'sl-h', html: `${icon(d.icon, 20, FAMILY_COLORS[d.family], 2.4)}<b>${esc(d.name)}</b><span class="stars">${stars(sl.lv, 3)}</span>` }),
+        h('small', {}, d.levels[sl.lv - 1]),
+        h('div', { class: 'sl-b' },
+          sl.lv < 3 ? h('button', { class: 'btn small', disabled: !!team.proposal || me.ether < up, onclick: () => this.cmd({ c: 'module', action: 'upgrade', module: sl.id }) }, `★ ${up}✨`) : h('small', { class: 'muted' }, 'MAX'),
+          h('button', { class: 'btn small ghost', disabled: !!team.proposal, onclick: () => this.cmd({ c: 'module', action: 'remove', module: sl.id }) }, `Démonter +${Math.floor(moduleValue(sl.id, sl.lv) * MODULE_REFUND)}✨`))));
+    });
+    S.append(slots);
+    const free = team.modules.some(x => !x);
+    const tabs = h('div', { class: 'seg', style: 'margin:6px 0' });
+    for (const f of Object.keys(FAMILY_NAMES) as ModuleFamily[]) tabs.append(h('button', { class: this.modFamily === f ? 'on' : '', style: `--fc:${FAMILY_COLORS[f]}`, onclick: () => { this.modFamily = f; this.renderSheet(); } }, FAMILY_NAMES[f]));
+    S.append(tabs);
+    for (const id of MODULE_IDS.filter(x => MODULES[x].family === this.modFamily)) {
+      const d = MODULES[id];
+      const installed = team.modules.find(x => x?.id === id);
+      const cost = moduleCost(id, 1);
+      S.append(h('button', { class: 'opt', disabled: !!installed || !free || !!team.proposal || me.ether < cost, onclick: () => { if (this.cmd({ c: 'module', action: 'install', module: id })) audio.play('click'); } },
+        h('div', { html: icon(d.icon, 24, FAMILY_COLORS[d.family], 2.4) }),
+        h('div', { class: 't' }, h('b', {}, d.name, installed ? ` ${'★'.repeat(installed.lv)}` : ''), h('br'), d.levels[0], h('br'), h('small', { class: 'muted' }, `★★ ${d.levels[1]} · ★★★ ${d.levels[2]}`)),
+        h('div', { class: 'p e' }, installed ? 'INSTALLÉ' : !free ? 'PLEIN' : `${cost}✨`)));
+    }
+  }
+
+  private renderResoSheet(S: HTMLElement, title: (t: string) => HTMLElement, m: MetaView, me: PlayerView) {
+    const t = m.teams[me.team];
+    const partner = this.partner(m);
+    const ab = duoAbility(me.faction, partner.faction);
+    S.append(title('💞 Résonance DUO'),
+      h('div', { class: 'reso-card', style: `--c1:${hex(ab.color)};--c2:${hex(ab.color2)}` },
+        h('small', {}, `${FACTIONS[me.faction].name} + ${FACTIONS[partner.faction].name}`),
+        h('b', {}, ab.name), h('p', {}, ab.text),
+        h('div', { class: 'rbar big' }, h('i', { style: `width:${Math.min(100, (t.reso / RESO_MAX) * 100)}%` })),
+        h('small', {}, `${Math.floor(t.reso)} / ${RESO_MAX} · déclenchée ${t.resoUses} fois`)),
+      h('p', { class: 'small' }, 'La jauge ne monte JAMAIS avec le temps : seulement quand vous coopérez.'),
+      h('ul', { class: 'small reso-list' },
+        h('li', {}, `Une de tes unités élimine un ennemi dans la voie de ton partenaire : +${RESO_GAIN.helpKill}`),
+        h('li', {}, `Un fuyard abattu avant le Core : +${RESO_GAIN.save} (+${RESO_GAIN.saveCross} s'il venait de la voie de ton partenaire)`),
+        h('li', {}, `Les deux voies tenues sans fuite : +${RESO_GAIN.cleanWave}`),
+        h('li', {}, `Un pouvoir lancé sur la voie de ton partenaire (la tienne est vide) : +${RESO_GAIN.powerAssist}`),
+        h('li', {}, `Deux pouvoirs lancés à moins de 4 s d'écart : +${RESO_GAIN.syncCast} (1×/vague)`),
+        h('li', {}, 'Dégâts infligés à un boss de la voie partenaire, Failles fermées par ton aide, combos d\'entraide')),
+      h('p', { class: 'small muted' }, 'Pleine : l\'un de vous la déclenche (bouton DUO en combat). L\'autre a 2 s pour appuyer sur SYNCHRO : effet +30 %. À utiliser maintenant… ou à garder pour le boss ?'),
+      h('div', { class: 'sect' }, 'Entraide de vos armées'),
+      h('div', { class: 'small' }, h('b', {}, `${FACTIONS[me.faction].help.name} : `), FACTIONS[me.faction].help.text, h('br'), h('b', {}, `${FACTIONS[partner.faction].help.name} (${partner.name}) : `), FACTIONS[partner.faction].help.text));
+    const seen = Object.keys(save.profile.duoGames ?? {}).length;
+    S.append(h('div', { class: 'muted small', style: 'margin-top:6px' }, `Capacités DUO découvertes : ${seen} / ${ALL_DUO_ABILITIES.length}`));
+  }
+
+  private renderRiftSheet(S: HTMLElement, title: (t: string) => HTMLElement, m: MetaView, me: PlayerView) {
+    const reward = m.rift?.reward ?? 'gold';
+    const rw = RIFT_REWARDS[reward];
+    S.append(title('⚡ Faille secondaire'),
+      h('p', { class: 'small' }, `Une Faille s'ouvre au bord de ta voie à cette vague. Ignorée, elle crache ${RIFT_MINIONS} ennemis. Fermée par tes unités : `, h('b', { style: 'color:var(--gold)' }, rw.text(m.wave)), '.'),
+      h('p', { class: 'muted small' }, `Risque : les unités affectées quittent ta défense pendant qu'elles la ferment (${RIFT_MAX_UNITS} max, pas les tours).`));
+    const mobile = me.builds.filter(b => !UNITS[b.defId].tower);
+    if (!mobile.length) S.append(h('p', { class: 'muted small' }, 'Aucune unité mobile : les tours ne quittent pas leur poste.'));
+    const n = me.builds.filter(b => b.rift).length;
+    for (const b of mobile) {
+      const st = unitStats(b.defId, b.level, b.branch);
+      S.append(h('button', { class: `opt rift${b.rift ? ' on' : ''}`, disabled: !b.rift && n >= RIFT_MAX_UNITS, onclick: () => this.cmd({ c: 'rift', bid: b.bid, on: !b.rift }) },
+        h('div', { class: 't' }, h('b', { html: `${esc(st.name)} ${stars(b.level)}` }), h('br'), `DPS ${fmt(st.dmg * st.atkSpeed)} · ${CATEGORY_NAMES[UNITS[b.defId].category]}`),
+        h('div', { class: 'p' }, b.rift ? '✓ AFFECTÉE' : 'AFFECTER')));
+    }
+  }
+
+  private renderFusionSheet(S: HTMLElement, title: (t: string) => HTMLElement, m: MetaView, me: PlayerView) {
+    S.append(title('✨ Fusions possibles'),
+      h('p', { class: 'muted small' }, `Deux unités identiques du même niveau → une seule, niveau supérieur. Gratuit (l'excédent est remboursé), libère une case et ajoute un Éclat de fusion : +${Math.round(FUSION_BONUS * 100)} % PV et dégâts (cumulable 3×).`));
+    const pairs = this.fusionPairs(me);
+    if (!pairs.length) S.append(h('p', { class: 'small' }, 'Aucune paire pour l\'instant. Astuce : une 2e copie d\'une unité ★ permet de fusionner (les cartes concernées brillent ✨).'));
+    for (const [a, b] of pairs) {
+      const st = unitStats(a.defId, a.level, a.branch);
+      const extra = Math.max(0, a.value + b.value - unitValueAt(a.defId, a.level + 1));
+      S.append(h('button', { class: 'opt', onclick: () => this.fuse(a, b.bid) },
+        h('div', { html: icon('merge', 26, '#C8A0FF', 2.6) }),
+        h('div', { class: 't' }, h('b', { html: `2× ${esc(st.name)} ${stars(a.level)} → ${stars(a.level + 1)}` }), h('br'), a.level + 1 === BRANCH_LEVEL ? 'Choix de spécialisation à la fusion.' : `+${Math.round(FUSION_BONUS * 100)} % PV et dégâts${extra ? ` · rembourse ${extra} 🪙` : ''}`),
+        h('div', { class: 'p' }, 'FUSIONNER')));
+    }
+    void m;
+  }
+
+  private onReso(ev: Extract<GameEvent, { t: 'reso' }>, m: MetaView) {
+    const me = this.me!;
+    if (ev.team !== me.team) { if (ev.k === 'fire') this.toast('L\'équipe adverse déclenche sa Résonance DUO !', 'error'); return; }
+    const ab = ALL_DUO_ABILITIES.find(a => a.id === ev.ability);
+    const name = ab?.name ?? 'RÉSONANCE';
+    switch (ev.k) {
+      case 'full': audio.play('resoFull'); this.toast(`💞 Résonance pleine : ${name} prête !`, 'ping'); this.haptic([30, 30, 30]); break;
+      case 'start':
+        audio.play('resoStart');
+        if (ev.pid === me.pid) this.banner(name, 'Ton partenaire peut SYNCHRONISER (+30 %)', false, 'reso');
+        else { this.banner('SYNCHRONISE !', `${m.players[ev.pid].name} lance ${name} — appuie sur DUO`, false, 'reso'); this.haptic([60, 40, 60, 40, 60]); }
+        break;
+      case 'sync': audio.play('resoSync'); this.toast(`✦ Résonance synchronisée : +30 % !`, 'ping'); break;
+      case 'fire':
+        audio.play('resoFire');
+        this.banner(name, ev.sync ? 'SYNCHRONISÉE' : '', false, 'reso');
+        this.flashScreen(ab ? `radial-gradient(circle, ${hex(ab.color)}88, ${hex(ab.color2)}22 60%, transparent 80%)` : 'rgba(255,255,255,0.4)');
+        this.haptic([80, 40, 120]);
+        break;
+      case 'refund': this.toast('La vague s\'est terminée avant l\'impact : Résonance rendue.', 'info'); break;
+    }
+  }
+
+  /** Short boss introduction: name, epithet, mechanic. Never blocks the game. */
+  private bossIntro(defId: string) {
+    const d = ENEMIES[defId];
+    audio.play('bossIntro');
+    this.haptic([60, 80, 60]);
+    this.els.vignette.classList.add('boss');
+    setTimeout(() => this.els.vignette.classList.remove('boss'), 2400);
+    const b = h('div', { class: 'bossintro' },
+      h('small', {}, d.title ? d.title.toUpperCase() : 'BOSS'),
+      h('b', {}, d.name.toUpperCase()),
+      h('span', {}, d.mechanic ?? d.description));
+    this.root.append(b);
+    setTimeout(() => b.remove(), 2800);
+  }
+
+  /** First time a cross-army help effect triggers: explain it once. */
+  private helpHint(kind: string, faction: keyof typeof FACTIONS, who: string) {
+    const key = `help:${kind}`;
+    if (this.hints.has(key)) return;
+    this.hints.add(key);
+    const f = FACTIONS[faction];
+    this.toast(`🤝 Entraide — ${f.help.name}${who ? ` (${who})` : ''} : ${f.help.text}`, 'info');
+  }
+
+  /** End of game: short timeline built from the journal + highlights (never judgemental). */
+  private endAnalysis(m: MetaView, team: PlayerView[]) {
+    const me = this.me!;
+    const wrap = h('div', { class: 'card endan', style: 'width:min(680px,100%)' });
+    const name = (pid: number) => m.players[pid]?.name ?? '?';
+    const mine = (pid: number) => m.players[pid]?.team === me.team;
+    const lines: { w: number; t: string; pri: number }[] = [];
+    const journal: JournalEntry[] = m.journal ?? [];
+    let firstLeak = false;
+    for (const j of journal) {
+      switch (j.k) {
+        case 'leak1': if (mine(j.p) && !firstLeak) { firstLeak = true; lines.push({ w: j.w, t: `Première fuite (${name(j.p)})`, pri: 2 }); } break;
+        case 'core': if (j.p === me.team && (j.b === 1 || Number(j.a) >= 300)) lines.push({ w: j.w, t: j.b === 1 ? `BOSS — perte de ${j.a} PV du Core` : `Vague difficile — perte de ${j.a} PV du Core`, pri: j.b === 1 ? 4 : 2 }); break;
+        case 'bossdown': if (j.p === me.team) lines.push({ w: j.w, t: 'Boss vaincu sans dégâts au Core !', pri: 4 }); break;
+        case 'reso': if (mine(j.p)) lines.push({ w: j.w, t: `Résonance DUO : ${ALL_DUO_ABILITIES.find(a => a.id === j.a)?.name ?? ''}${j.b ? ' (synchronisée)' : ''}`, pri: 5 }); break;
+        case 'save': if (mine(j.p)) lines.push({ w: j.w, t: `Défense sauvée par ${name(j.p)} : ${j.a} ennemis abattus chez son partenaire`, pri: 5 }); break;
+        case 'bigsend': { const to = Number(j.b); if (mine(to)) lines.push({ w: j.w, t: `Envoi adverse : ${RAIDERS.find(r => r.id === j.a)?.name ?? j.a} (${name(j.p)})`, pri: 3 }); else if (mine(j.p)) lines.push({ w: j.w, t: `${name(j.p)} envoie ${RAIDERS.find(r => r.id === j.a)?.name ?? j.a}`, pri: 3 }); break; }
+        case 'anom': if (j.p === me.team) lines.push({ w: j.w, t: `Anomalie choisie : ${ANOMALIES[j.a as AnomalyId]?.name ?? j.a}`, pri: 3 }); break;
+        case 'rift': if (mine(j.p)) lines.push({ w: j.w, t: `Faille fermée par ${name(j.p)} (${RIFT_REWARDS[j.a as keyof typeof RIFT_REWARDS]?.name ?? ''})`, pri: 2 }); break;
+        case 'mod': if (mine(j.p) && (j.b === 1 || j.b === 3)) lines.push({ w: j.w, t: j.b === 1 ? `Module installé : ${MODULES[j.a as keyof typeof MODULES]?.name}` : `${MODULES[j.a as keyof typeof MODULES]?.name} au niveau 3`, pri: 1 }); break;
+      }
+    }
+    const shown = lines.slice().sort((a, b) => b.pri - a.pri).slice(0, 9).sort((a, b) => a.w - b.w);
+    if (shown.length) wrap.append(h('div', { class: 'sect' }, 'Votre partie'), h('div', { class: 'timeline' }, ...shown.map(l => h('div', { class: 'tl' }, h('b', {}, `Vague ${l.w}`), h('span', {}, l.t)))));
+    // highlights
+    const all = team.flatMap(p => p.builds.map(b => ({ p, b })));
+    const best = (f: (x: { b: Build }) => number) => all.filter(x => f(x) > 0).sort((a, b) => f(b) - f(a))[0];
+    const label = (x: { p: PlayerView; b: Build }) => `${unitStats(x.b.defId, x.b.level, x.b.branch).name} (${x.p.name})`;
+    const hl: string[] = [];
+    const mvp = team.slice().sort((a, b) => score(b) - score(a))[0];
+    function score(p: PlayerView) { return p.stats.dmgDealt / 1000 + p.stats.dmgTanked / 2000 + p.stats.helpKills * 2 + p.stats.saves * 3 + p.stats.resoGain * 0.4; }
+    if (mvp) hl.push(`🏅 MVP : ${mvp.name}`);
+    const dmg = best(x => x.b.dmgTotal); if (dmg) hl.push(`⚔️ Plus de dégâts : ${label(dmg)} — ${fmt(dmg.b.dmgTotal)}`);
+    const tank = best(x => x.b.tanked); if (tank) hl.push(`🛡️ A le plus encaissé : ${label(tank)} — ${fmt(tank.b.tanked)}`);
+    const heal = best(x => x.b.healed); if (heal) hl.push(`💚 Soins & boucliers : ${label(heal)} — ${fmt(heal.b.healed)}`);
+    const ctrl = best(x => x.b.ctrl); if (ctrl) hl.push(`❄️ Contrôle : ${label(ctrl)} — ${Math.round(ctrl.b.ctrl)} s`);
+    const inv = best(x => x.b.dmgTotal / Math.max(1, x.b.value)); if (inv) hl.push(`💎 Meilleur investissement : ${label(inv)} — ${fmt(inv.b.dmgTotal / Math.max(1, inv.b.value))} dégâts par pièce d'or`);
+    wrap.append(h('div', { class: 'sect' }, 'Moments forts'), h('div', { class: 'highlights' }, ...hl.map(t => h('span', {}, t))));
+    // one gentle, reliable tip
+    let tip = '';
+    if (me.ether >= 150) tip = `Il te restait ${fmt(me.ether)} Éther à la fin : le Bastion, les pouvoirs et les envois peuvent en tirer parti plus tôt.`;
+    else if (me.gold >= 400) tip = `Il te restait ${fmt(me.gold)} or à la fin : une unité de plus ou une amélioration aurait pu peser dans les dernières vagues.`;
+    else if (me.stats.fusions === 0 && all.some(x => x.p.pid === me.pid && x.b.level >= 3)) tip = 'Essaie la fusion : deux unités identiques donnent un niveau ET un Éclat de fusion (+10 %).';
+    if (tip) wrap.append(h('div', { class: 'muted small', style: 'margin-top:6px' }, `💡 Piste pour la prochaine partie : ${tip}`));
+    return wrap;
+  }
+
   // ------------------------------------------------------------------ end of game
   private showEnd(m: MetaView) {
     if (this.ended || !m.result) return;
@@ -1101,6 +1571,7 @@ export class Hud {
       ['Armée', p => FACTIONS[p.faction].name], ['Ennemis éliminés', p => fmt(p.stats.kills)], ['Dégâts infligés', p => fmt(p.stats.dmgDealt)],
       ['Unités déployées', p => String(p.stats.unitsBuilt)], ['Améliorations / fusions', p => `${p.stats.upgrades} / ${p.stats.fusions}`],
       ['Ennemis envoyés', p => `${p.stats.sentUnits} (${p.stats.raidersSent} envois)`], ['Pouvoirs utilisés', p => String(p.stats.casts)],
+      ['Ordres donnés', p => String(p.stats.orders)], ['Résonance apportée', p => `${Math.round(p.stats.resoGain)} %`], ['Aide au partenaire', p => `${p.stats.helpKills} kills · ${p.stats.saves} sauvetages`],
       ['Unité la plus efficace', p => p.stats.bestUnit ? UNITS[p.stats.bestUnit].name : '—'], ['Or généré', p => fmt(p.stats.goldEarned)], ['Fuites', p => String(p.stats.leaks)],
     ];
     for (const [l, f] of rows) tbl.append(h('tr', {}, h('td', {}, l), ...team.map(p => h('td', {}, f(p)))));
@@ -1108,6 +1579,14 @@ export class Hud {
     prof.games++; if (win) prof.wins++;
     prof.xp += Math.round((20 + m.wave * 5 + (win ? 50 : 0)) * (me.randomFaction ? 1.25 : 1));
     prof.factionGames = { ...prof.factionGames, [me.faction]: (prof.factionGames?.[me.faction] ?? 0) + 1 };
+    const duoId = duoAbility(me.faction, this.partner(m).faction).id;
+    prof.duoGames = { ...(prof.duoGames ?? {}), [duoId]: (prof.duoGames?.[duoId] ?? 0) + 1 };
+    if (m.settings.challenge?.startsWith('daily:')) {
+      const day = m.settings.challenge.slice(6);
+      const prev = prof.daily?.[day];
+      const cur = { wave: m.wave, hp: Math.round(m.teams[me.team].hp), time: Math.round(m.time) };
+      if (!prev || cur.wave > prev.wave || (cur.wave === prev.wave && cur.hp > prev.hp)) prof.daily = { ...(prof.daily ?? {}), [day]: cur };
+    }
     let recordLine = '';
     if (survival) {
       const partner = team.find(p => p.pid !== me.pid)!;
@@ -1126,6 +1605,7 @@ export class Hud {
       h('p', { class: 'muted center', style: 'margin:6px 0' }, reason, ` — vague ${m.result.wave} · ${mins} min ${String(secs).padStart(2, '0')} s`),
       recordLine ? h('div', { class: 'code-big', style: 'font-size:clamp(18px,3.5vw,28px);letter-spacing:0.05em' }, recordLine) : null,
       h('div', { class: 'titles' }, ...titles.map(t => h('span', {}, t))),
+      this.endAnalysis(m, team),
       h('div', { class: 'card', style: 'width:min(680px,100%)' }, tbl),
       h('div', { class: 'menu row', style: 'margin-top:10px' },
         this.session.role !== 'guest' ? h('button', { class: 'btn primary', onclick: () => this.cb.rematch() }, '↻ Rejouer') : null,

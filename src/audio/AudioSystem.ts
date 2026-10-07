@@ -97,6 +97,14 @@ export class AudioSystem {
       case 'tick': this.tone(1200, 0.06, 'square', 0.1); this.tone(600, 0.1, 'triangle', 0.08, 0.02); break;
       case 'crit': this.noiseHit(0.08, 0.2, 3000, 0, 1.5); this.tone(1800, 0.08, 'square', 0.06, 0.01, 0.6); break;
       case 'boom': this.noiseHit(0.5, 0.45, 180, 0, 0.6); this.tone(70, 0.4, 'sine', 0.35, 0, 0.5); break;
+      // v0.4
+      case 'warn': this.tone(880, 0.12, 'square', 0.08); this.tone(660, 0.16, 'square', 0.08, 0.14); break;
+      case 'order': this.tone(523, 0.08, 'triangle', 0.14); this.tone(784, 0.12, 'triangle', 0.12, 0.06); this.noiseHit(0.05, 0.1, 2500); break;
+      case 'resoFull': [392, 494, 587, 784].forEach((f, i) => this.tone(f, 0.3, 'sine', 0.12, i * 0.07, 1.4)); break;
+      case 'resoStart': this.tone(196, 1.6, 'sawtooth', 0.12, 0, 2.2); this.tone(294, 1.6, 'sine', 0.14, 0.05, 2.2); this.noiseHit(1.4, 0.12, 900, 0.2, 3); break;
+      case 'resoSync': [659, 880, 1175].forEach((f, i) => this.tone(f, 0.25, 'triangle', 0.14, i * 0.05)); break;
+      case 'resoFire': this.noiseHit(0.9, 0.55, 220, 0, 0.5); this.tone(55, 1.0, 'sine', 0.5, 0, 0.6); [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.6, 'triangle', 0.12, 0.08 + i * 0.05)); break;
+      case 'bossIntro': this.tone(49, 2.2, 'sawtooth', 0.26, 0, 0.8); this.tone(73, 2.2, 'sine', 0.3, 0.05, 0.8); this.noiseHit(1.6, 0.3, 140, 0, 0.4); break;
     }
   }
 

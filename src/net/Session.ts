@@ -52,11 +52,14 @@ export class Session {
   private lastMetaSend = 0;
   private lastMetaJson = '';
   private netEvents: GameEvent[] = [];
-  private seq = 0;
+  private seq = Date.now(); // increasing across reconnections (the host drops anything not newer)
   private lobbyTimer: number | null = null;
   private partnerGoneAt = 0;
   private guestUid = '';
   private aiTakeover = false;
+  /** anti-replay / anti-spam: last command sequence and recent command times per guest uid */
+  private lastSeq = new Map<string, number>();
+  private cmdTimes = new Map<string, number[]>();
   private lastPhaseKey = '';
   private gameShown = false;
 
@@ -73,9 +76,9 @@ export class Session {
 
   // ------------------------------------------------------------------ setup
 
-  static solo(settings: GameSettings, ev: SessionEvents): Session {
+  static solo(settings: GameSettings, ev: SessionEvents, seed?: number): Session {
     const s = new Session('solo', 'SOLO', 'local', ev);
-    s.state = createGame(settings, (Math.random() * 2 ** 31) | 0);
+    s.state = createGame(settings, seed ?? ((Math.random() * 2 ** 31) | 0));
     s.publishLocal();
     return s;
   }
@@ -219,6 +222,7 @@ export class Session {
         }
         case 'hello': {
           if (!this.state) return;
+          this.lastSeq.delete(String(m.uid)); // a reconnected guest restarts its command numbering
           if (this.lobby.players.some(p => p.uid === m.uid)) this.sendStart();
           else this.transport?.send({ k: 'reject', to: m.uid, msg: 'Cette partie n\'existe plus.' });
           break;
@@ -244,6 +248,15 @@ export class Session {
           if (!this.state) return;
           const idx = this.lobby.players.findIndex(p => p.uid === m.uid);
           if (idx < 0) return;
+          // duplicated / replayed messages (double tap, network retry) are ignored; floods are dropped
+          const uid = String(m.uid), seq = Number(m.seq);
+          if (!Number.isFinite(seq) || seq <= (this.lastSeq.get(uid) ?? -1)) return;
+          this.lastSeq.set(uid, seq);
+          const now = performance.now();
+          const times = (this.cmdTimes.get(uid) ?? []).filter(t => now - t < 1000);
+          times.push(now);
+          this.cmdTimes.set(uid, times);
+          if (times.length > 15) { if (times.length === 16) this.transport?.send({ k: 'err', to: uid, msg: 'Trop de commandes à la fois : patiente une seconde.' }); return; }
           const pid = this.pidOf(idx);
           const err = applyCommand(this.state, pid, m.cmd as Command);
           if (err) this.transport?.send({ k: 'err', to: m.uid, msg: err });

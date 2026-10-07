@@ -1,7 +1,10 @@
 // SaveSystem — local persistence (profile, prefs, records, active game for reconnection).
 import type { Quality } from '../render/Renderer';
 
-export interface Prefs { sfx: number; music: number; quality: Quality; vibrate: boolean }
+/** shake: camera shake strength (1 normal, 0.4 reduced, 0 off) · flash: full-screen flashes · vibrate: haptics */
+export interface Prefs { sfx: number; music: number; quality: Quality; vibrate: boolean; shake: number; flash: boolean }
+/** Best result of a daily challenge (seeded game, same world for everyone). */
+export interface DailyBest { wave: number; hp: number; time: number }
 export interface Profile {
   name: string; avatar: string; localId: string;
   games: number; wins: number; xp: number; bestSurvival: number;
@@ -9,6 +12,8 @@ export interface Profile {
   tutorialDone: boolean;
   faction: string; // last army choice ('random' or a faction id)
   factionGames: Record<string, number>;
+  daily: Record<string, DailyBest>; // 'YYYY-MM-DD' → best result
+  duoGames: Record<string, number>; // DUO ability id → games played with that pair
 }
 export interface ActiveGame { code: string; role: 'host' | 'guest'; ts: number }
 
@@ -26,9 +31,9 @@ function defaults(): SaveData {
   return {
     profile: {
       name: '', avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)], localId: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
-      games: 0, wins: 0, xp: 0, bestSurvival: 0, duoRecords: {}, tutorialDone: false, faction: 'random', factionGames: {},
+      games: 0, wins: 0, xp: 0, bestSurvival: 0, duoRecords: {}, tutorialDone: false, faction: 'random', factionGames: {}, daily: {}, duoGames: {},
     },
-    prefs: { sfx: 0.8, music: 0.45, quality: mobile ? 'medium' : 'high', vibrate: true },
+    prefs: { sfx: 0.8, music: 0.45, quality: mobile ? 'medium' : 'high', vibrate: true, shake: 1, flash: true },
     active: null,
   };
 }

@@ -15,7 +15,10 @@ import { Fx, ProjKind } from './fx';
 import { DamageNumbers } from './numbers';
 import { buildEnvironment, Env } from './environment';
 import { glowTexture, starTexture } from './textures';
-import { EntView, F_BURN, F_ELITE, F_ENEMY, F_HASTE, F_POISON, F_SHIELD, F_SLOW, F_STEALTH, F_STUN, MetaView, ViewState } from '../net/snapshot';
+import { EntView, F_BURN, F_ELITE, F_ENEMY, F_HASTE, F_POISON, F_SHIELD, F_SLOW, F_STEALTH, F_STUN, F_MARK, F_WET, F_FOCUS, F_RIFT, F_GHOST, F_TASK, F_RALLY, MetaView, ViewState } from '../net/snapshot';
+import { ALL_DUO_ABILITIES } from '../data/resonance';
+import { MODULES, FAMILY_COLORS, ModuleId } from '../data/modules';
+import { save } from '../save/SaveSystem';
 
 export type Quality = 'high' | 'medium' | 'battery';
 export const ARENA_GAP = 34;
@@ -26,7 +29,7 @@ const GARRISON_SCALE = 0.72;
 const FX_COLORS: Record<string, number> = {
   spark: 0xffd27a, leaf: 0x9aff7a, star: 0xbfe0ff, water: 0x7ff6ff, fire: 0xff8a3a, note: 0xfff6c0, poison: 0x9aff4a, shell: 0xffb060,
   shadow: 0xd06aff, lightning: 0x9ffcff, enemy: 0xff4a6a, core: 0x7fd8ff, shield: 0x9fe8ff, enemyShield: 0xff9a6a, haste: 0xffe060, stun: 0xfff07a,
-  missile: 0xff7a3a, starfall: 0xbfe0ff,
+  missile: 0xff7a3a, starfall: 0xbfe0ff, beam: 0xbff8ff, chain: 0xffd27a,
 };
 export const SLOT_COLORS = [0x4aa8ff, 0xffa23a];
 const ENEMY_RING = 0xff3a5a;
@@ -119,6 +122,14 @@ export class Renderer {
   private coreFx = [0, 0];
   private lastPhase = '';
   private portraitCache = new Map<string, string>();
+  // v0.4
+  private decals: { mesh: THREE.Mesh; fill: THREE.Mesh; t: number; dur: number; id: number; hold: number; active: boolean }[] = [];
+  private chevrons: THREE.InstancedMesh;
+  private hazardMesh: THREE.InstancedMesh;
+  private resoStars: { group: THREE.Group; core: THREE.Mesh; halo: THREE.Sprite; k: number }[] = [];
+  private modGroups: { key: string; group: THREE.Group }[] = [];
+  private hitStop = 0;
+  private zoomPulse = 0;
 
   constructor(private canvas: HTMLCanvasElement, quality: Quality) {
     this.quality = quality;
@@ -172,6 +183,22 @@ export class Renderer {
     this.selRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 28).rotateX(-Math.PI / 2), ringMat(0xffffff, 0.95));
     for (const m of [this.rangeRing, this.auraRing, this.selRing]) { m.visible = false; m.position.y = GROUND_Y + 0.03; s.add(m); }
     s.add(this.ghostGroup);
+    // telegraphed boss attacks / rally zones: ground decals (outline + filling disc), pooled
+    for (let i = 0; i < 10; i++) {
+      const mesh = new THREE.Mesh(new THREE.RingGeometry(0.93, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff3a3a, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+      const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a2a, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }));
+      mesh.visible = fill.visible = false; mesh.renderOrder = fill.renderOrder = 5;
+      s.add(mesh, fill);
+      this.decals.push({ mesh, fill, t: 0, dur: 1, id: -1, hold: 0, active: false });
+    }
+    // enemy direction chevrons along the lanes
+    const chev = new THREE.ConeGeometry(0.42, 0.8, 3).rotateX(Math.PI / 2).rotateY(Math.PI / 2).scale(1, 0.12, 1);
+    this.chevrons = new THREE.InstancedMesh(chev, new THREE.MeshBasicMaterial({ color: 0xff7a4a, transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide }), 120);
+    this.chevrons.renderOrder = 6;
+    this.chevrons.frustumCulled = false; this.chevrons.count = 0; s.add(this.chevrons);
+    // dangerous cells (Rune instable anomaly)
+    this.hazardMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a6a, transparent: true, opacity: 0.38, depthWrite: false }), 16);
+    this.hazardMesh.frustumCulled = false; this.hazardMesh.count = 0; s.add(this.hazardMesh);
   }
 
   applyQuality() {
@@ -210,6 +237,20 @@ export class Renderer {
       const glyph = new THREE.Mesh(new THREE.RingGeometry(CORE.range - 0.12, CORE.range, 72).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: a > 0 ? 0xff4a6a : 0x5ad8ff, transparent: true, opacity: 0.22, depthWrite: false }));
       glyph.position.set(0, GROUND_Y + 0.015, z0);
       this.scene.add(glyph);
+      // Résonance DUO: a star forms above the Bastion during the channel
+      const group = new THREE.Group();
+      group.position.set(0, 9, z0);
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.9, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xc8a0ff, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+      halo.scale.setScalar(6);
+      group.add(core, halo);
+      group.visible = false;
+      this.scene.add(group);
+      this.resoStars.push({ group, core, halo, k: 0 });
+      const mods = new THREE.Group();
+      mods.position.set(0, 0, z0);
+      this.scene.add(mods);
+      this.modGroups.push({ key: '', group: mods });
     }
   }
 
@@ -290,6 +331,8 @@ export class Renderer {
   // ---------------------------------------------------------------- per-frame
 
   frame(dt: number, view: ViewState, opts: { localPid: number; ghost: DragGhost | null; selected: { pid: number; bid: number } | null; showGrid: boolean; events: GameEvent[] }) {
+    // hit-stop: a very short slow-down of the animations on huge impacts (never on the simulation)
+    if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.15; }
     this.time += dt;
     const meta = view.meta;
     this.env?.update(dt, this.time);
@@ -297,6 +340,7 @@ export class Renderer {
     const combat = meta.phase === 'combat';
     const me = meta.players[opts.localPid];
     if (me) this.localTeam = me.team;
+    this.localPid = opts.localPid;
     // time of day follows the waves; boss waves redden the sky
     const total = meta.settings.mode === 'survival' ? 10 : Math.max(2, meta.settings.totalWaves);
     const tod = meta.settings.mode === 'survival' ? ((meta.wave - 1) % 10) / 9 : (meta.wave - 1) / (total - 1);
@@ -403,6 +447,9 @@ export class Renderer {
       if (f & F_BURN) this.tint.multiply(new THREE.Color(1.3, 0.85, 0.65));
       if (f & F_SLOW) this.tint.multiply(new THREE.Color(0.8, 0.95, 1.3));
       if (f & F_ELITE) this.tint.multiply(new THREE.Color(1.15, 1.05, 0.8));
+      if (f & F_WET) this.tint.multiply(new THREE.Color(0.75, 0.95, 1.35));
+      if (f & F_GHOST) this.tint.multiply(new THREE.Color(0.75, 0.7, 1.6));
+      if (f & F_RIFT) this.tint.setRGB(1.2 + Math.sin(this.time * 4) * 0.25, 1, 1.4);
       if (v.flash > 0) this.tint.setRGB(3, 3, 3);
       rig.submit(this.batch, this.tint);
       // status particles (throttled)
@@ -414,6 +461,8 @@ export class Renderer {
         if (f & F_BURN) this.fx.fire(p.x, p.y + hgt * 0.4, p.z, 2, 0.4, 0.6);
         if (f & F_SLOW) this.fx.rise(p.x, p.y + hgt * 0.3, p.z, 0xbff4ff, 1, 0.14, 0.6);
         if (f & F_HASTE) this.fx.rise(p.x, p.y + 0.2, p.z, 0xffe060, 1, 0.14, 0.4);
+        if (f & F_RIFT) this.fx.rise(p.x, p.y + 0.6, p.z, 0xc07aff, 2, 0.22, 0.9);
+        if (f & F_GHOST) this.fx.rise(p.x, p.y + hgt * 0.5, p.z, 0xb090ff, 1, 0.18, 0.4);
       }
     }
     for (const [id, v] of this.ents) {
@@ -456,6 +505,13 @@ export class Renderer {
     // ---------- HP bars / blobs / rings / stun stars / shields ----------
     this.updateMarkers(meta, list, combat);
 
+    // ---------- v0.4: telegraphs, Résonance star, Bastion modules, lane chevrons, hazards ----------
+    this.updateDecals(dt);
+    this.updateResoStars(meta, dt);
+    this.updateModules(meta, dt);
+    this.updateChevrons(meta, combat);
+    this.updateHazards(meta, combat);
+
     // ---------- grid, zones, runes, selection ----------
     const gridOpacity = opts.showGrid && !combat ? 0.32 : 0.04;
     for (const g of this.gridLines) { const mt = g.material as THREE.LineBasicMaterial; mt.opacity += (gridOpacity - mt.opacity) * 0.15; }
@@ -495,8 +551,11 @@ export class Renderer {
 
     // ---------- camera ----------
     this.shake = Math.max(0, this.shake - dt * 2.5);
-    const sh = this.shake * this.shake * 0.6;
-    const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch)).multiplyScalar(this.dist);
+    const comfort = save.prefs.shake ?? 1;
+    const sh = this.shake * this.shake * 0.6 * comfort;
+    this.zoomPulse = Math.max(0, this.zoomPulse - dt * 1.6);
+    const zp = Math.sin(Math.min(1, this.zoomPulse) * Math.PI) * 0.1 * comfort;
+    const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch)).multiplyScalar(this.dist * (1 - zp));
     this.camera.position.copy(this.target).add(off).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0));
     this.camera.lookAt(this.target);
     if (this.env?.sun.castShadow) {
@@ -517,6 +576,7 @@ export class Renderer {
     return this.bossFlag;
   }
 
+  localPid = 0;
   private updateMarkers(meta: MetaView, list: EntView[], combat: boolean) {
     const m4 = new THREE.Matrix4();
     const q = this.camera.quaternion;
@@ -554,9 +614,15 @@ export class Renderer {
         const boss = enemy && !!ENEMIES[e.defId]?.boss;
         const elite = !!(e.flags & F_ELITE);
         const owner = meta.players[e.owner];
-        const color = enemy ? (boss ? 0xffb030 : elite ? 0xffd040 : ENEMY_RING) : SLOT_COLORS[owner?.slot ?? 0];
+        const fl = e.flags;
+        const color = enemy ? ((fl & F_FOCUS) ? 0xff1a1a : boss ? 0xffb030 : elite ? 0xffd040 : (fl & F_RIFT) ? 0xc07aff : ENEMY_RING)
+          : (fl & F_TASK) ? 0xb07aff : (fl & F_RALLY) ? 0x7dff9a : SLOT_COLORS[owner?.slot ?? 0];
         const p = v.rig.root.position;
-        const thick = boss ? 1.5 : elite ? 1.25 : 1;
+        const thick = (fl & F_FOCUS) ? 1.9 + Math.sin(this.time * 8) * 0.15 : boss ? 1.5 : elite ? 1.25 : 1;
+        if ((fl & F_MARK) && ns < 499) {
+          m4.compose(v3.set(p.x, p.y + v.rig.height + 0.42, p.z), q, s3.set(1.4, 1.4, 1.4));
+          this.stars.setMatrixAt(ns, m4); this.stars.setColorAt(ns++, col.setHex(0x9fd8ff));
+        }
         place(p.x, v.tower ? v.tower.deckY : 0, p.z, v.rig.scale * 0.55 * (v.tower ? 0.8 : 1), p.y + v.rig.height, color, thick, e.hp, e.hp < 0.999 || boss || elite || !!(e.flags & F_SHIELD), boss, !!(e.flags & F_SHIELD), enemy);
         if ((e.flags & F_STUN) && ns < 497) {
           for (let i = 0; i < 3; i++) {
@@ -572,11 +638,21 @@ export class Renderer {
         }
       }
     } else {
+      // fusion available: identical units of the local player pulse purple
+      const twins = new Set<number>();
+      const lp = meta.players.find(p => p.team === this.localTeam && p.pid === this.localPid);
+      if (lp) {
+        const groups = new Map<string, number[]>();
+        for (const b of lp.builds) if (b.level < 5) { const k = `${b.defId}|${b.level}|${b.branch}`; groups.set(k, [...(groups.get(k) ?? []), b.bid]); }
+        for (const ids of groups.values()) if (ids.length >= 2) ids.forEach(i => twins.add(i));
+      }
       for (const p of meta.players) for (const b of p.builds) {
         const bv = this.builds.get(`${p.pid}:${b.bid}`);
         if (!bv) continue;
         const rp = bv.rig.root.position;
-        place(rp.x, bv.tower ? -0.02 : 0, rp.z, bv.rig.scale * 0.55, rp.y + bv.rig.height * (bv.tower ? GARRISON_SCALE : 1), p.team !== this.localTeam ? ENEMY_RING : SLOT_COLORS[p.slot], bv.tower ? 1.25 : 1, 1, false, false, false, false);
+        const twin = p.pid === this.localPid && twins.has(b.bid);
+        const ringCol = p.team !== this.localTeam ? ENEMY_RING : twin ? 0xc87aff : b.rift ? 0xb07aff : SLOT_COLORS[p.slot];
+        place(rp.x, bv.tower ? -0.02 : 0, rp.z, bv.rig.scale * 0.55, rp.y + bv.rig.height * (bv.tower ? GARRISON_SCALE : 1), ringCol, (bv.tower ? 1.25 : 1) * (twin ? 1.25 + Math.sin(this.time * 5) * 0.15 : 1), 1, false, false, false, false);
         // level stars (readable power at a glance)
         for (let i = 0; i < b.level && ns < 500; i++) {
           const top = rp.y + bv.rig.height * (bv.tower ? GARRISON_SCALE : 1) + 0.28;
@@ -756,6 +832,7 @@ export class Renderer {
         const z = ev.z + arenaZ(ev.arena);
         if (ev.boss) {
           this.shake = 1;
+          if (ev.arena === this.localTeam) this.hitStop = 0.12;
           this.fx.explode(ev.x, z, 2.5, 0xffd04a, 1.2);
           this.fx.sparks(ev.x, 1.5, z, 0xffd04a, 60, 7, 0.3);
           this.fx.ring(ev.x, z, 7, 0xffd04a, 0.9);
@@ -772,7 +849,15 @@ export class Renderer {
       case 'pulse': {
         const x = ev.x, z = ev.z + arenaZ(ev.arena);
         const col = FX_COLORS[ev.fx] ?? 0xffffff;
-        if (ev.fx === 'missile') {
+        if (ev.fx === 'beam') {
+          this.fx.bolt(new THREE.Vector3(0, 4.4, arenaZ(ev.arena)), new THREE.Vector3(x, GROUND_Y + 0.8, z), 0xbff8ff);
+          this.fx.bolt(new THREE.Vector3(0, 4.4, arenaZ(ev.arena)), new THREE.Vector3(x, GROUND_Y + 0.8, z), 0xffffff);
+          this.fx.flash(x, 0.9, z, 0xbff8ff, 3, 0.2); this.fx.sparks(x, 0.9, z, 0xffffff, 14, 4);
+        } else if (ev.fx === 'chain') {
+          this.fx.ring(x, z, 1.8, 0xffd27a, 0.5); this.fx.sparks(x, 1.2, z, 0xffd27a, 12, 3); this.fx.bolt(new THREE.Vector3(0, 3.9, arenaZ(ev.arena)), new THREE.Vector3(x, 1, z), 0xffd27a);
+        } else if (ev.fx === 'leaf') {
+          this.fx.ring(x, z, ev.r, 0x7dffb0, 0.5); this.fx.rise(x, 0.4, z, 0x9aff9a, 6, 0.22, ev.r);
+        } else if (ev.fx === 'missile') {
           this.fx.shoot('missile', new THREE.Vector3(x - 3, 12, z - 2), new THREE.Vector3(x, GROUND_Y + 0.2, z), -1, 0xffffff, 1, p => { this.shake = Math.min(1, this.shake + this.fx.explode(p.x, p.z, 0.9) * 0.2); });
         } else if (ev.fx === 'starfall') {
           this.fx.shoot('ice', new THREE.Vector3(x + 2, 14, z - 3), new THREE.Vector3(x, GROUND_Y + 0.4, z), -1, 0xbfe0ff, 1.6, p => { this.fx.flash(p.x, p.y, p.z, 0xbfe0ff, 2.4, 0.2); this.fx.sparks(p.x, p.y, p.z, 0xffffff, 14, 4, 0.26); this.fx.ring(p.x, p.z, 1.6, 0xbfe0ff, 0.4); });
@@ -834,8 +919,162 @@ export class Renderer {
         }, 30);
         break;
       }
-      case 'bossIn': if (ev.arena === this.localTeam) this.shake = Math.min(1, this.shake + 0.6); break;
+      case 'bossIn': if (ev.arena === this.localTeam) { this.shake = Math.min(1, this.shake + 0.6); this.zoomPulse = 1; } break;
+      case 'tele': {
+        if (ev.dur <= 0) { for (const d of this.decals) if (d.active && d.id === ev.id) { d.active = false; d.mesh.visible = d.fill.visible = false; } break; }
+        this.decal(ev.x, ev.z + arenaZ(ev.arena), ev.r, ev.dur, ev.id, 0xff3a3a, 0);
+        break;
+      }
+      case 'slam': {
+        const z = ev.z + arenaZ(ev.arena);
+        this.shake = Math.min(1, this.shake + this.fx.explode(ev.x, z, ev.r * 0.8, 0xff6a3a) * 0.6);
+        this.fx.ring(ev.x, z, ev.r * 1.3, 0xff5a3a, 0.5);
+        this.fx.dust(ev.x, z, 8, ev.r);
+        if (ev.arena === this.localTeam) this.hitStop = 0.07;
+        break;
+      }
+      case 'bossPhase': {
+        const p = this.posOf(ev.id, view, 0.6);
+        if (p) { this.fx.ring(p.x, p.z, 4.5, 0xff3a5a, 0.7); this.fx.flash(p.x, p.y, p.z, 0xff6a6a, 4, 0.3); this.fx.sparks(p.x, p.y, p.z, 0xff9a6a, 30, 5, 0.3); }
+        if (ev.arena === this.localTeam) this.shake = Math.min(1, this.shake + 0.5);
+        break;
+      }
+      case 'reso': this.resoFx(ev, meta); break;
+      case 'order': {
+        const z = ev.z + arenaZ(ev.arena);
+        if (ev.order === 'rally') this.decal(ev.x, z, 3.5, 6, -2, 0x7dff9a, 6);
+        else if (ev.order === 'focus') { const p = this.posOf(ev.target, view, 1); if (p) { this.fx.ring(p.x, p.z, 1.6, 0xff2a2a, 0.5); this.fx.sparks(p.x, p.y, p.z, 0xff5a5a, 10, 2); } }
+        else if (ev.order === 'purge') { this.fx.ring(ev.x, z, 9, 0xffffff, 0.6); this.fx.rise(ev.x, 0.4, z, 0xffffff, 24, 0.22, 8); }
+        else if (ev.order === 'intercept') this.fx.ring(ev.x, z, 6, 0xffe060, 0.5);
+        else if (ev.order === 'retreat') this.fx.ring(ev.x, z, 7, 0x9fd8ff, 0.5);
+        break;
+      }
+      case 'portal': {
+        const z1 = ev.z + arenaZ(ev.arena), z2 = ev.z2 + arenaZ(ev.arena);
+        this.fx.ring(ev.x, z1, 1.6, 0xb07aff, 0.5); this.fx.rise(ev.x, 0.4, z1, 0xc8a0ff, 10, 0.24, 1);
+        this.fx.ring(ev.x2, z2, 1.6, 0xb07aff, 0.5); this.fx.flash(ev.x2, 1, z2, 0xc8a0ff, 3, 0.25);
+        break;
+      }
+      case 'rift': {
+        const z = ev.z + arenaZ(ev.arena);
+        if (ev.k === 'closed') { this.fx.explode(ev.x, z, 1.8, 0xc07aff, 1); this.fx.ring(ev.x, z, 4, 0xe0b0ff, 0.6); this.fx.sparks(ev.x, 1.5, z, 0xffe08a, 30, 5, 0.3); }
+        else if (ev.k === 'open') { this.fx.ring(ev.x, z, 2.5, 0x8a3aff, 0.6); this.fx.smoke(ev.x, 0.8, z, 4, 1, 0.4); }
+        break;
+      }
+      case 'help': { const z = ev.z + arenaZ(ev.arena); this.fx.rise(ev.x, 0.6, z, 0x7dffb0, 6, 0.22, 0.8); break; }
     }
+  }
+
+  // ---------------------------------------------------------------- v0.4 visuals
+
+  /** Ground decal (telegraph or zone): outline + disc that fills during `dur` (hold = stays filled). */
+  private decal(x: number, z: number, r: number, dur: number, id: number, color: number, hold: number) {
+    const d = this.decals.find(q => !q.active) ?? this.decals[0];
+    d.active = true; d.t = 0; d.dur = Math.max(0.05, dur); d.id = id; d.hold = hold;
+    d.mesh.position.set(x, GROUND_Y + 0.05, z); d.fill.position.set(x, GROUND_Y + 0.04, z);
+    d.mesh.scale.setScalar(r); d.fill.scale.setScalar(0.01);
+    (d.mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
+    (d.fill.material as THREE.MeshBasicMaterial).color.setHex(color);
+    d.mesh.visible = d.fill.visible = true;
+  }
+  private updateDecals(dt: number) {
+    for (const d of this.decals) {
+      if (!d.active) continue;
+      d.t += dt;
+      const k = Math.min(1, d.t / d.dur);
+      const r = d.mesh.scale.x;
+      d.fill.scale.setScalar(Math.max(0.01, (d.hold > 0 ? 1 : k) * r));
+      const blink = d.hold > 0 ? 0.25 + Math.sin(this.time * 4) * 0.06 : 0.22 + k * 0.3 + (k > 0.7 ? Math.abs(Math.sin(this.time * 18)) * 0.2 : 0);
+      (d.fill.material as THREE.MeshBasicMaterial).opacity = blink;
+      if (d.t >= d.dur + (d.hold > 0 ? 0 : 0.1)) { d.active = false; d.mesh.visible = d.fill.visible = false; }
+    }
+  }
+
+  /** Résonance channel: a star grows above the Bastion; the detonation colours the whole arena. */
+  private updateResoStars(meta: MetaView, dt: number) {
+    meta.teams.forEach((t, i) => {
+      const rs = this.resoStars[i];
+      if (!rs) return;
+      const target = t.resoCast ? 1 : 0;
+      rs.k += (target - rs.k) * Math.min(1, dt * 3);
+      rs.group.visible = rs.k > 0.02;
+      if (!rs.group.visible) return;
+      const pulse = 1 + Math.sin(this.time * (t.resoCast?.sync ? 16 : 8)) * 0.12;
+      rs.core.scale.setScalar(rs.k * pulse * (t.resoCast?.sync ? 1.35 : 1));
+      rs.core.rotation.y += dt * 3; rs.core.rotation.x += dt * 1.7;
+      rs.halo.scale.setScalar(6 * rs.k * pulse * (t.resoCast?.sync ? 1.4 : 1));
+      if (Math.random() < dt * 20) this.fx.rise((Math.random() - 0.5) * 6, 1, arenaZ(i) + (Math.random() - 0.5) * 6, 0xffffff, 1, 0.26, 0.5);
+    });
+  }
+  private resoFx(ev: Extract<GameEvent, { t: 'reso' }>, meta: MetaView) {
+    const ab = ALL_DUO_ABILITIES.find(a => a.id === ev.ability);
+    const z0 = arenaZ(ev.team);
+    const rs = this.resoStars[ev.team];
+    if (ev.k === 'start' && rs && ab) { (rs.halo.material as THREE.SpriteMaterial).color.setHex(ab.color); (rs.core.material as THREE.MeshBasicMaterial).color.setHex(ab.color2); this.fx.ring(0, z0, 4, ab.color, 0.8); }
+    if (ev.k === 'sync') this.fx.ring(0, z0, 6, 0xffffff, 0.6);
+    if (ev.k !== 'fire' || !ab) return;
+    const big = ev.team === this.localTeam;
+    for (const x of [-18, -9, 0, 9, 18]) this.fx.ring(x, z0, 10, x % 18 === 0 ? ab.color : ab.color2, 0.9);
+    this.fx.flash(0, 9, z0, ab.color, 14, 0.5);
+    this.fx.sparks(0, 9, z0, ab.color2, 80, 9, 0.35);
+    for (let i = 0; i < 6; i++) this.fx.shoot('orb', new THREE.Vector3(0, 9, z0), new THREE.Vector3((Math.random() - 0.5) * 40, GROUND_Y + 0.3, z0 + (Math.random() - 0.5) * 6), -1, ab.color, 2, p => this.fx.flash(p.x, p.y, p.z, ab.color2, 4, 0.25));
+    if (big) { this.shake = Math.min(1, this.shake + 0.7); this.zoomPulse = 1; this.hitStop = 0.09; }
+    void meta;
+  }
+
+  /** The Core shows its modules: one piece per slot, bigger with the level. */
+  private updateModules(meta: MetaView, dt: number) {
+    meta.teams.forEach((t, i) => {
+      const mg = this.modGroups[i];
+      if (!mg) return;
+      const key = t.modules.map(m => (m ? m.id + m.lv : '-')).join(',');
+      if (mg.key !== key) {
+        mg.key = key;
+        mg.group.clear();
+        t.modules.forEach((m, slot) => { if (m) mg.group.add(moduleMesh(m.id, m.lv, slot)); });
+      }
+      mg.group.children.forEach((c, k) => { c.rotation.y += dt * (0.4 + k * 0.15); });
+    });
+  }
+
+  /** Chevrons pointing from the rifts to the Core: where the enemies will walk. */
+  private updateChevrons(meta: MetaView, combat: boolean) {
+    const show = meta.phase === 'build' || (combat && meta.combatTime < 4);
+    const mat = this.chevrons.material as THREE.MeshBasicMaterial;
+    mat.opacity += ((show ? 0.55 : 0) - mat.opacity) * 0.1;
+    if (mat.opacity < 0.02) { this.chevrons.count = 0; return; }
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    let n = 0;
+    const team = this.localTeam;
+    for (const slot of [0, 1]) {
+      const d = slot === 0 ? 1 : -1;
+      q.setFromAxisAngle(up, d > 0 ? 0 : Math.PI);
+      for (let i = 0; i < 9 && n < 120; i++) {
+        const k = ((i + (this.time * 0.6) % 1) / 9);
+        const x = -d * (LANE.spawnX - 1 - k * (LANE.spawnX - LANE.leakX - 1));
+        m4.compose(new THREE.Vector3(x, GROUND_Y + 0.32, arenaZ(team) + 0.15), q, new THREE.Vector3(1, 1, 1));
+        this.chevrons.setMatrixAt(n++, m4);
+      }
+    }
+    this.chevrons.count = n;
+    this.chevrons.instanceMatrix.needsUpdate = true;
+  }
+
+  private updateHazards(meta: MetaView, combat: boolean) {
+    let n = 0;
+    const m4 = new THREE.Matrix4();
+    for (const p of meta.players) {
+      if (p.team !== this.localTeam || combat) continue;
+      for (const hz of p.hazards ?? []) {
+        if (n >= 16) break;
+        const c = cellCenter(p.slot, hz.col, hz.row);
+        m4.makeTranslation(c.x, GROUND_Y + 0.035, c.z + arenaZ(p.team));
+        this.hazardMesh.setMatrixAt(n++, m4);
+      }
+    }
+    this.hazardMesh.count = n;
+    this.hazardMesh.instanceMatrix.needsUpdate = true;
+    (this.hazardMesh.material as THREE.MeshBasicMaterial).opacity = 0.28 + Math.sin(this.time * 5) * 0.1;
   }
 
   /** Big, distinct visuals for commander powers. */
@@ -915,6 +1154,44 @@ export class Renderer {
   get drawCalls() { return this.renderer.info.render.calls; }
 
   dispose() { this.numbers.dispose(); this.renderer.dispose(); }
+}
+
+/** A small procedural piece on the Bastion for an installed module (slot → position, level → size). */
+function moduleMesh(id: ModuleId, lv: number, slot: number): THREE.Object3D {
+  const d = MODULES[id];
+  const col = new THREE.Color(FAMILY_COLORS[d.family]);
+  const g = new THREE.Group();
+  const ang = -Math.PI / 2 + slot * (Math.PI * 2 / 3);
+  const k = 0.75 + lv * 0.18;
+  const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.25 + lv * 0.15, roughness: 0.4, metalness: 0.3, flatShading: true });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3a3a46, roughness: 0.7, flatShading: true });
+  const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, rx = 0) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.rotation.x = rx; g.add(me); return me; };
+  switch (d.family) {
+    case 'defense':
+      for (let i = 0; i < lv + 1; i++) { const a = (i / (lv + 1)) * Math.PI * 2; add(new THREE.BoxGeometry(0.5, 0.7, 0.08), mat, Math.cos(a) * 0.9, 0.2, Math.sin(a) * 0.9).rotation.y = -a; }
+      if (id === 'egide') { const dome = add(new THREE.SphereGeometry(3.4, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.05 + lv * 0.03, depthWrite: false }), 0, -2.9, 0); dome.renderOrder = 4; }
+      break;
+    case 'artillerie':
+      add(new THREE.CylinderGeometry(0.35, 0.45, 0.4, 8), dark, 0, 0, 0);
+      if (id === 'rayon') add(new THREE.OctahedronGeometry(0.35, 0), new THREE.MeshBasicMaterial({ color: 0xbff8ff }), 0, 0.6, 0);
+      else if (id === 'orage') for (let i = 0; i < lv + 1; i++) add(new THREE.TorusGeometry(0.28 - i * 0.04, 0.05, 6, 16), mat, 0, 0.35 + i * 0.22, 0, Math.PI / 2);
+      else if (id === 'onde') add(new THREE.TorusGeometry(0.45, 0.07, 6, 20), mat, 0, 0.3, 0, Math.PI / 2);
+      else { const b = add(new THREE.CylinderGeometry(0.12, 0.16, 0.9, 8), mat, 0, 0.35, 0.3); b.rotation.x = Math.PI / 2.6; }
+      break;
+    case 'soutien':
+      add(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 5), dark, 0, 0.5, 0);
+      if (id === 'tresor') add(new THREE.BoxGeometry(0.5, 0.35, 0.35), new THREE.MeshStandardMaterial({ color: 0xe0b040, emissive: 0x6a4a10, flatShading: true }), 0, 0, 0.3);
+      else add(new THREE.BoxGeometry(0.04, 0.45, 0.6), mat, 0, 0.9, 0.3);
+      add(new THREE.SphereGeometry(0.12 + lv * 0.03, 8, 6), new THREE.MeshBasicMaterial({ color: col }), 0, 1.25, 0);
+      break;
+    case 'controle':
+      for (let i = 0; i < lv + 2; i++) { const c = add(new THREE.ConeGeometry(0.14, 0.6 + i * 0.1, 5), mat, Math.cos(i * 2) * 0.35, 0.15, Math.sin(i * 2) * 0.35); c.rotation.z = (i % 2 ? 0.3 : -0.3); }
+      if (id === 'portail') add(new THREE.TorusGeometry(0.42, 0.06, 6, 20, Math.PI), new THREE.MeshBasicMaterial({ color: 0xc07aff }), 0, 0.3, 0);
+      break;
+  }
+  g.scale.setScalar(k);
+  g.position.set(Math.cos(ang) * 2.2, 2.85, Math.sin(ang) * 2.2);
+  return g;
 }
 
 function easeOutBack(x: number) { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }

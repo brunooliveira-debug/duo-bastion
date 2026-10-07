@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGame, applyCommand, step, drainEvents, workerCost } from '../src/sim/game';
+import { createGame, applyCommand, step, drainEvents, workerCost, levelPrice } from '../src/sim/game';
 import { UNITS, FACTIONS, FACTION_IDS, unitStats, upgradeCost, unitValueAt } from '../src/data/units';
 import { RAIDERS, raiderPrice, sendCap, ECONOMY } from '../src/data/economy';
 import { buildBonuses } from '../src/sim/synergy';
@@ -80,7 +80,9 @@ describe('levels, specialisations and fusion', () => {
     expect(b.branch).toBe('A'); // permanent
     expect(b.level).toBe(5);
     expect(applyCommand(s, 0, { c: 'upgrade', bid: b.bid })).toMatch(/maximum/);
-    expect(b.value).toBe(unitValueAt('ferraille', 5));
+    // value = gold actually invested (Rouages doctrine "Optimisation": level-ups 10 % cheaper)
+    expect(b.value).toBe([2, 3, 4, 5].reduce((t, l) => t + levelPrice('ferraille', l, 'rouages', null), UNITS.ferraille.cost));
+    expect(b.value).toBeLessThan(unitValueAt('ferraille', 5));
     const l1 = unitStats('ferraille', 1), l5 = unitStats('ferraille', 5, 'A');
     expect(l5.hp).toBeGreaterThan(l1.hp * 4);
     expect(l5.name).toBe(UNITS.ferraille.branches![0].name);

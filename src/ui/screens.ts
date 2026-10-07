@@ -7,6 +7,7 @@ import type { LobbyState, Session } from '../net/Session';
 import type { Difficulty, FactionChoice, GameMode } from '../sim/state';
 import { FACTIONS, FACTION_IDS, UNITS, CATEGORY_NAMES, CATEGORY_COLORS } from '../data/units';
 import { FACTION_POWERS } from '../data/powers';
+import { duoAbility } from '../data/resonance';
 import { ECONOMY } from '../data/economy';
 import { icon, categoryIcon } from './icons';
 
@@ -60,6 +61,19 @@ export interface MenuActions {
   solo(mode: GameMode, waves: number, diff: Difficulty): void;
   tutorial(): void;
   resume(): void;
+  daily(): void;
+}
+
+/** Daily challenge: the same seed, the same world and the same armies for everyone today. */
+export function dailyInfo(date = new Date()) {
+  const day = date.toISOString().slice(0, 10);
+  let h = 2166136261;
+  for (const ch of 'duo-bastion:' + day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const seed = (h >>> 0) % 2147483647;
+  const a = FACTION_IDS[seed % FACTION_IDS.length];
+  const rest = FACTION_IDS.filter(f => f !== a);
+  const b = rest[Math.floor(seed / 7) % rest.length];
+  return { day, seed, faction: a, partner: b };
 }
 
 export function menuScreen(a: MenuActions) {
@@ -74,6 +88,7 @@ export function menuScreen(a: MenuActions) {
       h('div', { class: 'row' },
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!needName()) soloScreen(a); } }, '🤖 Solo'),
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!needName()) survivalScreen(a); } }, '♾️ Survie')),
+      h('button', { class: 'btn daily', onclick: () => { audio.unlock(); if (!needName()) dailyScreen(a); } }, `🗓️ Défi du jour${p.daily?.[dailyInfo().day] ? ` · record vague ${p.daily[dailyInfo().day].wave}` : ''}`),
       h('div', { class: 'row' },
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!save.profile.name) { save.profile.name = 'Recrue'; save.flush(); } a.tutorial(); } }, `🎓 Tutoriel${p.tutorialDone ? '' : ' ★'}`),
         h('button', { class: 'btn', style: 'flex:1', onclick: () => optionsScreen(() => show(menuScreen(a))) }, '⚙️ Options')),
@@ -81,6 +96,21 @@ export function menuScreen(a: MenuActions) {
     ),
     h('div', { class: 'version' }, `v${VERSION}${ONLINE ? '' : ' · hors-ligne'}`));
   return scr;
+}
+
+function dailyScreen(a: MenuActions) {
+  const d = dailyInfo();
+  const best = save.profile.daily?.[d.day];
+  const ab = duoAbility(d.faction, d.partner);
+  show(h('div', { class: 'screen' },
+    h('h2', {}, `🗓️ DÉFI DU JOUR — ${d.day}`),
+    h('div', { class: 'card col' },
+      h('p', { class: 'small', style: 'margin:0' }, 'Même graine pour tout le monde aujourd\'hui : mêmes vagues, mêmes événements, mêmes failles, mêmes anomalies. Survie : tenez le plus longtemps possible.'),
+      h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Ton armée'), armyBadge(d.faction), h('span', { class: 'muted small' }, '+ IA'), armyBadge(d.partner)),
+      h('div', { class: 'reso-card', style: `--c1:#${ab.color.toString(16).padStart(6, '0')};--c2:#${ab.color2.toString(16).padStart(6, '0')}` }, h('small', {}, 'Résonance DUO du jour'), h('b', {}, ab.name), h('p', {}, ab.text)),
+      h('div', { class: 'muted small' }, best ? `Ton record aujourd'hui : vague ${best.wave} · Core ${best.hp} PV · ${Math.floor(best.time / 60)} min` : 'Pas encore de record aujourd\'hui.'),
+      h('button', { class: 'btn primary', onclick: () => a.daily() }, 'Relever le défi'),
+      h('button', { class: 'btn ghost', onclick: () => show(menuScreen(a)) }, '← Retour'))));
 }
 
 function survivalScreen(a: MenuActions) {
@@ -212,8 +242,11 @@ export function optionsScreen(back: () => void) {
       h('div', { class: 'muted' }, 'Avatar'), avatars,
       h('div', { class: 'muted' }, '🔊 Effets sonores'), range(p.sfx, v => (p.sfx = v)),
       h('div', { class: 'muted' }, '🎵 Musique'), range(p.music, v => (p.music = v)),
-      h('div', { class: 'muted' }, 'Graphismes'),
-      seg<string>([['high', 'HIGH'], ['medium', 'MEDIUM'], ['battery', 'ÉCONOMIE BATTERIE']], p.quality, v => { p.quality = v as typeof p.quality; save.flush(); }),
+      h('div', { class: 'muted' }, 'Graphismes (sur téléphone, MOYEN ou BAS garde une image fluide)'),
+      seg<string>([['high', 'ÉLEVÉ'], ['medium', 'MOYEN'], ['battery', 'BAS (batterie)']], p.quality, v => { p.quality = v as typeof p.quality; save.flush(); }),
+      h('div', { class: 'muted' }, 'Confort'),
+      seg<number>([[1, '🎥 Secousses normales'], [0.4, 'Réduites'], [0, 'Aucune']], p.shake ?? 1, v => { p.shake = v; save.flush(); }),
+      seg<string>([['on', '⚡ Flashs ON'], ['off', 'OFF']], p.flash === false ? 'off' : 'on', v => { p.flash = v === 'on'; save.flush(); }),
       seg<string>([['on', '📳 Vibrations ON'], ['off', 'OFF']], p.vibrate ? 'on' : 'off', v => { p.vibrate = v === 'on'; save.flush(); }),
       installEvt ? h('button', { class: 'btn', onclick: () => { installEvt?.prompt(); installEvt = undefined; } }, '📲 Installer l\'application') :
         h('div', { class: 'muted', style: 'font-size:12px' }, '📲 iPhone : Safari → Partager → « Sur l\'écran d\'accueil ». Android : menu ⋮ → « Installer l\'application ».'),
@@ -252,6 +285,10 @@ export function armyPicker(current: FactionChoice, onPick: (f: FactionChoice) =>
         h('h3', { style: `color:${d.color}` }, d.name, h('small', {}, ` — ${d.title}`)),
         h('p', { class: 'small' }, d.style),
         h('div', { class: 'pc' }, h('div', { class: 'pros' }, ...d.strengths.flatMap(t => [h('span', {}, '✔ ' + t), h('br')])), h('div', { class: 'cons' }, ...d.weaknesses.flatMap(t => [h('span', {}, '✖ ' + t), h('br')]))),
+        h('div', { class: 'sect' }, 'Doctrine & entraide'),
+        h('div', { class: 'armypowers' },
+          h('div', { class: 'ap' }, h('span', { html: icon('star', 22, d.color) }), h('div', {}, h('b', {}, `Doctrine — ${d.doctrine.name}`), h('small', {}, d.doctrine.text))),
+          h('div', { class: 'ap' }, h('span', { html: icon('users', 22, '#7DFFB0') }), h('div', {}, h('b', {}, `Entraide — ${d.help.name}`), h('small', {}, d.help.text)))),
         h('div', { class: 'sect' }, 'Unités'),
         h('div', { class: 'armyunits' }, ...d.units.map(id => {
           const u = UNITS[id];

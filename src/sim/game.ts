@@ -89,7 +89,7 @@ export function createGame(settings: GameSettings, seed: number): GameState {
       const hi = humanAt.get(pid);
       const human = hi !== undefined ? settings.humans[hi] : undefined;
       const pers: Personality = t === 0 && settings.mode !== 'duel' ? 'balanced' : PERSONALITIES[Math.floor(rand(s) * PERSONALITIES.length)];
-      const choice = human?.faction ?? 'random';
+      const choice = human?.faction ?? settings.aiFactions?.[pid] ?? 'random';
       let faction: FactionId;
       if (choice === 'random' || !FACTIONS[choice]) {
         const pool = FACTION_IDS.filter(f => !used.has(f));
@@ -120,17 +120,19 @@ export function workerCost(p: PlayerState) { return ECONOMY.workerBaseCost + ECO
 
 export function armyValue(p: PlayerState) { return p.builds.reduce((t, b) => t + b.value, 0); }
 
-/** Gold price of a new unit (anomaly ARSENAL: +15 %). */
-export function buildPrice(s: GameState, p: PlayerState, id: string) {
-  return Math.round(UNITS[id].cost * (anomalyOf(s, p.team) === 'arsenal' ? 1.15 : 1));
+/** Gold price of a new unit (anomaly ARSENAL: +15 %). Pure: shared with the UI. */
+export function unitPrice(id: string, anomaly: AnomalyId | null) {
+  return Math.round(UNITS[id].cost * (anomaly === 'arsenal' ? 1.15 : 1));
 }
-/** Gold price of a level-up (doctrine Optimisation des Rouages: -10 %, anomaly ARSENAL: -20 %). */
-export function upgradePrice(s: GameState, p: PlayerState, id: string, toLevel: number) {
+/** Gold price of a level-up (doctrine Optimisation des Rouages: -10 %, anomaly ARSENAL: -20 %). Pure: shared with the UI. */
+export function levelPrice(id: string, toLevel: number, faction: FactionId, anomaly: AnomalyId | null) {
   let c = upgradeCost(id, toLevel);
-  if (p.faction === 'rouages') c *= 0.9;
-  if (anomalyOf(s, p.team) === 'arsenal') c *= 0.8;
+  if (faction === 'rouages') c *= 0.9;
+  if (anomaly === 'arsenal') c *= 0.8;
   return Math.round(c / 5) * 5;
 }
+export function buildPrice(s: GameState, p: PlayerState, id: string) { return unitPrice(id, anomalyOf(s, p.team)); }
+export function upgradePrice(s: GameState, p: PlayerState, id: string, toLevel: number) { return levelPrice(id, toLevel, p.faction, anomalyOf(s, p.team)); }
 
 function cellFree(p: PlayerState, col: number, row: number, except = -1) {
   return !p.builds.some(b => b.col === col && b.row === row && b.bid !== except);

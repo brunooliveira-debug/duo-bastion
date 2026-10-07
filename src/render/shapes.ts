@@ -429,6 +429,35 @@ export function shapeDef(m: ModelDef): RigDef {
         legs: [mirror(leg), leg],
       };
     }
+    // ======================= v0.4 =======================
+    case 'rift': return {
+      // secondary rift: a torn crystal frame around a glowing tear, orbiting shards
+      kind: 'float', attack: 'cast', height: 2.4, hover: 0.15,
+      body: [
+        { g: tor(0.78, 0.09), c: DARK, p: [0, 1.25, 0], s: [1, 1.35, 1] },
+        { g: tor(0.66, 0.05), c: A, p: [0, 1.25, 0.02], s: [1, 1.35, 1], glow: true },
+        { g: box(0.9, 1.6, 0.04), c: C, p: [0, 1.25, 0], glow: true },
+        { g: box(0.42, 1.1, 0.06), c: L, p: [0, 1.25, 0.02], glow: true },
+        ...[0, 1, 2, 3, 4].map(i => ({ g: cone(0.12, 0.5, 4), c: i % 2 ? A : D, p: [Math.cos(i * 1.256) * 0.95, 0.35, Math.sin(i * 1.256) * 0.35] as V3, r: [0, i, Math.PI] as V3 })),
+      ],
+      orbit: [0, 1, 2, 3].map(i => ({ g: oct(0.1), c: A, p: [Math.cos(i * 1.57) * 1.05, 1.3 + (i % 2) * 0.4, Math.sin(i * 1.57) * 0.4] as V3, glow: true })),
+    };
+    case 'leviathan': {
+      // the mechanical leviathan of the Résonance DUO (Abysses + Rouages): riveted hull, glowing eye, steel tentacles
+      const tent = (a: number, len: number): Limb => ({ pivot: [Math.cos(a) * 0.42, 0.62, Math.sin(a) * 0.42], parts: [{ g: cyl(0.12, 0.05, len, 6), c: DMETAL, p: [0, -len / 2 + 0.05, 0], r: [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4] }, ...[0.3, 0.6].map(k => ({ g: tor(0.1, 0.03), c: A, p: [Math.cos(a) * len * k * 0.4, -len * k, Math.sin(a) * len * k * 0.4] as V3, glow: true }))] });
+      return {
+        kind: 'float', attack: 'slam', height: 2, hover: 0.12,
+        body: [
+          { g: sph(0.6), c: C, p: [0, 1.25, -0.05], s: [1, 1.15, 1.25] },
+          { g: box(1.0, 0.12, 0.9), c: DMETAL, p: [0, 1.0, 0] }, { g: box(0.95, 0.1, 0.85), c: DMETAL, p: [0, 1.5, -0.05] },
+          { g: cone(0.36, 0.6, 6), c: METAL, p: [0, 1.95, -0.2], r: [-0.4, 0, 0] },
+          { g: sph(0.16, 1), c: A, p: [0, 1.3, 0.62], glow: true }, { g: tor(0.2, 0.04), c: GOLD, p: [0, 1.3, 0.6] },
+          ...[-1, 1].map(sx => ({ g: cyl(0.06, 0.06, 0.5, 6), c: GOLD, p: [sx * 0.55, 1.55, -0.2] as V3, r: [0.6, 0, 0] as V3 })),
+        ],
+        arms: [tent(Math.PI * 0.75, 1.05), tent(Math.PI * 0.25, 1.05)],
+        legs: [tent(Math.PI * 1.2, 0.8), tent(Math.PI * 1.8, 0.8), tent(Math.PI * 1.5, 0.85), tent(Math.PI * 0.5, 0.7)],
+      };
+    }
     default:
       return { kind: 'float', attack: 'cast', height: 1, body: [{ g: oct(0.5), c: C, p: [0, 0.6, 0] }] };
   }

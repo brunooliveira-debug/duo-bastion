@@ -49,6 +49,19 @@ const P: Record<string, string> = {
   swords: '<path d="M4 4l10 10M20 4L10 14"/><path d="M6 18l3-3M18 18l-3-3M4 20l2-2M20 20l-2-2"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-3-6.3"/><path d="M20 4v5h-5"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  // v0.4
+  duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/><path d="M12 8.2v7.6"/>',
+  flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+  back: '<path d="M10 6L4 12l6 6"/><path d="M4 12h12a4 4 0 0 1 4 4v2"/>',
+  run: '<circle cx="14" cy="4.5" r="2"/><path d="M6 21l4-6 3 2 1 4M10 15l1-6 4 3h4M7 10l4-1"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  rune: '<path d="M12 2l8 5v10l-8 5-8-5V7z"/><path d="M12 7v10M9 10l3 2 3-2"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  portal: '<ellipse cx="12" cy="12" rx="6" ry="9"/><path d="M12 7a2.5 5 0 0 1 0 10"/>',
+  cannon: '<circle cx="8" cy="16" r="4"/><path d="M10.5 13l9-7 1.5 2-8.5 7.5"/>',
+  beam: '<path d="M4 20l7-7"/><path d="M11 13l9-9"/><circle cx="11" cy="13" r="2.5"/>',
+  pulse: '<circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="10"/>',
+  chain: '<rect x="3" y="9" width="9" height="6" rx="3"/><rect x="12" y="9" width="9" height="6" rx="3"/>',
 };
 
 export function icon(name: string, size = 20, color = 'currentColor', width = 2.4) {

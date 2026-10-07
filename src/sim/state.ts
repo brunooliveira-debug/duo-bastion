@@ -285,6 +285,7 @@ export interface GameSettings {
   humans: HumanSlot[]; // 1 or 2 humans; missing partner = AI
   tutorial?: boolean;
   challenge?: string; // 'daily:YYYY-MM-DD' — same seed, same world for everyone
+  aiFactions?: Record<number, FactionId>; // fixed armies for AI players (daily challenge), by pid
 }
 
 export interface GameResult {

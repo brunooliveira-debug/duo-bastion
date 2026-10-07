@@ -5,7 +5,7 @@ import { Hud } from './ui/Hud';
 import { audio } from './audio/AudioSystem';
 import { save } from './save/SaveSystem';
 import { ensureAuth, createLobby, joinLobby, friendly, upsertProfile, recordMatch, setLobbyStatus } from './net/backend';
-import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions } from './ui/screens';
+import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions, dailyInfo } from './ui/screens';
 import { log, ONLINE, DEBUG } from './config';
 import { step, drainEvents } from './sim/game';
 import type { Difficulty, FactionChoice, GameMode } from './sim/state';
@@ -55,7 +55,15 @@ const actions: MenuActions = {
   duo: (mode: GameMode) => duoScreen(mode, () => createDuo(mode), code => joinDuo(code), goMenu),
   solo: (mode: GameMode, waves: number, diff: Difficulty) => {
     teardown();
-    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice }] }, events);
+    // ?seed=123 replays a given world (same waves, events, rifts and anomalies)
+    const seedParam = Number(new URLSearchParams(location.search).get('seed'));
+    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice }] }, events, Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined);
+    enterGame();
+  },
+  daily: () => {
+    teardown();
+    const d = dailyInfo();
+    session = Session.solo({ mode: 'survival', totalWaves: 9999, difficulty: 'normal', humans: [{ name: save.profile.name || 'Joueur', faction: d.faction }], challenge: `daily:${d.day}`, aiFactions: { 1: d.partner } }, events, d.seed);
     enterGame();
   },
   tutorial: () => {
