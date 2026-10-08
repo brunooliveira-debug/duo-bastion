@@ -53,6 +53,7 @@ const P: Record<string, string> = {
   duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/><path d="M12 8.2v7.6"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   back: '<path d="M10 6L4 12l6 6"/><path d="M4 12h12a4 4 0 0 1 4 4v2"/>',
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   run: '<circle cx="14" cy="4.5" r="2"/><path d="M6 21l4-6 3 2 1 4M10 15l1-6 4 3h4M7 10l4-1"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   rune: '<path d="M12 2l8 5v10l-8 5-8-5V7z"/><path d="M12 7v10M9 10l3 2 3-2"/>',

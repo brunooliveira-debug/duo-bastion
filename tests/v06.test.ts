@@ -1,11 +1,14 @@
 // v0.6 ULTRA: dynamic resolution (holds the screen refresh rate), dedicated-GPU detection, and the bridge
-// regression (z-fighting between the bridge deck and the flagstones).
+// regression (z-fighting between the bridge deck and the flagstones), and undo during the preparation phase.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { FrameGovernor, snapRefresh } from '../src/render/governor';
 import { isDedicatedGpu } from '../src/render/gpu';
 import { pathGeometry, stoneBridge } from '../src/render/terrain';
 import type { Part } from '../src/render/characters';
+import { createGame, applyCommand, step, drainEvents, workerCost, buildPrice } from '../src/sim/game';
+import { metaOf } from '../src/net/snapshot';
+import type { GameState } from '../src/sim/state';
 
 const feed = (g: FrameGovernor, ms: number[] | number, count: number) => {
   let changed = 0;
@@ -62,5 +65,85 @@ describe('bridge (regression: z-fighting)', () => {
     const path = pathGeometry(11.65, 0, 2.7, 4.0, 1, 1 / 3, 0.2, 4.25);
     const p = path.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < p.count; i++) expect(Math.abs(p.getZ(i))).toBeLessThanOrEqual(4.25 + 1e-6);
+  });
+});
+
+describe('undo (preparation phase)', () => {
+  const game = (): GameState => createGame({ mode: 'vsai', totalWaves: 21, difficulty: 'normal', humans: [{ name: 'A', faction: 'astreens' }, { name: 'B', faction: 'rouages' }] }, 31);
+  const ok = (s: GameState, pid: number, c: Parameters<typeof applyCommand>[2]) => expect(applyCommand(s, pid, c)).toBeNull();
+
+  it('undoes a misplaced unit with a full refund', () => {
+    const s = game(), p = s.players[0];
+    p.gold = 1000;
+    const id = p.draft[0], price = buildPrice(s, p, id);
+    ok(s, 0, { c: 'build', unit: id, col: 2, row: 3 });
+    expect(p.gold).toBe(1000 - price);
+    ok(s, 0, { c: 'undo' });
+    expect(p.builds.length).toBe(0);
+    expect(p.gold).toBe(1000);
+    expect(applyCommand(s, 0, { c: 'undo' })).toMatch(/Rien à annuler/);
+  });
+
+  it('only reverses the undone action (gold spent elsewhere in between is not refunded)', () => {
+    const s = game(), p = s.players[0];
+    p.gold = 1000;
+    const price = buildPrice(s, p, p.draft[0]);
+    ok(s, 0, { c: 'build', unit: p.draft[0], col: 2, row: 3 });
+    const wc = workerCost(p);
+    ok(s, 0, { c: 'worker' });
+    const workers = p.workers;
+    ok(s, 0, { c: 'undo' });
+    expect(p.builds.length).toBe(0);
+    expect(p.gold).toBe(1000 - wc); // the worker stays bought
+    expect(p.workers).toBe(workers);
+    expect(price).toBeGreaterThan(0);
+  });
+
+  it('undoes moves, upgrades, sales and fusions step by step (LIFO)', () => {
+    const s = game(), p = s.players[0];
+    p.gold = 5000;
+    const id = p.draft[0];
+    ok(s, 0, { c: 'build', unit: id, col: 2, row: 3 });
+    ok(s, 0, { c: 'build', unit: id, col: 4, row: 3 });
+    const [a, b] = p.builds.map(x => x.bid);
+    ok(s, 0, { c: 'move', bid: a, col: 2, row: 5 });
+    ok(s, 0, { c: 'upgrade', bid: b });
+    const g1 = p.gold;
+    ok(s, 0, { c: 'sell', bid: b });
+    expect(p.builds.length).toBe(1);
+    ok(s, 0, { c: 'undo' }); // sale undone: unit back, refund taken back
+    expect(p.builds.length).toBe(2);
+    expect(p.gold).toBe(g1);
+    ok(s, 0, { c: 'undo' }); // upgrade undone
+    expect(p.builds.find(x => x.bid === b)!.level).toBe(1);
+    ok(s, 0, { c: 'undo' }); // move undone
+    expect(p.builds.find(x => x.bid === a)).toMatchObject({ col: 2, row: 3 });
+    ok(s, 0, { c: 'fuse', bid: a, with: b });
+    expect(p.builds.length).toBe(1);
+    ok(s, 0, { c: 'undo' }); // fusion undone: both units back
+    expect(p.builds.map(x => x.level)).toEqual([1, 1]);
+    expect(metaOf(s).players[0].undoCount).toBe(2); // the two placements remain undoable
+  });
+
+  it('a sale cannot be undone without the gold to buy it back', () => {
+    const s = game(), p = s.players[0];
+    p.gold = 1000;
+    ok(s, 0, { c: 'build', unit: p.draft[0], col: 2, row: 3 });
+    ok(s, 0, { c: 'sell', bid: p.builds[0].bid });
+    p.gold = 0;
+    expect(applyCommand(s, 0, { c: 'undo' })).toMatch(/Il faut/);
+    expect(p.builds.length).toBe(0);
+  });
+
+  it('placements are locked once the wave starts, and the AI never stacks undo steps', () => {
+    const s = game(), p = s.players[0];
+    p.gold = 1000;
+    ok(s, 0, { c: 'build', unit: p.draft[0], col: 2, row: 3 });
+    for (const q of s.players) q.ready = true;
+    step(s); drainEvents(s);
+    expect(s.phase).toBe('combat');
+    expect(applyCommand(s, 0, { c: 'undo' })).toMatch(/préparation/);
+    expect(p.undo?.length ?? 0).toBe(0);
+    for (const q of s.players.filter(x => x.isAI)) expect(q.undo?.length ?? 0).toBe(0);
   });
 });

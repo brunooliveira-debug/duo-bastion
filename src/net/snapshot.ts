@@ -21,6 +21,8 @@ export interface PlayerView {
   runes: RuneTile[]; hazards: { col: number; row: number }[];
   orders: number; orderCd: number; anomalyVote: AnomalyId | null;
   pauseVote: boolean; leakedThisWave: number; stats: PlayerStats;
+  /** undoable actions left this preparation phase */
+  undoCount: number;
 }
 export interface TeamView {
   hp: number; maxHp: number; shield: number;
@@ -105,6 +107,7 @@ export function metaOf(s: GameState): MetaView {
       powerLv: p.powerLv.slice(), powerCd: p.powerCd.map(c => Math.ceil(c * 10) / 10), fogUntil: p.fogUntil, jamUntil: p.jamUntil,
       runes: p.runes, hazards: p.hazards, orders: p.orders, orderCd: p.orderCd, anomalyVote: p.anomalyVote,
       pauseVote: p.pauseVote, leakedThisWave: p.leakedThisWave, stats: { ...p.stats },
+      undoCount: s.phase === 'build' ? (p.undo ?? []).filter(u => u.wave === s.wave).length : 0,
     })),
   };
 }

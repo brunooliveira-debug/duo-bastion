@@ -64,6 +64,13 @@ describe('duo multiplayer (host-authoritative)', () => {
     guest.send({ c: 'debug', action: 'gold' });
     await until(() => errors.some(e => /tests locaux/i.test(e)));
     expect(host.state!.players[1].gold).toBe(goldBefore);
+    // undo over the network: the guest takes back its misplaced unit (full refund, validated by the host), then re-places it
+    guest.send({ c: 'undo' });
+    await until(() => host.state!.players[1].builds.length === 0);
+    expect(host.state!.players[1].gold).toBeGreaterThan(goldBefore);
+    await until(() => guest.view.meta!.players[1].builds.length === 0);
+    guest.send({ c: 'build', unit: draft[0], col: 2, row: 3 });
+    await until(() => host.state!.players[1].builds.length === 1);
     // host builds too, both ready → combat
     host.send({ c: 'build', unit: host.state!.players[0].draft[0], col: 2, row: 3 });
     host.send({ c: 'ready', value: true });

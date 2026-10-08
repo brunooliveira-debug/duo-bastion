@@ -30,6 +30,19 @@ export interface Build {
   rift: boolean; // assigned to close the secondary rift this wave
 }
 
+/**
+ * One undoable action of the current preparation phase. builds = the army before the action; spent = gold spent by
+ * the action (negative when it gave gold back: sale, fusion refund). Undo restores the army and reverses exactly that
+ * amount — never more (gold earned or spent on other things in between is untouched).
+ */
+export interface UndoStep {
+  wave: number;
+  kind: 'build' | 'move' | 'upgrade' | 'sell' | 'fuse';
+  builds: Build[];
+  spent: number;
+  stats: { goldArmy: number; unitsBuilt: number; upgrades: number; fusions: number };
+}
+
 export interface PlayerStats {
   dmgDealt: number;
   dmgTanked: number;
@@ -105,6 +118,8 @@ export interface PlayerState {
   waveDmg: number;
   pauseVote: boolean;
   stats: PlayerStats;
+  /** undo stack of the current preparation phase, emptied when combat starts (optional: older saves) */
+  undo?: UndoStep[];
 }
 
 export interface CoreState {
@@ -235,6 +250,7 @@ export interface Ent {
 }
 
 export type GameEvent =
+  | { t: 'undo'; pid: number; kind: UndoStep['kind']; gold: number }
   | { t: 'atk'; a: number; b: number; fx: string; ranged: boolean; dmg: number; crit: boolean }
   | { t: 'coreShot'; team: number; b: number }
   | { t: 'die'; id: number; boss: boolean; x: number; z: number; arena: number; enemy: boolean }

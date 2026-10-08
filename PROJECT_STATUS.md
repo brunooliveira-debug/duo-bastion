@@ -1,6 +1,6 @@
 # PROJECT_STATUS — DUO BASTION
 
-**VERSION ACTUELLE :** 0.6.0-alpha (« Ultra » : niveau ULTRA pour cartes dédiées, résolution dynamique 144 Hz, test de performance, image 4K de l'écran titre — rapport : `docs/RAPPORT_v0.6.md`)
+**VERSION ACTUELLE :** 0.6.1-alpha (bouton ↶ Annuler pendant la préparation ; « Ultra » : niveau ULTRA pour cartes dédiées, résolution dynamique 144 Hz, test de performance, image 4K de l'écran titre — rapport : `docs/RAPPORT_v0.6.md`)
 **URL PUBLIQUE (GitHub Pages) :** https://brunooliveira-debug.github.io/duo-bastion/
 **DERNIER TEST :** 2026-10-08
 - v0.5 : `vitest` 55/55 (48 + 7 tests v0.5 : modèles, Primordial 3 phases, signatures de faction, branches A/B, champ de bataille plat, décor hors voie, rendu sans effet sur la simulation). `npm run build` OK. Navigateur : PC 1280×720 en ÉLEVÉ / MOYEN / BAS, téléphone paysage 812×375 et portrait 375×812 (émulés), 6 factions, Résonance, vague du Primordial. Performances mesurées au chronomètre GPU (voir le rapport, section 11).
@@ -14,6 +14,7 @@
 - Clé client : clé *publishable* Supabase (publique par conception, RLS). Aucune clé secrète dans le code.
 
 ## TERMINÉ
+- v0.6.1 — **↶ Annuler** pendant la préparation (bouton + Ctrl+Z) : annule la dernière action (pose, déplacement, amélioration, vente, fusion) avec le remboursement exact ; jamais l'or dépensé ailleurs entre-temps ; verrouillé au lancement de la vague ; validé par l'hôte (marche en duo en ligne). Tests 65/65.
 - v0.6 — « Ultra » : MSAA 4×, occlusion ambiante GTAO, rayons de lumière, finition cinéma, ombres 4096, lumières de lanternes dynamiques, reflets partout ; résolution dynamique (vise la fréquence de l'écran) ; détection des cartes dédiées ; test de performance intégré (`?bench`) ; image 4K rendue par le moteur pour l'écran titre ; correction du pont (z-fighting) ; commandes de debug refusées en réseau (anti-triche). Tests 60/60.
 - v0.5 — « Crépuscule » (refonte graphique, moteur inchangé, 100 % procédural) :
   - Post-traitement HDR (halo lumineux, ACES, étalonnage, vignette, FXAA) ; 3 niveaux de matériaux (PBR / mixte / Lambert) ; reflets réservés aux héros.

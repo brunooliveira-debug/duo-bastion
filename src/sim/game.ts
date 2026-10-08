@@ -19,8 +19,7 @@ import type { Branch, FactionId } from '../data/types';
 import type { RuneKind, RuneTile } from '../data/synergies';
 import {
   DT, GameSettings, GameState, PlayerState, TeamState, STATE_VERSION, newStats, newTeam, teamCount, raiderTarget, opponents, humanPlayers, humanPid,
-  Personality, partnerOf, moduleLv, anomalyOf, journal,
-} from './state';
+  Personality, partnerOf, moduleLv, anomalyOf, journal, type UndoStep } from './state';
 import { rand, shuffle, worldRand, worldPick } from './rng';
 import { applyOrder, castPower, combatTick, enemiesAlive, fireResonance, hitCore, spawnEnemies, spawnRift, spawnUnits, SpawnSpec } from './combat';
 import { addReso, teamAbility } from './resonance';
@@ -30,6 +29,7 @@ export type Command =
   | { c: 'build'; unit: string; col: number; row: number }
   | { c: 'move'; bid: number; col: number; row: number }
   | { c: 'sell'; bid: number }
+  | { c: 'undo' }
   | { c: 'upgrade'; bid: number; branch?: Branch }
   | { c: 'fuse'; bid: number; with: number; branch?: Branch }
   | { c: 'worker' }
@@ -104,7 +104,7 @@ export function createGame(settings: GameSettings, seed: number): GameState {
         gold: ECONOMY.startGold + (random ? ECONOMY.randomFactionGold : 0), ether: ECONOMY.startEther, income: ECONOMY.startIncome, workers: ECONOMY.startWorkers,
         draft: FACTIONS[faction].units.slice(), rerolls: 0, builds: [], ready: false, powers: [], powerChoice: null,
         raiderQueue: [], raiderCd: {}, curseQueue: [], curseCd: {}, powerLv: [1, 1, 1], powerCd: [0, 0, 0], fogUntil: 0, jamUntil: 0,
-        runes: [], hazards: [], orders: 0, orderCd: 0, anomalyVote: null, riftReward: false, waveHelpKills: 0, helpWave: 0, souls: 0,
+        runes: [], hazards: [], undo: [], orders: 0, orderCd: 0, anomalyVote: null, riftReward: false, waveHelpKills: 0, helpWave: 0, souls: 0,
         leakedThisWave: 0, waveDmg: 0, pauseVote: false, stats: newStats(),
       };
       s.players.push(p);
@@ -148,6 +148,22 @@ export function sameSends(p: { raiderQueue: { r: string }[] }, r: string) { retu
 /** Is a secondary rift opening in p's lane this wave? */
 export function riftThisWave(s: GameState, team: number) { return !!s.rift || anomalyOf(s, team) === 'contrat'; }
 
+// ---------------------------------------------------------------- undo (preparation phase)
+
+const UNDO_MAX = 30;
+/** snapshot taken just before an undoable action (human players only) */
+function undoBegin(s: GameState, p: PlayerState, kind: UndoStep['kind']): UndoStep | null {
+  if (p.isAI) return null;
+  return { wave: s.wave, kind, builds: p.builds.map(b => ({ ...b })), spent: p.gold, stats: { goldArmy: p.stats.goldArmy, unitsBuilt: p.stats.unitsBuilt, upgrades: p.stats.upgrades, fusions: p.stats.fusions } };
+}
+function undoCommit(p: PlayerState, u: UndoStep | null) {
+  if (!u) return;
+  u.spent -= p.gold; // gold before − gold after
+  const st = (p.undo ??= []);
+  st.push(u);
+  if (st.length > UNDO_MAX) st.shift();
+}
+
 /** Validate & apply a player command. Returns an error message (French, user-facing) or null. */
 export function applyCommand(s: GameState, pid: number, cmd: Command): string | null {
   const p = s.players[pid];
@@ -163,6 +179,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       const u = UNITS[cmd.unit];
       const price = buildPrice(s, p, cmd.unit);
       if (p.gold < price) return 'Pas assez d\'or.';
+      const undo = undoBegin(s, p, 'build');
       p.gold -= price;
       p.stats.goldArmy += price;
       const bid = s.nextId++;
@@ -170,6 +187,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       p.stats.unitsBuilt++;
       journal(s, 'buy', pid, u.id);
       s.events.push({ t: 'build', pid, bid });
+      undoCommit(p, undo);
       return null;
     }
     case 'move': {
@@ -177,7 +195,10 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       const b = p.builds.find(x => x.bid === cmd.bid);
       if (!b) return 'Unité introuvable.';
       if (!inGrid(cmd.col, cmd.row) || !cellFree(p, cmd.col, cmd.row, b.bid)) return 'Case occupée.';
+      if (b.col === cmd.col && b.row === cmd.row) return null;
+      const undo = undoBegin(s, p, 'move');
       b.col = cmd.col; b.row = cmd.row;
+      undoCommit(p, undo);
       return null;
     }
     case 'sell': {
@@ -186,10 +207,12 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       if (i < 0) return 'Unité introuvable.';
       const b = p.builds[i];
       const refund = Math.floor(b.value * (b.placedWave === s.wave ? 1 : ECONOMY.sellRefund));
+      const undo = undoBegin(s, p, 'sell');
       p.gold += refund;
       p.builds.splice(i, 1);
       journal(s, 'sell', pid, b.defId, refund);
       s.events.push({ t: 'sell', pid });
+      undoCommit(p, undo);
       return null;
     }
     case 'upgrade': {
@@ -205,6 +228,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       }
       const cost = upgradePrice(s, p, b.defId, next);
       if (p.gold < cost) return 'Pas assez d\'or.';
+      const undo = undoBegin(s, p, 'upgrade');
       p.gold -= cost;
       p.stats.goldArmy += cost;
       b.level = next; b.branch = branch;
@@ -212,6 +236,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       p.stats.upgrades++;
       journal(s, 'up', pid, b.defId, b.level);
       s.events.push({ t: 'evolve', pid, bid: b.bid, level: b.level, branch: b.branch });
+      undoCommit(p, undo);
       return null;
     }
     case 'fuse': {
@@ -230,6 +255,7 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       // the extra value of the second copy is refunded (fusion never wastes gold)
       const newValue = unitValueAt(a.defId, next);
       const refund = Math.max(0, a.value + o.value - newValue);
+      const undo = undoBegin(s, p, 'fuse');
       p.gold += refund;
       p.builds.splice(p.builds.indexOf(o), 1);
       a.level = next; a.branch = branch;
@@ -243,6 +269,22 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       s.events.push({ t: 'fuse', pid, bid: a.bid, col: o.col, row: o.row });
       s.events.push({ t: 'evolve', pid, bid: a.bid, level: a.level, branch: a.branch });
       if (refund > 0) s.events.push({ t: 'income', pid, gold: refund });
+      undoCommit(p, undo);
+      return null;
+    }
+    case 'undo': {
+      if (!building) return 'Annulation possible uniquement pendant la préparation.';
+      const st = p.undo ?? [];
+      while (st.length && st[st.length - 1].wave !== s.wave) st.pop();
+      const u = st[st.length - 1];
+      if (!u) return 'Rien à annuler.';
+      if (u.spent < 0 && p.gold < -u.spent) return `Il faut ${Math.ceil(-u.spent)} or pour annuler.`;
+      st.pop();
+      p.gold += u.spent;
+      const rift = new Map(p.builds.map(b => [b.bid, b.rift]));
+      p.builds = u.builds.map(b => ({ ...b, rift: rift.get(b.bid) ?? b.rift }));
+      Object.assign(p.stats, u.stats);
+      s.events.push({ t: 'undo', pid, kind: u.kind, gold: u.spent });
       return null;
     }
     case 'worker': {
@@ -608,6 +650,7 @@ const waveStart = new WeakMap<GameState, { hp: number[] }>();
 
 function startCombat(s: GameState) {
   s.phase = 'combat';
+  for (const p of s.players) p.undo = []; // placements are locked in once the wave starts
   s.combatTime = 0;
   s.ents = [];
   s.fallen = [];

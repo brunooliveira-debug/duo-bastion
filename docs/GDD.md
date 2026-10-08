@@ -108,6 +108,12 @@ src/save      SaveSystem (profil, préférences, records, défi du jour)
 ```
 
 
+## 16 bis. Annuler (v0.6.1)
+- Pendant la préparation, **↶ Annuler** (bouton à gauche d'« Ouvrier », ou Ctrl+Z) défait la dernière action : pose, déplacement, amélioration, vente ou fusion, avec le remboursement exact (une vente annulée reprend l'or rendu).
+- Pile par joueur, actions de la vague en cours uniquement (30 au plus), vidée au lancement de la vague. L'or gagné ou dépensé autrement entre-temps (ouvrier, envois) n'est jamais touché.
+- C'est une commande comme les autres : l'hôte la valide, la partie reste identique pour les deux joueurs.
+- Autres corrections possibles : glisser une unité posée pour la déplacer ; appui long → Vendre (100 % remboursé si posée pendant cette vague).
+
 ## 17. Direction artistique (v0.5 « Crépuscule »)
 - **Ambiance** : crépuscule → heure bleue → nuit magique selon la vague ; ombres bleu nuit, lumière chaude rasante, contre-jour froid ; tout ce qui est magique est émissif en HDR et fait briller l'image (halo lumineux).
 - **Lisibilité** : champ de bataille plat et dégagé (dalles), décor sur les bords et au fond, côté caméra bas, liseré froid sur les unités, zones télégraphiées au-dessus de tout.

@@ -73,7 +73,23 @@ export class Hud {
   private hints = new Set<string>();
   private teleWarned = 0;
 
+  private onKey = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return; // typing in the chat
+      e.preventDefault();
+      this.undo();
+    }
+  };
+  /** ↶ undo the last action of this preparation phase (the host validates it: works online too) */
+  private undo() {
+    if (this.meta?.phase !== 'build') return;
+    if (this.cmd({ c: 'undo' })) { audio.play('click'); this.haptic(15); }
+  }
+  private undoHintShown = false;
+
   constructor(private session: Session, private r: Renderer, private cb: HudCallbacks) {
+    window.addEventListener('keydown', this.onKey);
     this.root = h('div', { id: 'hud' });
     document.body.append(this.root);
     this.root.addEventListener('mousedown', e => { if ((e.target as HTMLElement).closest('button')) e.preventDefault(); });
@@ -86,6 +102,7 @@ export class Hud {
   get meta() { return this.session.view.meta; }
 
   destroy() {
+    window.removeEventListener('keydown', this.onKey);
     this.root.remove();
     this.dragEl?.remove();
     const c = this.r.renderer.domElement;
@@ -145,6 +162,9 @@ export class Hud {
       btn.append(badge);
       return { wrap: h('div', { class: 'rwrap' }, btn, sub), btn, badge, sub };
     };
+    // ↶ undo the last placement / move / upgrade / sale / fusion of this preparation phase (exact refund)
+    const un = round('undo', 'undo', '#BFE6FF', 'Annuler', () => this.undo());
+    E.undoWrap = un.wrap; E.undoBadge = un.badge; un.wrap.style.display = 'none';
     const w = round('worker', 'pick', '#FFD27A', 'Ouvrier', () => { if (this.cmd({ c: 'worker' })) { audio.play('worker'); this.tutorial?.on('worker'); } });
     const r = round('raider', 'swords', '#FF9AA6', 'Attaquer', () => this.openSheet('raiders'));
     const c = round('corebtn', 'core', '#9FE9FF', 'Bastion', () => this.openSheet('core'));
@@ -158,7 +178,7 @@ export class Hud {
     E.duo = h('button', { class: 'duobtn', style: 'display:none', 'aria-label': 'Résonance DUO', onclick: () => { if (this.cmd({ c: 'reso' })) { vibrate([30, 40, 60]); } } });
     E.combatExtra = h('div', { class: 'combat-extra', style: 'display:none' }, E.ordersBtn, E.duo);
     E.orderStrip = h('div', { class: 'orderstrip', style: 'display:none' });
-    const bottom = h('div', { class: 'hud-bottom' }, E.cards, E.powers, E.combatExtra, h('div', { class: 'actions' }, w.wrap, r.wrap, c.wrap, E.ready));
+    const bottom = h('div', { class: 'hud-bottom' }, E.cards, E.powers, E.combatExtra, h('div', { class: 'actions' }, un.wrap, w.wrap, r.wrap, c.wrap, E.ready));
     E.sheet = h('div', { class: 'sheet', style: 'display:none' });
     E.sheet.addEventListener('pointerdown', () => { this.sheetHold = true; });
     const release = () => { if (!this.sheetHold) return; this.sheetHold = false; this.lastSheetKey = ''; };
@@ -289,6 +309,9 @@ export class Hud {
     if (combat) { this.renderPowers(me, m); this.renderCombatExtra(me, m); } else { this.renderCards(me, m); if (this.orderOpen) { this.orderOpen = false; this.renderOrders(); } }
     // round actions
     const wc = ECONOMY.workerBaseCost + ECONOMY.workerCostStep * (me.workers - ECONOMY.startWorkers);
+    const uc = m.phase === 'build' ? me.undoCount ?? 0 : 0;
+    E.undoWrap.style.display = uc > 0 ? '' : 'none';
+    E.undoBadge.textContent = String(uc);
     E.workerBadge.textContent = String(me.workers);
     E.workerSub.textContent = `Ouvrier ${wc}`;
     (E.workerBtn as HTMLButtonElement).disabled = me.gold < wc || me.workers >= ECONOMY.maxWorkers;
@@ -461,7 +484,14 @@ export class Hud {
   private onEvent(ev: GameEvent, m: MetaView) {
     const me = this.me!;
     switch (ev.t) {
-      case 'build': if (ev.pid === me.pid) { audio.play('build'); this.tutorial?.on('build'); } break;
+      case 'build': if (ev.pid === me.pid) {
+        audio.play('build'); this.tutorial?.on('build');
+        if (!this.undoHintShown) { this.undoHintShown = true; this.toast('Erreur de placement ? ↶ Annuler (Ctrl+Z), ou glisse l\'unité pour la déplacer.', 'info'); }
+      } break;
+      case 'undo': if (ev.pid === me.pid) {
+        const what = { build: 'Placement annulé', move: 'Déplacement annulé', upgrade: 'Amélioration annulée', sell: 'Vente annulée', fuse: 'Fusion annulée' }[ev.kind];
+        this.toast(`↶ ${what}${ev.gold > 0 ? ` · +${Math.round(ev.gold)} 🪙` : ev.gold < 0 ? ` · ${Math.round(ev.gold)} 🪙` : ''}`, 'info');
+      } break;
       case 'evolve': {
         if (ev.pid !== me.pid && ev.pid !== this.partnerPid()) break;
         audio.play('upgrade');

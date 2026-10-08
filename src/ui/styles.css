@@ -563,3 +563,7 @@ h2 { font-family: var(--display); letter-spacing: 0.05em; }
   .screen { background-position: 50% 44%, 0 0, 74% 50%, 0 0; }
 }
 .screen.transparent { background: rgba(5, 7, 20, 0.78); }
+
+/* ---------- v0.6 undo button (preparation phase) ---------- */
+.rbtn.undo { background: radial-gradient(circle at 50% 35%, #2e4a66, #101c2c); border-color: rgba(191, 230, 255, 0.75); }
+.rwrap:has(.rbtn.undo) small { color: #bfe6ff; }
