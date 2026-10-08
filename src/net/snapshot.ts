@@ -1,10 +1,11 @@
 // Compact view-state shared by host (local) and guests (network). The renderer/UI only read these.
 import { UNITS } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import type { GameEvent, GameState, GameSettings, Build, PlayerStats, GameResult, Phase, Ent, QueuedSend, ModuleSlot, Proposal, ResoCast, RiftSpec, JournalEntry } from '../sim/state';
+import type { GameEvent, GameState, GameSettings, Build, PlayerStats, GameResult, Phase, Ent, QueuedSend, ModuleSlot, Proposal, ResoCast, RiftSpec, JournalEntry, BlessingOffer, SealState } from '../sim/state';
 import type { Branch, FactionId } from '../data/types';
 import type { RuneTile } from '../data/synergies';
 import type { AnomalyId } from '../data/tactics';
+import type { BlessingId } from '../data/blessings';
 
 export const DEF_IDS = [...Object.keys(UNITS), ...Object.keys(ENEMIES)];
 const DEF_INDEX = new Map(DEF_IDS.map((id, i) => [id, i]));
@@ -29,6 +30,8 @@ export interface TeamView {
   reso: number; resoCast: ResoCast | null; resoUses: number;
   modules: (ModuleSlot | null)[]; proposal: Proposal | null;
   anomaly: { id: AnomalyId; until: number } | null; anomalyOffer: AnomalyId[] | null; bossBoost: number;
+  // v0.7
+  blessings: BlessingId[]; blessingOffer: BlessingOffer | null; seal: SealState | null;
 }
 export interface MetaView {
   settings: GameSettings;
@@ -46,6 +49,8 @@ export const F_ENEMY = 1, F_SLOW = 2, F_SHIELD = 4, F_LEAK = 8, F_BOSS = 16, F_R
   F_POISON = 128, F_BURN = 256, F_STUN = 512, F_STEALTH = 1024, F_SUMMON = 2048, F_HASTE = 4096;
 // v0.4 (bits 18+; 13–17 hold level / branch)
 export const F_MARK = 1 << 18, F_WET = 1 << 19, F_FOCUS = 1 << 20, F_RIFT = 1 << 21, F_GHOST = 1 << 22, F_TASK = 1 << 23, F_RALLY = 1 << 24, F_TELE = 1 << 25;
+// v0.7: breachers (run for the gate, cannot be taunted)
+export const F_BREACH = 1 << 26;
 const LV_SHIFT = 13, BR_SHIFT = 16;
 
 export interface EntView { id: number; defId: string; x: number; z: number; hp: number; arena: number; flags: number; owner: number; level: number; branch: Branch | null }
@@ -74,6 +79,7 @@ export function entFlags(s: GameState, e: Ent): number {
   if (e.task >= 0) f |= F_TASK;
   if (e.rallyUntil > s.combatTime || e.retreatUntil > s.combatTime) f |= F_RALLY;
   if (e.tele) f |= F_TELE;
+  if (e.enemy && e.abilities.some(a => a.kind === 'breach')) f |= F_BREACH;
   f |= (e.level & 7) << LV_SHIFT;
   f |= (e.branch === 'A' ? 1 : e.branch === 'B' ? 2 : 0) << BR_SHIFT;
   return f;
@@ -95,6 +101,8 @@ export function metaOf(s: GameState): MetaView {
       reso: Math.floor(t.reso * 10) / 10, resoCast: t.resoCast ? { ...t.resoCast } : null, resoUses: t.resoUses,
       modules: t.modules.map(m => (m ? { ...m } : null)), proposal: t.proposal ? { ...t.proposal } : null,
       anomaly: t.anomaly ? { ...t.anomaly } : null, anomalyOffer: t.anomalyOffer ? t.anomalyOffer.slice() : null, bossBoost: t.bossBoost,
+      blessings: t.blessings.slice(), blessingOffer: t.blessingOffer ? { ids: t.blessingOffer.ids.slice(), picker: t.blessingOffer.picker } : null,
+      seal: t.seal ? { boss: t.seal.boss, armed: [t.seal.armed[0], t.seal.armed[1]], broken: t.seal.broken } : null,
     })),
     journal: s.phase === 'ended' ? s.journal : null,
     players: s.players.map(p => ({

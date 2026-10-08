@@ -1,8 +1,9 @@
 # PROJECT_STATUS — DUO BASTION
 
-**VERSION ACTUELLE :** 0.6.1-alpha (bouton ↶ Annuler pendant la préparation ; « Ultra » : niveau ULTRA pour cartes dédiées, résolution dynamique 144 Hz, test de performance, image 4K de l'écran titre — rapport : `docs/RAPPORT_v0.6.md`)
+**VERSION ACTUELLE :** 0.7.0-alpha (« Siège » : bénédictions entre les vagues, Brécheurs / Invocateurs, Sceaux jumeaux des boss, HUD repensé avec mini-carte, auras d'élite, îles flottantes — rapport : `docs/RAPPORT_v0.7.md`)
 **URL PUBLIQUE (GitHub Pages) :** https://brunooliveira-debug.github.io/duo-bastion/
 **DERNIER TEST :** 2026-10-08
+- v0.7 : `vitest` 73/73 (65 + 8 tests v0.7 : draft de bénédictions, tour de rôle, tirage forcé, IA, rares, effets en combat, brécheurs, invocateurs, sceaux ×3 ; test réseau étendu au tour de rôle). `tsc` + `npm run build` OK. Navigateur : PC 1280×720, téléphone paysage 812×375 (émulé) — bénédictions, barre de siège, mini-carte, boss scellé, bris par l'IA partenaire, auras, îles. Équilibrage : `scripts/leaks-by-wave.ts 30` avant / après (voir le rapport §4).
 - v0.5 : `vitest` 55/55 (48 + 7 tests v0.5 : modèles, Primordial 3 phases, signatures de faction, branches A/B, champ de bataille plat, décor hors voie, rendu sans effet sur la simulation). `npm run build` OK. Navigateur : PC 1280×720 en ÉLEVÉ / MOYEN / BAS, téléphone paysage 812×375 et portrait 375×812 (émulés), 6 factions, Résonance, vague du Primordial. Performances mesurées au chronomètre GPU (voir le rapport, section 11).
 - `vitest` 48/48 OK : les 22 tests v0.3 + 26 tests v0.4 (Résonance : charge, plafond, jamais avec le temps, déclenchement, double déclenchement, synchronisation, remboursement, pouvoir d'assistance ; modules : séquestre, validation, cofinancement, refus, accord tacite, 3 emplacements, amélioration, démontage, effets ; ordres : charges, recharge, phase, cible, repli, purge ; failles : affectation, tours refusées, récompense, nombre d'ennemis limité ; anomalies : vote commun, effets, offre réelle ; boss : zone télégraphiée, impact, interruption par étourdissement ; graine : reproductibilité, monde indépendant des actions ; fusion : éclat ; réseau hôte/invité : module commun, vote d'anomalie, anti-rejeu, synchronisation de Résonance).
 - Équilibrage : `npx tsx scripts/balance-report.ts 300` → `BALANCE_REPORT.md` (section 4 = avant/après). Ligue v0.4 : Ronces 54 %, Rouages 52 %, Brasier 52 %, Nécrose 49 %, Abysses 49 %, Astral 43 % (v0.3 : 42–61 %). Résonance : 2,8 déclenchements par équipe et par partie.
@@ -14,6 +15,7 @@
 - Clé client : clé *publishable* Supabase (publique par conception, RLS). Aucune clé secrète dans le code.
 
 ## TERMINÉ
+- v0.7 — « Siège » : **bénédictions** (3 tirées avant presque chaque vague, une gardée, permanente et commune ; 16 dont 5 rares ; humains à tour de rôle, hasard si aucun choix, IA avec préférences) ; **Brécheur** (ignore les unités, fonce sur la porte) et **Invocateur** (en retrait, invoque) dans les vagues 6/9/13/16/18/20 et la Survie ; **Sceaux jumeaux** sur les 3 boss majeurs (bouclier 30 %, deux SCEAUX à moins de 3 s → bris, étourdissement, +12 Résonance ; IA partenaire qui répond) ; **HUD** : barre de siège (vague, Bastion, ennemis restants), cadre partenaire, mini-carte tactile ; **rendu** : auras d'élite niveaux 4–5, îles flottantes à cascades, effets sceaux / fantômes. Format de sauvegarde v4. Tests 73/73.
 - v0.6.1 — **↶ Annuler** pendant la préparation (bouton + Ctrl+Z) : annule la dernière action (pose, déplacement, amélioration, vente, fusion) avec le remboursement exact ; jamais l'or dépensé ailleurs entre-temps ; verrouillé au lancement de la vague ; validé par l'hôte (marche en duo en ligne). Tests 65/65.
 - v0.6 — « Ultra » : MSAA 4×, occlusion ambiante GTAO, rayons de lumière, finition cinéma, ombres 4096, lumières de lanternes dynamiques, reflets partout ; résolution dynamique (vise la fréquence de l'écran) ; détection des cartes dédiées ; test de performance intégré (`?bench`) ; image 4K rendue par le moteur pour l'écran titre ; correction du pont (z-fighting) ; commandes de debug refusées en réseau (anti-triche). Tests 60/60.
 - v0.5 — « Crépuscule » (refonte graphique, moteur inchangé, 100 % procédural) :
@@ -38,7 +40,8 @@
 - v0.3 et avant : 6 armées × 6 unités, niveaux 1→5 + spécialisations, synergies, pouvoirs, envois, malédictions, duel, rendu 3D procédural (îles flottantes, tours, effets), multijoueur hôte autoritaire, PWA, tutoriel, survie.
 
 ## À FAIRE
-- Graphismes (suite v0.5) : resculpter les maillages des unités, modèles dédiés pour les autres boss, résolution dynamique, effets d'impact par faction.
+- Jouabilité (suite v0.7) : pièges consommables posables pendant la préparation (Éther) ; modèle dédié au Brécheur (bélier) ; IA qui réserve ses intercepteurs pour les vagues à brécheurs.
+- Graphismes (suite v0.5) : resculpter les maillages des unités, modèles dédiés pour les autres boss, effets d'impact par faction.
 - Duels : la pression offensive reste faible (envois surtout économiques, 15 % des duels finis par destruction d'un Core) → aperçu des envois entrants + IA plus offensive.
 - IA : certaines unités à distance coûteuses restent rarement choisies (Lancière, Astromancienne, Bombardière, Harponneuse, Méduse, Arbalétrière, Archère des Cendres).
 - Classement en ligne du défi du jour (appliquer `002_daily_challenge.sql`), rejouer le journal côté serveur pour valider les scores.
@@ -53,4 +56,4 @@
 - Une clé secrète Supabase (`sb_secret_…`) a été collée dans le chat : à **révoquer** dans Supabase → Project Settings → API Keys → Secret keys. Le jeu ne l'utilise pas.
 
 ## PROCHAINE ÉTAPE
-Refonte graphique v0.5 (prototype d'une scène de référence, puis généralisation), en gardant 60 fps sur mobile moyen.
+Retour du joueur sur la v0.7 (bénédictions, sceaux, HUD) ; puis pièges consommables et test de performance sur la carte dédiée du joueur (`?bench`).

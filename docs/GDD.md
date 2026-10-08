@@ -114,6 +114,12 @@ src/save      SaveSystem (profil, préférences, records, défi du jour)
 - C'est une commande comme les autres : l'hôte la valide, la partie reste identique pour les deux joueurs.
 - Autres corrections possibles : glisser une unité posée pour la déplacer ; appui long → Vendre (100 % remboursé si posée pendant cette vague).
 
+## 16 ter. v0.7 « Siège » : bénédictions, brécheurs, sceaux jumeaux
+- **Bénédictions** (`src/data/blessings.ts`) : avant chaque préparation à partir de la vague 2 (sauf vagues d'anomalie), 3 bénédictions tirées par le monde ; l'équipe en garde une, permanente et commune. Les humains choisissent à tour de rôle (un humain choisit toujours avant un partenaire IA) ; sans choix au lancement, le hasard tranche. 16 bénédictions (5 rares à partir de la vague 6), cumulables 1–3 niveaux : cadence des tours, dégâts, première ligne, bouclier de départ, PV du Core, primes, revenu, Éther par élimination, givre au contact, venin, anti-colosses ; rares : projectiles rebondissants, aura du Cœur, Résonance +25 %, +1 ordre, Relève (fantômes). Commande `bless` validée par l'hôte.
+- **Brécheur** (`breach`) : ne cible jamais une unité, insensible à la provocation, fonce sur la porte ; contre-jeu portée / ralentis / intercepteurs. **Invocateur** (`kite` + `spawn`) : recule devant les unités, invoque des moucherons. Chaman en vague 18.
+- **Sceaux jumeaux** : Colosse, Reine-Essaim et Primordial arrivent avec un bouclier de 30 % PV ; bouton SCEAU par joueur en combat ; deux activations à moins de 3 s brisent le bouclier, étourdissent 2,5 s et donnent +12 Résonance. Commande `seal`. IA partenaire répond ; jamais bloquant.
+- **HUD** : barre de siège (vague, Bastion, ennemis restants), cadre partenaire, mini-carte tactile. **Rendu** : auras d'élite (niveaux 4–5), îles flottantes à cascades, effets de sceaux et de fantômes.
+
 ## 17. Direction artistique (v0.5 « Crépuscule »)
 - **Ambiance** : crépuscule → heure bleue → nuit magique selon la vague ; ombres bleu nuit, lumière chaude rasante, contre-jour froid ; tout ce qui est magique est émissif en HDR et fait briller l'image (halo lumineux).
 - **Lisibilité** : champ de bataille plat et dégagé (dalles), décor sur les bords et au fond, côté caméra bas, liseré froid sur les unités, zones télégraphiées au-dessus de tout.

@@ -567,3 +567,80 @@ h2 { font-family: var(--display); letter-spacing: 0.05em; }
 /* ---------- v0.6 undo button (preparation phase) ---------- */
 .rbtn.undo { background: radial-gradient(circle at 50% 35%, #2e4a66, #101c2c); border-color: rgba(191, 230, 255, 0.75); }
 .rwrap:has(.rbtn.undo) small { color: #bfe6ff; }
+
+/* =====================================================================
+   v0.7 "Siège" — HUD: siege bar (wave + Bastion + enemies left), partner frame, mini-map,
+   blessing draft, twin-seal button
+   ===================================================================== */
+#hud .siege, #hud .minimap, #hud .combat-extra, #hud .anomaly, #hud .bless, #hud .orderstrip, #hud .proposal { pointer-events: auto; }
+.siege { position: absolute; left: 50%; top: calc(6px + var(--sat)); transform: translateX(-50%); width: clamp(230px, 27vw, 400px); background: linear-gradient(180deg, rgba(24, 28, 56, 0.92), rgba(8, 10, 24, 0.9)); border: 1px solid var(--edge); border-radius: 14px; padding: 5px 10px 6px; display: flex; flex-direction: column; gap: 3px; box-shadow: inset 0 1px 0 var(--glass-hi), 0 4px 14px rgba(0, 0, 0, 0.45); z-index: 2; }
+.siege.boss { border-color: rgba(255, 90, 106, 0.75); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 16px rgba(255, 60, 80, 0.35); }
+.sg-wave { display: flex; align-items: center; gap: 6px; font-family: var(--display); font-size: 12px; letter-spacing: 0.08em; white-space: nowrap; min-width: 0; }
+.sg-wave b { font-weight: 900; color: #fff6e0; }
+.sg-name { font-family: var(--font); font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; flex: 1; letter-spacing: 0; font-size: 11px; }
+.sg-wave .timer-chip { height: 20px; min-width: 42px; font-size: 11px; margin-left: auto; padding: 0 8px; }
+.sg-core { display: flex; align-items: center; gap: 6px; }
+.sg-core .bar { flex: 1; height: 9px; border-radius: 5px; background: #16142a; border: 1px solid rgba(255, 255, 255, 0.12); }
+.bar.core > i { background: linear-gradient(90deg, #4ac8ff, #7dffb0); }
+.bar.core.low > i { background: linear-gradient(90deg, #ff4a4a, #ff8a5a); }
+.bar.core > s { position: absolute; top: 0; bottom: 0; background: rgba(234, 246, 255, 0.8); text-decoration: none; }
+.sg-core b { font-size: 11.5px; font-variant-numeric: tabular-nums; min-width: 96px; text-align: right; color: #d8f6ff; }
+.sg-prog { display: flex; align-items: center; gap: 6px; }
+.sg-prog .bar { flex: 1; height: 4px; background: #16142a; }
+.bar.prog > i { background: #ffb547; transition: width .2s linear; }
+.siege[data-mode="combat"] .bar.prog > i { background: linear-gradient(90deg, #ff5a6a, #ffb547); }
+.sg-prog small { font-size: 10px; color: var(--muted); white-space: nowrap; min-width: 96px; text-align: right; font-weight: 700; }
+.bossbar { top: calc(var(--pill-h) * 2 + 30px + var(--sat)); }
+.toasts { top: calc(var(--pill-h) * 2 + 36px + var(--sat)); }
+.bossbar.sealed .bb-bar i { background: linear-gradient(90deg, #8a5aff, #d0b0ff); }
+.bossbar.sealed { border-color: rgba(208, 176, 255, 0.8); }
+/* partner frame: faction-coloured avatar ring, army bar vs recommended */
+.partner { --fc: var(--b); border-color: color-mix(in srgb, var(--fc) 65%, var(--line)); }
+.partner .av { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18), 0 0 10px color-mix(in srgb, var(--fc) 70%, transparent); }
+.partner .pf { display: flex; flex-direction: column; gap: 2px; min-width: 96px; }
+.bar.mini { height: 4px; width: 100%; background: #16142a; }
+.bar.mini > i { background: var(--fc); }
+.bar.mini.low > i { background: var(--warn); }
+/* mini-map (my arena from above) */
+.minimap { position: absolute; right: calc(8px + var(--sar)); top: calc(var(--pill-h) + 18px + var(--sat)); width: 180px; height: 100px; border-radius: 10px; background: rgba(9, 11, 26, 0.78); border: 1px solid var(--edge); box-shadow: inset 0 1px 0 var(--glass-hi), 0 6px 16px rgba(0, 0, 0, 0.4); z-index: 1; touch-action: none; }
+.debug { top: calc(var(--pill-h) + 128px + var(--sat)); }
+/* blessing draft */
+.anomaly.bless { border-color: #e0c8ff; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55), 0 0 18px rgba(200, 160, 255, 0.25); }
+.anomaly.bless .an-head b { color: #ecd8ff; }
+.an-card.bl .good { color: #ffe9b0; }
+.an-card.bl:disabled { opacity: 0.55; }
+.an-card.bl:not(:disabled):active { transform: scale(0.97); }
+.an-card.rare { border-color: rgba(200, 160, 255, 0.7); background: rgba(160, 110, 255, 0.1); }
+.an-card em.rare { font-style: normal; font-size: 9px; color: #e0c8ff; letter-spacing: 0.1em; }
+.blesschip { border-color: #e0c8ff; color: #ecd8ff; }
+.blesslist { border-color: rgba(255, 224, 138, 0.7); color: #ffe9b0; }
+/* twin seals */
+.sealbtn { position: relative; width: calc(var(--round) * 1.15); height: calc(var(--round) * 1.35); border-radius: 16px; background: radial-gradient(circle at 50% 30%, #4a2a6a, #160c24); border: 2px solid rgba(224, 200, 255, 0.75); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; box-shadow: 0 0 14px rgba(176, 122, 255, 0.5), 0 4px 14px rgba(0, 0, 0, 0.5); padding: 4px; text-shadow: 0 1px 2px #000; }
+.sealbtn b { font-size: 11px; letter-spacing: 0.06em; }
+.sealbtn small { font-size: 8px; color: #e0c8ff; text-align: center; line-height: 1.1; max-width: 100%; }
+.sealbtn.is-urgent { --c1: #ffd27a; --c2: #ff8a3a; border-color: #fff6a0; animation: duopulse .45s ease-in-out infinite; background: radial-gradient(circle at 50% 30%, #8a5a20, #3a1c08); }
+.sealbtn.is-armed { filter: saturate(0.5); opacity: 0.8; }
+.sealbtn:active { transform: scale(0.95); }
+@media (max-width: 920px) and (orientation: landscape) {
+  .siege { width: min(250px, 31vw); min-width: 200px; padding: 3px 8px 4px; gap: 2px; }
+  .oppchip .oc { display: none; }
+  .oppchip { padding: 0 8px; }
+  .sg-name { display: none; }
+  .sg-core b { min-width: 84px; font-size: 10.5px; }
+  .sg-prog small { min-width: 78px; font-size: 9px; }
+  .minimap { width: 120px; height: 68px; top: calc(var(--pill-h) + 14px + var(--sat)); }
+  .sealbtn { width: var(--round); height: calc(var(--round) * 1.2); }
+  .sealbtn small { display: none; }
+  .partner .pf { display: none; }
+  .bossbar { top: calc(var(--pill-h) * 2 + 18px + var(--sat)); }
+}
+@media (max-height: 500px) {
+  .anomaly.bless .an-card .good { font-size: 9.5px; }
+}
+@media (orientation: portrait) and (max-width: 700px) {
+  .siege { top: calc(var(--pill-h) * 2 + 20px + var(--sat)); width: 94vw; min-width: 0; }
+  .hud-left { top: calc(var(--pill-h) * 2 + 100px + var(--sat)); }
+  .minimap { display: none; }
+  .bossbar { top: calc(var(--pill-h) * 2 + 100px + var(--sat)); }
+  .toasts { top: calc(var(--pill-h) * 2 + 104px + var(--sat)); }
+}

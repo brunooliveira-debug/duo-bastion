@@ -11,7 +11,8 @@ import { MOD } from '../data/modules';
 import { RESO_GAIN, SYNC_WINDOW } from '../data/resonance';
 import type { OrderId } from '../data/tactics';
 import { RIFT_SPAWN_EVERY, RIFT_MINIONS, riftEther, riftGold, ANOMALY_WAVES } from '../data/tactics';
-import { DT, Build, Ent, GameState, LANE, PlayerState, laneDir, cellCenter, moduleLv, anomalyOf, partnerOf, journal, riftPos } from './state';
+import { BLESS, blessingLv } from '../data/blessings';
+import { DT, Build, Ent, GameState, LANE, PlayerState, laneDir, cellCenter, moduleLv, anomalyOf, partnerOf, journal, riftPos, SEAL_WINDOW, SEAL_SHIELD, SEAL_STUN, SEAL_RESO, teamMembers } from './state';
 import { buildBonuses } from './synergy';
 import { rand } from './rng';
 import { addReso, teamAbility } from './resonance';
@@ -135,6 +136,12 @@ export function spawnUnits(s: GameState) {
       if (p.faction === 'ronces') e.maxHp *= 1 + Math.min(0.24, 0.03 * Math.max(0, s.wave - b.placedWave));
       // Bastion module: Aura de Cadence (back line)
       if (cad && e.back) { e.atkSpeed *= 1 + MOD.cadence[cad]; if (cad >= 3 && e.range > 2) e.range *= 1.1; }
+      // v0.7 blessings (team-wide, permanent)
+      const bl = (id: Parameters<typeof blessingLv>[1]) => blessingLv(team, id);
+      if (def.tower && bl('cadence')) e.atkSpeed *= 1 + BLESS.cadence * bl('cadence');
+      if (b.col <= 3 && bl('phalange')) { e.maxHp *= 1 + BLESS.phalangeHp * bl('phalange'); e.armor = Math.min(0.6, e.armor + BLESS.phalangeArmor * bl('phalange')); }
+      if (bl('trempe')) e.dmg *= 1 + BLESS.trempe * bl('trempe');
+      if (bl('chasse')) { e.abilities = [...e.abilities, { kind: 'bonusVsBig', pct: BLESS.chasse * bl('chasse') }]; e.timers.push(0); }
       // anomalies
       if (anom === 'sacrifice') e.dmg *= 1.12;
       if (anom === 'eclipse' && e.range > 2) e.range = Math.max(2.1, e.range * 0.85);
@@ -145,6 +152,7 @@ export function spawnUnits(s: GameState) {
       if (hasPower(p, 'precision') && e.range > 2) { e.dmg *= 1.2; e.range += 0.5; }
       if (s.waveEvent === 'overcharge') { e.hasteUntil = 12; e.hastePct = 0.4; }
       e.maxHp = Math.round(e.maxHp); e.hp = e.maxHp;
+      if (bl('egide')) e.shield += e.maxHp * BLESS.egide * bl('egide');
       if (ab(e, 'stealth')) { e.stealth = true; e.ambush = ab(e, 'stealth')!.ambush; }
       if (b.rift && e.moveSpeed > 0) e.task = p.pid;
       s.ents.push(e);
@@ -311,7 +319,7 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
     if (pid >= 0 && t.bounty > 0) {
       const p = s.players[pid];
       const ev = s.waveEvent === 'double' ? 2 : s.waveEvent === 'rush' ? 1.5 : 1;
-      const g = Math.round(t.bounty * ev * (p.powers.includes('fortune') ? 1.5 : 1));
+      const g = Math.round(t.bounty * ev * (p.powers.includes('fortune') ? 1.5 : 1) * (1 + BLESS.primes * blessingLv(s.teams[p.team], 'primes')));
       p.gold += g;
       p.stats.goldEarned += g;
     }
@@ -319,6 +327,7 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
       const ks = kp.stats;
       ks.kills++;
       kp.souls++;
+      if (blessingLv(s.teams[kp.team], 'moisson')) { kp.ether += BLESS.moisson; kp.stats.etherProduced += BLESS.moisson; } // blessing "Moisson d'Éther"
       if (t.leaked) {
         ks.saves++;
         addReso(s, kp.team, kp.pid !== t.owner ? RESO_GAIN.saveCross : RESO_GAIN.save, kp.pid);
@@ -366,6 +375,18 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
     // a defender fell: remembered for "Machine Interdite", Nécrose "Pacte"
     s.fallen.push({ owner: t.owner, defId: t.defId, level: t.level, branch: t.branch, x: t.x, z: t.z });
     const owner = s.players[t.owner];
+    // blessing "Relève": the fallen unit may come back as a short-lived ghost
+    if (owner && !t.ghost && blessingLv(s.teams[owner.team], 'releve') && rand(s) < BLESS.releve) {
+      const st = unitStats(t.defId, t.level, t.branch);
+      const g = baseEnt(s, st, t.defId);
+      g.arena = t.arena; g.owner = owner.pid; g.summon = true; g.ghost = true; g.level = t.level; g.branch = t.branch;
+      g.maxHp = g.hp = Math.round(st.hp * BLESS.releveHp); g.dmg = st.dmg * BLESS.releveDmg;
+      g.x = g.hx = t.x; g.z = g.hz = t.z; g.radius = t.radius; g.crit = BASE_CRIT;
+      if (st.tower) { g.moveSpeed = 2; g.range = Math.min(g.range, 4); }
+      g.expires = s.combatTime + BLESS.releveLife;
+      s.ents.push(g);
+      s.events.push({ t: 'ghost', arena: t.arena, x: t.x, z: t.z });
+    }
     if (owner?.faction === 'necrose') {
       if (rand(s) < 0.35) { spawnToken(s, owner, 'squelette', t.x, t.z, Math.pow(LEVEL_MUL[t.level] ?? 1, 0.8)); s.events.push({ t: 'summon', arena: t.arena, x: t.x, z: t.z }); }
       for (const o of s.ents) if (!o.enemy && !o.dead && o.owner === t.owner && dist2(o, t) <= 9) { o.lsUntil = s.combatTime + 4; o.lsPct = Math.max(o.lsPct, 0.2); }
@@ -474,6 +495,18 @@ function hit(s: GameState, a: Ent, t: Ent, map: Map<number, Ent>) {
   s.events.push({ t: 'atk', a: a.id, b: t.id, fx: a.enemy ? 'enemy' : UNITS[a.defId]?.fx ?? 'spark', ranged: a.range > 2, dmg: Math.round(dealt), crit });
   const ls = (ab(a, 'lifesteal')?.pct ?? 0) + (a.lsUntil > s.combatTime ? a.lsPct : 0);
   if (ls > 0) a.hp = Math.min(a.maxHp, a.hp + dealt * ls);
+  // v0.7 blessings on every hit of a defender: frost blades (melee), venom, bouncing projectiles (ranged)
+  if (owner && t.enemy && !t.rift) {
+    const tm = s.teams[owner.team];
+    if (a.range < 2 && blessingLv(tm, 'givre')) { t.slowUntil = Math.max(t.slowUntil, s.time + BLESS.givreDur); t.slowPct = Math.max(t.slowPct, BLESS.givreSlow); credit(s, a, 'ctrl', BLESS.givreDur * BLESS.givreSlow); }
+    const venin = blessingLv(tm, 'venin');
+    if (venin) poisonOn(s, a, t, a.dmg * BLESS.venin * venin, BLESS.veninDur);
+    if (a.range > 2 && blessingLv(tm, 'rebonds') && !ab(a, 'chain') && !ab(a, 'splash')) {
+      let best: Ent | null = null, bd = BLESS.rebondsRange * BLESS.rebondsRange;
+      for (const o of map.values()) { if (o === t || o.dead || !o.enemy || o.rift) continue; const d = dist2(o, t); if (d < bd) { bd = d; best = o; } }
+      if (best) { const d2 = applyDamage(s, a, best, a.dmg * effMul(a, best) * BLESS.rebonds, { pierce }); s.events.push({ t: 'atk', a: t.id, b: best.id, fx: UNITS[a.defId]?.fx ?? 'spark', ranged: true, dmg: Math.round(d2), crit: false }); }
+    }
+  }
   // doctrine (Ordre Astral) + cross-army help effects when fighting in the partner's lane
   if (owner && t.enemy && !t.rift) {
     const helping = t.owner !== a.owner && !t.leaked;
@@ -636,6 +669,12 @@ function chooseTarget(s: GameState, e: Ent, arenaEnts: Ent[], range: number) {
     e.target = best;
   } else {
     let best = -1, bd = Infinity;
+    // breachers never fight: straight to the gate (the Core is their only target)
+    if (ab(e, 'breach')) {
+      if (e.leaked && Math.sqrt(e.x * e.x + e.z * e.z) <= LANE.coreRadius + e.range + 0.3) best = -2;
+      e.target = best;
+      return;
+    }
     if (!ab(e, 'ignoreTaunt')) {
       for (const o of arenaEnts) {
         if (o.enemy || o.dead || hidden(s, o, e)) continue;
@@ -839,6 +878,9 @@ export function combatTick(s: GameState) {
       });
       if (!e.enemy && hasPower(owner, 'regeneration')) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.02 * DT);
     }
+    // blessing "Aura du Cœur": defenders near the Bastion regenerate
+    const coeur = blessingLv(team, 'coeur');
+    if (coeur) for (const e of list) if (!e.enemy && !e.dead && e.x * e.x + e.z * e.z <= 81) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * BLESS.coeur * coeur * DT);
 
     // ---- dashes (assassins) at combat start ----
     for (const e of list) {
@@ -905,8 +947,11 @@ export function combatTick(s: GameState) {
         const d = Math.sqrt(dist2(e, t));
         const boom = e.enemy ? ab(e, 'explode') : undefined;
         if (boom && d <= e.radius + t.radius + 0.5) { detonate(s, e, boom, list); continue; }
-        if (d > reach) { if (spd > 0) moveToward(e, t.x, t.z, spd); else e.target = -1; }
-        else if (e.cd <= 0 && !boom) { hit(s, e, t, map); e.cd = 1 / Math.max(0.05, e.atkSpeed); e.cd = Math.min(e.cd, 4); }
+        // kiting casters back off toward their rift when a defender gets too close (still firing from range)
+        const kite = e.enemy && !e.leaked ? ab(e, 'kite') : undefined;
+        if (kite && d < kite.dist && spd > 0 && Math.abs(e.x) < LANE.spawnX - 1) moveToward(e, e.x - laneDir(enemySlot(s, e)) * 2, e.z, spd * 0.8);
+        else if (d > reach) { if (spd > 0) moveToward(e, t.x, t.z, spd); else e.target = -1; }
+        if (d <= reach && e.cd <= 0 && !boom) { hit(s, e, t, map); e.cd = 1 / Math.max(0.05, e.atkSpeed); e.cd = Math.min(e.cd, 4); }
       } else if (e.enemy) {
         // walk the lane toward the Core
         const d = laneDir(enemySlot(s, e));
@@ -1046,6 +1091,44 @@ function coreTick(s: GameState, ai: number, list: Ent[], map: Map<number, Ent>) 
       } else core.chainCd = 1;
     }
   }
+}
+
+// ---------------------------------------------------------------- v0.7: twin seals (boss co-op mechanic)
+
+/** Combat start: major bosses arrive behind the twin seals (a shield only the two players together can shatter fast). */
+export function openSeals(s: GameState) {
+  for (const t of s.teams) {
+    t.seal = null;
+    const boss = s.ents.find(e => e.enemy && !e.dead && e.boss && e.arena === t.id && ENEMIES[e.defId]?.seal);
+    if (!boss) continue;
+    boss.shield += boss.maxHp * SEAL_SHIELD;
+    t.seal = { boss: boss.id, armed: [-99, -99], broken: false };
+    s.events.push({ t: 'seal', team: t.id, k: 'open', pid: -1, x: boss.x, z: boss.z, arena: t.id });
+  }
+}
+
+/** A player arms their seal (validated by applyCommand). Both armed within SEAL_WINDOW → the seals break. */
+export function armSeal(s: GameState, p: PlayerState): string | null {
+  const t = s.teams[p.team];
+  const seal = t.seal;
+  if (!seal || seal.broken) return 'Aucun sceau à activer.';
+  const boss = s.ents.find(e => e.id === seal.boss && !e.dead);
+  if (!boss) return 'Le boss est déjà tombé.';
+  const ct = s.combatTime;
+  if (ct - seal.armed[p.slot] < SEAL_WINDOW) return 'Ton sceau est déjà actif : à ton partenaire !';
+  seal.armed[p.slot] = ct;
+  const other = seal.armed[1 - p.slot];
+  if (ct - other <= SEAL_WINDOW && teamMembers(s, p.team).length > 1) {
+    seal.broken = true;
+    boss.shield = 0;
+    stun(s, boss, SEAL_STUN * 2); // bosses halve stuns
+    boss.abilities.forEach((a, i) => { if ('every' in a) boss.timers[i] = Math.max(boss.timers[i], a.every * 0.5); });
+    addReso(s, p.team, SEAL_RESO, p.pid);
+    journal(s, 'seal', p.pid, boss.defId);
+    s.events.push({ t: 'seal', team: p.team, k: 'break', pid: p.pid, x: boss.x, z: boss.z, arena: p.team });
+    s.events.push({ t: 'pulse', arena: p.team, x: boss.x, z: boss.z, r: 3.2, fx: 'chain' });
+  } else s.events.push({ t: 'seal', team: p.team, k: 'arm', pid: p.pid, x: boss.x, z: boss.z, arena: p.team });
+  return null;
 }
 
 /** Core damage bookkeeping: lane owner, damage source (wave or send) and the sender's credit. */

@@ -12,15 +12,17 @@ import { SYNERGIES, ZONE_TEXT, RUNES, zoneOf } from '../data/synergies';
 import { MODULES, MODULE_IDS, FAMILY_NAMES, FAMILY_COLORS, MODULE_REFUND, PROPOSAL_TIMEOUT, moduleCost, moduleValue, ModuleFamily } from '../data/modules';
 import { RESO_MAX, RESO_GAIN, duoAbility, ALL_DUO_ABILITIES } from '../data/resonance';
 import { ORDERS, ORDER_IDS, OrderId, ANOMALIES, AnomalyId, RIFT_REWARDS, RIFT_MAX_UNITS, RIFT_MINIONS } from '../data/tactics';
+import { BLESSINGS, BlessingId, blessingWave } from '../data/blessings';
 import type { Ability, AttackType, Branch, DefenseType } from '../data/types';
 import { recommendedValue, riskOf, powerBucket } from '../sim/balance';
 import { buildBonuses, previewSynergies } from '../sim/synergy';
+import { cellCenter, SEAL_WINDOW, SEAL_RESO } from '../sim/state';
 import type { Build, GameEvent, JournalEntry } from '../sim/state';
 import { unitPrice, levelPrice, type Command } from '../sim/game';
 import { FUSION_BONUS } from '../sim/combat';
 import { Renderer, DragGhost, ARENA_GAP } from '../render/Renderer';
 import type { Session } from '../net/Session';
-import type { MetaView, PlayerView } from '../net/snapshot';
+import { F_BREACH, F_ELITE, F_ENEMY, F_LEAK, F_RIFT, F_SHIELD, type MetaView, type PlayerView } from '../net/snapshot';
 import { audio } from '../audio/AudioSystem';
 import { save } from '../save/SaveSystem';
 import { DEBUG } from '../config';
@@ -28,7 +30,7 @@ import { h, clear, fmt, vibrate } from './dom';
 import { icon, categoryIcon } from './icons';
 import { Tutorial } from './Tutorial';
 
-type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | 'opp' | 'syn' | 'reso' | 'rift' | 'fusion' | null;
+type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | 'opp' | 'syn' | 'reso' | 'rift' | 'fusion' | 'bless' | null;
 
 export interface HudCallbacks { exit(): void; rematch(): void }
 
@@ -120,14 +122,19 @@ export class Hud {
   private build() {
     const E = this.els;
     const pill = (ic: string, color: string, val: HTMLElement, extra = '', label = '') => h('div', { class: `pill ${extra}`, 'aria-label': label }, h('span', { html: icon(ic, 22, color) }), val);
-    // top-left: lives (Core), gold, ether, income, wave + timer
-    E.coreTxt = h('b'); E.coreFill = h('i'); E.coreBar = h('div', { class: 'bar' }, E.coreFill);
+    // top-left: my resources (gold, ether, income)
     E.gold = h('b', { class: 'g' }); E.ether = h('b', { class: 'e' }); E.income = h('b', { class: 'inc' });
-    E.wave = h('b'); E.timer = h('span', { class: 'timer-chip' });
     const pills = h('div', { class: 'pills' },
-      h('div', { class: 'pill core-pill', 'aria-label': 'Points de vie du Core' }, h('span', { html: icon('heart', 22, '#FF5A6A') }), h('div', { class: 'core-col' }, E.coreTxt, E.coreBar)),
-      pill('coin', '#FFC233', E.gold, '', 'Or'), pill('ether', '#9FE9FF', E.ether, '', 'Éther'), pill('income', '#7DFFB0', E.income, 'inc-pill', 'Revenu par vague'),
-      h('div', { class: 'pill wave-pill' }, h('span', { html: icon('skull', 22, '#F2ECE0') }), E.wave, E.timer));
+      pill('coin', '#FFC233', E.gold, '', 'Or'), pill('ether', '#9FE9FF', E.ether, '', 'Éther'), pill('income', '#7DFFB0', E.income, 'inc-pill', 'Revenu par vague'));
+    // top centre (v0.7 HUD): the siege bar — wave tracker, shared Bastion health, enemies remaining
+    E.coreTxt = h('b'); E.coreFill = h('i'); E.coreShield = h('s'); E.coreBar = h('div', { class: 'bar core' }, E.coreFill, E.coreShield);
+    E.wave = h('b'); E.waveName = h('span', { class: 'sg-name' }); E.timer = h('span', { class: 'timer-chip' });
+    E.progFill = h('i'); E.progTxt = h('small');
+    E.siege = h('div', { class: 'siege', 'aria-label': 'Vague et Bastion' },
+      h('div', { class: 'sg-wave' }, h('span', { html: icon('skull', 16, '#F2ECE0', 2.6) }), E.wave, E.waveName, E.timer),
+      h('div', { class: 'sg-core' }, h('span', { html: icon('core', 16, '#9FE9FF', 2.6) }), E.coreBar, E.coreTxt),
+      h('div', { class: 'sg-prog' }, h('div', { class: 'bar prog' }, E.progFill), E.progTxt));
+    E.siege.onclick = () => { E.nextDetail.style.display = E.nextDetail.style.display === 'none' ? 'block' : 'none'; };
     // top-right: partner, opponent, chat, speed, pause, menu
     E.partner = h('div', { class: 'partner' });
     E.opp = h('button', { class: 'oppchip', 'aria-label': 'Informations sur l\'adversaire', onclick: () => this.openSheet('opp') });
@@ -148,7 +155,13 @@ export class Hud {
     E.fuseChip = h('button', { class: 'pill small fusechip', style: 'display:none', onclick: () => this.openSheet('fusion') });
     E.riftChip = h('button', { class: 'pill small riftchip', style: 'display:none', onclick: () => this.openSheet('rift') });
     E.anomChip = h('button', { class: 'pill small anomchip', style: 'display:none', onclick: () => { this.anomalyMin = false; this.els.anomaly.dataset.k = ''; } });
-    E.left = h('div', { class: 'hud-left' }, h('div', { class: 'hud-row2' }, E.reso, E.army, E.next, E.syn, E.fuseChip, E.riftChip, E.anomChip), E.nextDetail);
+    // v0.7: blessing draft chip (minimised panel) + owned blessings chip
+    E.blessChip = h('button', { class: 'pill small anomchip blesschip', style: 'display:none', onclick: () => { this.blessMin = false; this.els.bless.dataset.k = ''; } });
+    E.blessList = h('button', { class: 'pill small blesslist', style: 'display:none', 'aria-label': 'Bénédictions de l\'équipe', onclick: () => this.openSheet('bless') });
+    E.left = h('div', { class: 'hud-left' }, h('div', { class: 'hud-row2' }, E.reso, E.army, E.next, E.syn, E.fuseChip, E.riftChip, E.anomChip, E.blessChip, E.blessList), E.nextDetail);
+    // v0.7: mini-map (tap to look there)
+    E.minimap = h('canvas', { class: 'minimap', width: 180, height: 100, 'aria-label': 'Mini-carte' });
+    E.minimap.onpointerdown = e => { e.preventDefault(); this.minimapTap(e.offsetX, e.offsetY); };
     // boss bar (top centre, combat)
     E.bossName = h('b'); E.bossMech = h('small'); E.bossFill = h('i');
     E.boss = h('div', { class: 'bossbar', style: 'display:none' }, h('div', { class: 'bb-head' }, h('span', { html: icon('crown', 18, '#FFC233') }), E.bossName, E.bossMech), h('div', { class: 'bb-bar' }, E.bossFill));
@@ -176,7 +189,9 @@ export class Hud {
     // combat: tactical orders + DUO button next to the commander powers
     E.ordersBtn = h('button', { class: 'obtn', 'aria-label': 'Ordres tactiques', onclick: () => { this.orderOpen = !this.orderOpen; this.renderOrders(); audio.play('click'); } });
     E.duo = h('button', { class: 'duobtn', style: 'display:none', 'aria-label': 'Résonance DUO', onclick: () => { if (this.cmd({ c: 'reso' })) { vibrate([30, 40, 60]); } } });
-    E.combatExtra = h('div', { class: 'combat-extra', style: 'display:none' }, E.ordersBtn, E.duo);
+    // v0.7: twin seals of the major bosses (both players press within 3 s)
+    E.seal = h('button', { class: 'sealbtn', style: 'display:none', 'aria-label': 'Sceau', onclick: () => { if (this.cmd({ c: 'seal' })) { audio.play('order'); this.haptic([20, 30, 20]); } } });
+    E.combatExtra = h('div', { class: 'combat-extra', style: 'display:none' }, E.ordersBtn, E.seal, E.duo);
     E.orderStrip = h('div', { class: 'orderstrip', style: 'display:none' });
     const bottom = h('div', { class: 'hud-bottom' }, E.cards, E.powers, E.combatExtra, h('div', { class: 'actions' }, un.wrap, w.wrap, r.wrap, c.wrap, E.ready));
     E.sheet = h('div', { class: 'sheet', style: 'display:none' });
@@ -192,16 +207,17 @@ export class Hud {
     E.overlay = h('div', { class: 'overlay-msg', style: 'display:none' });
     E.rotate = h('div', { class: 'rotate' }, '↻ Tourne ton téléphone en mode paysage pour mieux jouer');
     E.anomaly = h('div', { class: 'anomaly', style: 'display:none' });
+    E.bless = h('div', { class: 'anomaly bless', style: 'display:none' });
     E.proposal = h('div', { class: 'proposal', style: 'display:none' });
     E.flash = h('div', { class: 'screenflash' });
-    this.root.append(E.vignette, E.flash, top, E.left, E.boss, bottom, E.orderStrip, E.anomaly, E.proposal, E.sheet, E.toasts, E.countdown, E.placeTip, E.overlay, E.rotate);
+    this.root.append(E.vignette, E.flash, top, E.siege, E.left, E.boss, E.minimap, bottom, E.orderStrip, E.anomaly, E.bless, E.proposal, E.sheet, E.toasts, E.countdown, E.placeTip, E.overlay, E.rotate);
     if (DEBUG) this.root.append(this.debugPanel());
   }
 
   private debugPanel() {
     const b = (label: string, action: string) => h('button', { onclick: () => this.cmd({ c: 'debug', action }) }, label);
     return h('div', { class: 'debug' }, b('+500 or', 'gold'), b('+100 éther', 'ether'), b('Vague +1', 'wave'), b('Lancer', 'skip'), b('Tuer tout', 'kill'), b('Core 100%', 'core'), b('Pouvoirs', 'cd'), b('Événement', 'event'),
-      b('Résonance', 'reso'), b('Faille', 'rift'), b('Anomalie', 'anomaly'),
+      b('Résonance', 'reso'), b('Faille', 'rift'), b('Anomalie', 'anomaly'), b('Bénédiction', 'bless'),
       h('button', { onclick: () => this.cmd({ c: 'speed', speed: 3 }) }, 'x3'), h('button', { onclick: () => this.cmd({ c: 'speed', speed: 1 }) }, 'x1'));
   }
 
@@ -248,12 +264,18 @@ export class Hud {
     const E = this.els;
     const me = this.me!;
     const total = m.settings.mode === 'survival' ? '∞' : m.settings.totalWaves;
-    E.wave.textContent = `${m.wave}/${total}`;
+    E.wave.textContent = `VAGUE ${m.wave} / ${total}`;
+    const wd = getWave(m.wave);
+    if (E.waveName.textContent !== wd.name) E.waveName.textContent = wd.name;
+    E.siege.classList.toggle('boss', !!wd.boss);
     const ct = m.teams[me.team];
     const k = ct.hp / ct.maxHp;
     E.coreFill.style.width = `${k * 100}%`;
+    E.coreShield.style.left = `${k * 100}%`;
+    E.coreShield.style.width = `${Math.min(100 - k * 100, (ct.shield / ct.maxHp) * 100)}%`;
     E.coreBar.classList.toggle('low', k < 0.3);
-    E.coreTxt.textContent = fmt(ct.hp);
+    E.coreTxt.textContent = `${fmt(ct.hp)} / ${fmt(ct.maxHp)}`;
+    this.renderProgress(m, me);
     E.gold.textContent = fmt(me.gold);
     E.ether.textContent = fmt(me.ether);
     E.income.textContent = `+${me.income}`;
@@ -270,7 +292,9 @@ export class Hud {
     this.renderReso(m, me);
     this.renderChips(m, me);
     this.renderAnomaly(m, me);
+    this.renderBless(m, me);
     this.renderProposal(m, me);
+    this.renderMinimap(m, me);
     // synergies chip
     const bb = buildBonuses(me.builds, me.runes ?? []);
     const synCount = new Set([...bb.values()].flatMap(b => b.syn)).size;
@@ -281,11 +305,15 @@ export class Hud {
     const pv = partner.builds.reduce((t, b) => t + b.value, 0);
     const off = !this.session.partnerOnline && !partner.isAI && m.settings.mode !== 'duel';
     const state = off ? 'CONNEXION…' : m.phase === 'build' ? (partner.ready ? '<em>PRÊT</em>' : 'construit…') : m.phase === 'combat' ? (partner.leakedThisWave ? `${partner.leakedThisWave} fuites` : 'en combat') : '';
-    const pKey = `${partner.name}|${pv}|${partner.workers}|${state}|${off}`;
+    const prec = recommendedValue(m.wave, partner.builds, pv);
+    const pk = Math.max(0.04, Math.min(1, pv / Math.max(1, prec)));
+    const pKey = `${partner.name}|${pv}|${partner.workers}|${state}|${off}|${Math.round(pk * 20)}`;
     if (E.partner.dataset.k !== pKey) {
       E.partner.dataset.k = pKey;
       E.partner.classList.toggle('off', off);
-      E.partner.innerHTML = `<div class="av" style="background:${FACTIONS[partner.faction].color}">${partner.isAI ? 'IA' : esc(partner.name.slice(0, 1).toUpperCase())}</div><div><div class="nm">${esc(partner.name)}</div><div class="st">${FACTIONS[partner.faction].title} · Armée ${fmt(pv)} · ${state}</div></div>`;
+      const fc = FACTIONS[partner.faction].color;
+      E.partner.style.setProperty('--fc', fc);
+      E.partner.innerHTML = `<div class="av" style="background:${fc}">${partner.isAI ? 'IA' : esc(partner.name.slice(0, 1).toUpperCase())}</div><div class="pf"><div class="nm">${esc(partner.name)}</div><div class="st">${FACTIONS[partner.faction].title} · Armée ${fmt(pv)} · ${state}</div><div class="bar mini ${pk < 0.6 ? 'low' : ''}"><i style="width:${pk * 100}%"></i></div></div>`;
     }
     // opponent chip (public info only)
     const opp = this.opponents(m);
@@ -357,7 +385,7 @@ export class Hud {
     return [this.sheet, this.sheetArg, m.phase, m.wave, Math.floor(me.gold), Math.floor(me.ether), me.income, me.workers,
       me.builds.map(b => `${b.bid}${b.level}${b.branch ?? ''}${b.rift ? 'r' : ''}${b.col}${b.row}`).join(','), me.raiderQueue.length, me.curseQueue.length,
       me.powerLv.join(), t.modules.map(x => (x ? x.id + x.lv : '-')).join(), t.proposal ? t.proposal.module + t.proposal.by : '', Math.floor(t.reso), t.resoUses,
-      Math.round(t.hp / 50), this.raiderTab, this.target, this.modFamily, this.pendingFuse,
+      Math.round(t.hp / 50), this.raiderTab, this.target, this.modFamily, this.pendingFuse, t.blessings.join(),
       this.sheet === 'opp' || this.sheet === 'stats' ? Math.floor(m.time / 2) : 0].join('|');
   }
 
@@ -400,16 +428,153 @@ export class Hud {
   private renderBoss(m: MetaView) {
     const E = this.els;
     const me = this.me!;
-    let best: { name: string; hp: number; mech: string } | null = null;
+    let best: { name: string; hp: number; mech: string; shield: boolean } | null = null;
     if (m.phase === 'combat') {
       for (const e of this.session.view.sample()) {
         const d = ENEMIES[e.defId];
         if (!d?.boss || e.arena !== me.team) continue;
-        if (!best || e.hp > best.hp) best = { name: d.name, hp: e.hp, mech: d.mechanic ?? '' };
+        if (!best || e.hp > best.hp) best = { name: d.name, hp: e.hp, mech: d.mechanic ?? '', shield: !!(e.flags & F_SHIELD) };
       }
     }
     E.boss.style.display = best ? '' : 'none';
-    if (best) { E.bossName.textContent = best.name; E.bossMech.textContent = best.mech; E.bossFill.style.width = `${best.hp * 100}%`; }
+    if (best) {
+      const seal = m.teams[me.team].seal;
+      E.bossName.textContent = best.name;
+      E.bossMech.textContent = seal && !seal.broken ? '🔒 Sceaux jumeaux : activez vos deux SCEAUX à moins de 3 s' : best.mech;
+      E.bossFill.style.width = `${best.hp * 100}%`;
+      E.boss.classList.toggle('sealed', !!seal && !seal.broken && best.shield);
+    }
+  }
+
+  // ------------------------------------------------------------------ v0.7 HUD: siege bar progress, mini-map, blessings, seals
+  private waveTotal = 0;
+  /** enemies of my arena still standing (rifts excluded) */
+  private enemiesLeft(m: MetaView, me: PlayerView) {
+    let n = 0;
+    if (m.phase !== 'combat') return 0;
+    for (const e of this.session.view.sample()) if ((e.flags & F_ENEMY) && !(e.flags & F_RIFT) && e.arena === me.team) n++;
+    return n;
+  }
+  private renderProgress(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    if (m.phase === 'combat') {
+      const n = this.enemiesLeft(m, me);
+      this.waveTotal = Math.max(this.waveTotal, n);
+      const k = this.waveTotal ? 1 - n / this.waveTotal : 0;
+      E.progFill.style.width = `${k * 100}%`;
+      E.progTxt.textContent = `${n} ennemi${n > 1 ? 's' : ''} restant${n > 1 ? 's' : ''}`;
+      E.siege.dataset.mode = 'combat';
+    } else {
+      if (m.phase === 'build') this.waveTotal = 0;
+      const k = m.phase === 'build' ? Math.max(0, Math.min(1, m.timer / Math.max(1, m.timerMax))) : 1;
+      E.progFill.style.width = `${k * 100}%`;
+      E.progTxt.textContent = m.phase === 'build' ? 'préparation' : m.phase === 'resolution' ? 'vague terminée' : '';
+      E.siege.dataset.mode = m.phase;
+    }
+  }
+
+  /** Tap on the mini-map: look there. */
+  private minimapTap(px: number, py: number) {
+    const me = this.me; if (!me) return;
+    const c = this.els.minimap as HTMLCanvasElement;
+    const r = c.getBoundingClientRect();
+    const x = (px / r.width) * 96 - 48, z = (py / r.height) * 17 - 8.5;
+    this.r.target.x = Math.max(-42, Math.min(42, x));
+    this.r.target.z = me.team * ARENA_GAP + Math.max(-8, Math.min(8, z));
+    audio.play('click');
+  }
+  private mmLast = 0;
+  /** Mini-map: my team's arena from above — lanes, grids, Bastion, units (slot colours), enemies (red), bosses, rifts. */
+  private renderMinimap(m: MetaView, me: PlayerView) {
+    const now = performance.now();
+    if (now - this.mmLast < 120) return;
+    this.mmLast = now;
+    const c = this.els.minimap as HTMLCanvasElement;
+    const g = c.getContext('2d');
+    if (!g) return;
+    const W = c.width, H = c.height;
+    const X = (x: number) => ((x + 48) / 96) * W, Z = (z: number) => ((z + 8.5) / 17) * H;
+    g.clearRect(0, 0, W, H);
+    // lanes + bridges + plaza
+    g.fillStyle = 'rgba(120, 128, 160, 0.22)';
+    for (const sg of [-1, 1]) { g.fillRect(X(Math.min(sg * 46, sg * 5)), Z(-4.6), (41 / 96) * W, (9.2 / 17) * H); }
+    g.fillStyle = 'rgba(159, 233, 255, 0.28)';
+    g.beginPath(); g.arc(X(0), Z(0), (5.6 / 96) * W, 0, Math.PI * 2); g.fill();
+    // build grids (per slot colour)
+    for (const slot of [0, 1]) {
+      const a = cellCenter(slot, 0, 0), b = cellCenter(slot, 11, 6);
+      g.fillStyle = slot === me.slot ? 'rgba(74, 168, 255, 0.22)' : 'rgba(255, 162, 58, 0.18)';
+      g.fillRect(X(Math.min(a.x, b.x) - 0.5), Z(a.z - 0.5), (12 / 96) * W, (7 / 17) * H);
+    }
+    // rift gates
+    g.fillStyle = '#b07aff';
+    for (const sg of [-1, 1]) { g.beginPath(); g.arc(X(sg * 38), Z(0), 2.2, 0, Math.PI * 2); g.fill(); }
+    const dot = (x: number, z: number, col: string, r: number) => { g.fillStyle = col; g.beginPath(); g.arc(X(x), Z(z), r, 0, Math.PI * 2); g.fill(); };
+    const slotCol = ['#4aa8ff', '#ffa23a'];
+    if (m.phase === 'combat') {
+      for (const e of this.session.view.sample()) {
+        if (e.arena !== me.team) continue;
+        const f = e.flags;
+        if (f & F_ENEMY) {
+          const boss = !!ENEMIES[e.defId]?.boss;
+          if (f & F_RIFT) dot(e.x, e.z, '#c07aff', 2.6);
+          else if (boss) { dot(e.x, e.z, '#ffb030', 3.4); g.strokeStyle = '#fff'; g.lineWidth = 1; g.stroke(); }
+          else dot(e.x, e.z, (f & F_LEAK) ? '#ff2a2a' : (f & F_BREACH) ? '#ff8a2a' : '#ff5a6a', (f & F_ELITE) ? 2.2 : 1.5);
+        } else dot(e.x, e.z, slotCol[m.players[e.owner]?.slot ?? 0], 1.6);
+      }
+    } else {
+      for (const p of m.players) { if (p.team !== me.team) continue; for (const b of p.builds) { const cc = cellCenter(p.slot, b.col, b.row); dot(cc.x, cc.z, slotCol[p.slot], 1.6); } }
+    }
+    // camera focus
+    const tx = this.r.target.x, tz = this.r.target.z - me.team * ARENA_GAP;
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1;
+    g.strokeRect(X(tx) - 9, Z(tz) - 6, 18, 12);
+  }
+
+  private blessMin = false;
+  /** Blessing draft (3 cards): the picker chooses, the partner watches. Minimises to a chip. */
+  private renderBless(m: MetaView, me: PlayerView) {
+    const E = this.els;
+    const t = m.teams[me.team];
+    const offer = m.phase === 'build' ? t.blessingOffer : null;
+    const key = offer && !this.blessMin ? `${offer.ids.join()}|${offer.picker}|${t.blessings.join()}` : '';
+    if (!key) { E.bless.style.display = 'none'; E.bless.dataset.k = ''; return; }
+    if (E.bless.dataset.k === key) return;
+    E.bless.dataset.k = key;
+    E.bless.style.display = '';
+    clear(E.bless);
+    const mine = offer!.picker === me.pid;
+    const picker = m.players[offer!.picker];
+    E.bless.append(h('div', { class: 'an-head' },
+      h('b', {}, '✦ BÉNÉDICTION — permanente, pour l\'équipe'),
+      h('span', { class: 'muted small' }, mine ? 'À toi de choisir (chacun son tour)' : `${picker?.name ?? 'Ton partenaire'} choisit…`),
+      h('button', { class: 'x', 'aria-label': 'Réduire', onclick: () => { this.blessMin = true; E.bless.dataset.k = ''; this.renderBless(m, me); } }, '▾')));
+    const row = h('div', { class: 'an-row' });
+    for (const id of offer!.ids) {
+      const b = BLESSINGS[id];
+      const lv = t.blessings.filter(x => x === id).length;
+      row.append(h('button', { class: `an-card bl${mine ? '' : ' wait'}${b.rare ? ' rare' : ''}`, disabled: !mine, onclick: () => { if (this.cmd({ c: 'bless', id })) { audio.play('upgrade'); this.haptic(20); } } },
+        h('div', { class: 'an-ic', html: icon(b.icon, 22, b.rare ? '#E0C8FF' : '#FFE08A', 2.4) }),
+        h('b', {}, b.name, b.rare ? h('em', { class: 'rare' }, ' RARE') : null),
+        h('span', { class: 'good' }, b.text),
+        h('small', { class: 'votes' }, lv ? `Niveau ${lv} → ${lv + 1} / ${b.max}` : b.max > 1 ? `Cumulable ×${b.max}` : '')));
+    }
+    E.bless.append(row);
+  }
+
+  private renderBlessSheet(S: HTMLElement, title: (t: string) => HTMLElement, m: MetaView, me: PlayerView) {
+    const t = m.teams[me.team];
+    S.append(title('✦ Bénédictions de l\'équipe'),
+      h('p', { class: 'muted small' }, `Avant presque chaque vague (sauf les vagues d'anomalie), 3 bénédictions sont tirées : l'un de vous en garde une, à tour de rôle. Elles sont permanentes et valent pour vous deux.`));
+    const counts = new Map<string, number>();
+    for (const id of t.blessings) counts.set(id, (counts.get(id) ?? 0) + 1);
+    if (!counts.size) S.append(h('p', { class: 'small' }, 'Aucune pour l\'instant : la première est proposée avant la vague 2.'));
+    for (const [id, n] of counts) {
+      const b = BLESSINGS[id as BlessingId];
+      S.append(h('div', { class: 'synrow on' }, h('span', { html: icon(b.icon, 18, b.rare ? '#E0C8FF' : '#FFE08A') }), h('div', {}, h('b', {}, b.name), n > 1 ? ` ×${n}` : '', h('br'), h('small', {}, b.text))));
+    }
+    const next = (() => { for (let w = m.wave + 1; w < m.wave + 12; w++) if (blessingWave(m.settings.mode, m.settings.totalWaves, w, !!m.settings.tutorial)) return w; return 0; })();
+    if (next) S.append(h('div', { class: 'muted small', style: 'margin-top:6px' }, `Prochaine bénédiction : avant la vague ${next}.`));
   }
 
   private renderCards(me: PlayerView, m: MetaView) {
@@ -562,6 +727,33 @@ export class Hud {
         break;
       }
       case 'help': if (m.players[ev.pid]?.team === me.team) this.helpHint(ev.kind, m.players[ev.pid].faction, ev.pid === me.pid ? '' : m.players[ev.pid].name); break;
+      // v0.7
+      case 'bless': {
+        if (ev.team !== me.team) break;
+        if (ev.k === 'offer') { this.blessMin = false; audio.play('ping'); if (ev.pid === me.pid) this.toast('✦ À toi de choisir une bénédiction pour l\'équipe', 'ping'); }
+        else {
+          const b = BLESSINGS[ev.id as BlessingId];
+          if (!b) break;
+          audio.play('upgrade');
+          const by = ev.pid === me.pid ? '' : ev.pid >= 0 ? ` (${m.players[ev.pid]?.name ?? ''})` : ' (le hasard a tranché)';
+          this.banner(`✦ ${b.name}`, b.text + by, false, 'event');
+        }
+        break;
+      }
+      case 'seal': {
+        if (ev.team !== me.team) break;
+        if (ev.k === 'open') { audio.play('boss'); setTimeout(() => this.banner('🔒 SCEAUX JUMEAUX', `Activez vos deux SCEAUX à moins de ${SEAL_WINDOW} s d'écart pour briser le bouclier du boss`, true), 2600); }
+        else if (ev.k === 'arm') {
+          if (ev.pid === me.pid) this.toast(`🔒 Sceau activé : ton partenaire a ${SEAL_WINDOW} s pour répondre`, 'info');
+          else { this.toast(`🔒 ${m.players[ev.pid]?.name ?? 'Ton partenaire'} active son sceau — appuie sur SCEAU !`, 'ping'); audio.play('warn'); this.haptic([60, 40, 60]); }
+        } else {
+          audio.play('resoFire');
+          this.banner('SCEAUX BRISÉS !', `Bouclier détruit, boss étourdi · +${SEAL_RESO} Résonance`, false, 'reso');
+          this.flashScreen('radial-gradient(circle, rgba(255,230,160,0.7), rgba(255,180,60,0.2) 60%, transparent 80%)');
+          this.haptic([80, 40, 120]);
+        }
+        break;
+      }
       case 'portal': if (ev.arena === me.team && !this.hints.has('portal')) { this.hints.add('portal'); this.toast('🌀 Portail de Repli : un fuyard renvoyé au début de la voie !', 'info'); } break;
       case 'powerUp': if (ev.pid === me.pid) audio.play('upgrade'); break;
       case 'income': if (ev.pid === me.pid && ev.gold > 0) { audio.play('coin'); this.toast(`+${ev.gold} 🪙`, 'info'); } break;
@@ -603,6 +795,7 @@ export class Hud {
       if (w.boss) audio.play('boss');
       this.selected = null;
       this.bossIds.clear();
+      this.blessMin = false;
     } else if (m.phase === 'combat') {
       audio.setMood(w.boss ? 'boss' : lowCore ? 'danger' : 'combat');
       audio.play('combat');
@@ -951,6 +1144,7 @@ export class Hud {
       case 'reso': this.renderResoSheet(S, title, m, me); break;
       case 'rift': this.renderRiftSheet(S, title, m, me); break;
       case 'fusion': this.renderFusionSheet(S, title, m, me); break;
+      case 'bless': this.renderBlessSheet(S, title, m, me); break;
       case 'syn': {
         S.append(title('🤝 Synergies & placement'));
         const bb = buildBonuses(me.builds, me.runes ?? []);
@@ -1265,6 +1459,18 @@ export class Hud {
     const offer = build ? m.teams[me.team].anomalyOffer : null;
     E.anomChip.style.display = offer && this.anomalyMin ? '' : 'none';
     if (offer && this.anomalyMin) E.anomChip.innerHTML = `${icon('sparkle', 16, '#FFE08A', 2.6)}<span>${me.anomalyVote ? 'Anomalie votée' : 'Anomalie à choisir !'}</span>`;
+    // v0.7: blessing draft (minimised) + owned blessings
+    const t = m.teams[me.team];
+    const bo = build ? t.blessingOffer : null;
+    E.blessChip.style.display = bo && this.blessMin ? '' : 'none';
+    if (bo && this.blessMin) {
+      const mine = bo.picker === me.pid;
+      const k = `${mine}|${bo.picker}`;
+      if (E.blessChip.dataset.k !== k) { E.blessChip.dataset.k = k; E.blessChip.innerHTML = `${icon('sparkle', 16, '#FFE08A', 2.6)}<span>${mine ? 'Bénédiction à choisir !' : `${esc(m.players[bo.picker]?.name ?? 'Partenaire')} choisit…`}</span>`; }
+    }
+    const nb = t.blessings.length;
+    E.blessList.style.display = nb ? '' : 'none';
+    if (nb && E.blessList.dataset.k !== String(nb)) { E.blessList.dataset.k = String(nb); E.blessList.innerHTML = `${icon('star', 16, '#FFE08A', 2.6)}<span>Bénédictions ×${nb}</span>`; }
   }
 
   /** Combat bar extras: tactical orders and the DUO button. */
@@ -1278,6 +1484,24 @@ export class Hud {
       E.ordersBtn.dataset.k = ok2;
       E.ordersBtn.className = `obtn${ok ? '' : ' off'}${this.orderOpen ? ' open' : ''}`;
       E.ordersBtn.innerHTML = `${icon('flag', 24, '#FFE08A', 2.4)}<b>ORDRES</b><small>${'●'.repeat(me.orders)}${'○'.repeat(Math.max(0, 2 - me.orders))}${cdLeft > 0 ? ` ${Math.ceil(cdLeft)}s` : ''}</small>`;
+    }
+    // v0.7 twin seals: shown while a sealed boss is alive; "SCEAU !" (urgent) when the partner just armed theirs
+    const seal = t.seal;
+    const sealOn = !!seal && !seal.broken;
+    E.seal.style.display = sealOn ? '' : 'none';
+    if (sealOn) {
+      const mineLeft = SEAL_WINDOW - (m.combatTime - seal!.armed[me.slot]);
+      const partnerLeft = SEAL_WINDOW - (m.combatTime - seal!.armed[1 - me.slot]);
+      const mine = mineLeft > 0, partner = partnerLeft > 0;
+      const label = partner && !mine ? 'SCEAU !' : mine ? 'ACTIVÉ' : 'SCEAU';
+      const sub = partner && !mine ? `${Math.ceil(partnerLeft)} s pour répondre` : mine ? `à ton partenaire (${Math.ceil(mineLeft)} s)` : 'brise le bouclier à deux';
+      const k = `${label}|${sub}`;
+      if (E.seal.dataset.k !== k) {
+        E.seal.dataset.k = k;
+        E.seal.className = `sealbtn${partner && !mine ? ' is-urgent' : mine ? ' is-armed' : ''}`;
+        E.seal.innerHTML = `${icon('rune', 26, '#FFFFFF', 2.4)}<b>${label}</b><small>${sub}</small>`;
+      }
+      (E.seal as HTMLButtonElement).disabled = mine;
     }
     const cast = t.resoCast;
     const canSync = !!cast && cast.by !== me.pid && !cast.sync;

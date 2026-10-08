@@ -54,7 +54,11 @@ export type Ability =
   | { kind: 'spawn'; unit: string; count: number; every: number } // boss: calls minions
   | { kind: 'resistSplash'; pct: number } // boss: takes less area damage
   /** boss: telegraphed slam on the densest group of units within reach (red zone on the ground during the windup) */
-  | { kind: 'slam'; every: number; windup: number; radius: number; dmg: number; stun: number; reach: number };
+  | { kind: 'slam'; every: number; windup: number; radius: number; dmg: number; stun: number; reach: number }
+  /** v0.7 enemy: ignores the defenders and runs straight for the Bastion gate (cannot be taunted) */
+  | { kind: 'breach' }
+  /** v0.7 enemy: keeps its distance — backs off toward its rift when a defender comes closer than `dist` */
+  | { kind: 'kite'; dist: number };
 
 export type Shape =
   // defenders
@@ -151,6 +155,8 @@ export interface EnemyDef extends CombatStats {
   /** short epithet shown in the boss introduction */
   title?: string;
   phases?: BossPhase[];
+  /** v0.7: arrives behind the twin seals (both players must arm their seal to shatter its shield) */
+  seal?: boolean;
   description: string;
 }
 

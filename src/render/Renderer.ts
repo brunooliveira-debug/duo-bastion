@@ -19,7 +19,7 @@ import { buildEnvironment, Env } from './environment';
 import { FACTION_LOOK } from './terrain';
 import { runeCircleTexture } from './textures';
 import { glowTexture, starTexture } from './textures';
-import { EntView, F_BURN, F_ELITE, F_ENEMY, F_HASTE, F_POISON, F_SHIELD, F_SLOW, F_STEALTH, F_STUN, F_MARK, F_WET, F_FOCUS, F_RIFT, F_GHOST, F_TASK, F_RALLY, MetaView, ViewState } from '../net/snapshot';
+import { EntView, F_BURN, F_ELITE, F_ENEMY, F_HASTE, F_POISON, F_SHIELD, F_SLOW, F_STEALTH, F_STUN, F_MARK, F_WET, F_FOCUS, F_RIFT, F_GHOST, F_TASK, F_RALLY, F_BREACH, MetaView, ViewState } from '../net/snapshot';
 import { ALL_DUO_ABILITIES } from '../data/resonance';
 import { MODULES, FAMILY_COLORS, ModuleId } from '../data/modules';
 import { save } from '../save/SaveSystem';
@@ -216,7 +216,12 @@ export class Renderer {
     // dangerous cells (Rune instable anomaly)
     this.hazardMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 0.9).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a6a, transparent: true, opacity: 0.38, depthWrite: false }), 16);
     this.hazardMesh.frustumCulled = false; this.hazardMesh.count = 0; s.add(this.hazardMesh);
+    // v0.7: auras under the elite units (level 4+): a rune ring in the army colour, HDR so the bloom catches it
+    this.auras = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: runeCircleTexture(), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide }), 200);
+    this.auras.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(200 * 3), 3);
+    this.auras.renderOrder = 4; this.auras.frustumCulled = false; this.auras.count = 0; s.add(this.auras);
   }
+  private auras: THREE.InstancedMesh;
 
   applyQuality() {
     const dpr = window.devicePixelRatio || 1;
@@ -487,6 +492,8 @@ export class Renderer {
         if (f & F_HASTE) this.fx.rise(p.x, p.y + 0.2, p.z, 0xffe060, 1, 0.14, 0.4);
         if (f & F_RIFT) this.fx.rise(p.x, p.y + 0.6, p.z, 0xc07aff, 2, 0.22, 0.9);
         if (f & F_GHOST) this.fx.rise(p.x, p.y + hgt * 0.5, p.z, 0xb090ff, 1, 0.18, 0.4);
+        if ((f & F_BREACH) && moving) { this.fx.dust(p.x, p.z, 1, 0.5); if (Math.random() < 0.5) this.fx.sparks(p.x, p.y + 0.3, p.z, 0xff8a2a, 2, 1.5, 0.14); }
+        if (!enemy && e.level >= 5 && Math.random() < 0.5) this.fx.rise(p.x + (Math.random() - 0.5) * 0.8, p.y + 0.1, p.z + (Math.random() - 0.5) * 0.8, FACTION_LOOK[meta.players[e.owner]?.faction ?? 'astreens'].glow, 1, 0.12, 0.2);
         // bosses: embers + smoke rising off the body, arcs of rift energy (stronger in later phases)
         if (bossDef?.boss) {
           const ec = phase === 1 ? 0xc07aff : phase === 2 ? 0xff5aa0 : 0xff6a2a;
@@ -635,6 +642,18 @@ export class Renderer {
     const col = new THREE.Color();
     let nb = 0, nr = 0, ns = 0, nu = 0;
     const v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
+    // elite auras (level 4: ring, level 5: larger ring + sparkles in combat)
+    let na = 0;
+    const qa = new THREE.Quaternion(), ya = new THREE.Vector3(0, 1, 0);
+    const aura = (x: number, y: number, z: number, level: number, faction: FactionId | undefined, r: number) => {
+      if (level < 4 || na >= 200) return;
+      const k = level >= 5 ? 1.0 : 0.72;
+      qa.setFromAxisAngle(ya, this.time * (level >= 5 ? 0.9 : 0.5) + na);
+      m4.compose(v3.set(x, y + 0.035, z), qa, s3.set(r * 2.6 * k, 1, r * 2.6 * k));
+      this.auras.setMatrixAt(na, m4);
+      const gc = faction ? FACTION_LOOK[faction].glow : 0xffe08a;
+      this.auras.setColorAt(na++, col.setHex(gc).multiplyScalar(level >= 5 ? 1.6 : 1.1));
+    };
     const place = (x: number, y0: number, z: number, scale: number, top: number, color: number, thick: number, hp: number, showHp: boolean, boss: boolean, shield: boolean, enemy: boolean) => {
       if (nr >= 500) return;
       m4.compose(v3.set(x, GROUND_Y + 0.02, z), qI, s3.set(scale * 1.7, 1, scale * 1.7));
@@ -666,10 +685,12 @@ export class Renderer {
         const elite = !!(e.flags & F_ELITE);
         const owner = meta.players[e.owner];
         const fl = e.flags;
-        const color = enemy ? ((fl & F_FOCUS) ? 0xff1a1a : boss ? 0xffb030 : elite ? 0xffd040 : (fl & F_RIFT) ? 0xc07aff : ENEMY_RING)
+        const color = enemy ? ((fl & F_FOCUS) ? 0xff1a1a : boss ? 0xffb030 : elite ? 0xffd040 : (fl & F_RIFT) ? 0xc07aff : (fl & F_BREACH) ? 0xff8a2a : ENEMY_RING)
           : (fl & F_TASK) ? 0xb07aff : (fl & F_RALLY) ? 0x7dff9a : SLOT_COLORS[owner?.slot ?? 0];
         const p = v.rig.root.position;
-        const thick = (fl & F_FOCUS) ? 1.9 + Math.sin(this.time * 8) * 0.15 : boss ? 1.5 : elite ? 1.25 : 1;
+        const thick = (fl & F_FOCUS) ? 1.9 + Math.sin(this.time * 8) * 0.15 : boss ? 1.5 : elite ? 1.25 : (fl & F_BREACH) ? 1.3 + Math.sin(this.time * 10) * 0.1 : 1;
+        if (!enemy && !v.tower) aura(p.x, p.y, p.z, e.level, owner?.faction, v.rig.scale * 0.55);
+        else if (!enemy && v.tower) aura(p.x, GROUND_Y, p.z, e.level, owner?.faction, 0.62);
         if ((fl & F_MARK) && ns < 499) {
           m4.compose(v3.set(p.x, p.y + v.rig.height + 0.42, p.z), q, s3.set(1.4, 1.4, 1.4));
           this.stars.setMatrixAt(ns, m4); this.stars.setColorAt(ns++, col.setHex(0x9fd8ff));
@@ -704,6 +725,7 @@ export class Renderer {
         const twin = p.pid === this.localPid && twins.has(b.bid);
         const ringCol = p.team !== this.localTeam ? ENEMY_RING : twin ? 0xc87aff : b.rift ? 0xb07aff : SLOT_COLORS[p.slot];
         place(rp.x, bv.tower ? -0.02 : 0, rp.z, bv.rig.scale * 0.55, rp.y + bv.rig.height * (bv.tower ? GARRISON_SCALE : 1), ringCol, (bv.tower ? 1.25 : 1) * (twin ? 1.25 + Math.sin(this.time * 5) * 0.15 : 1), 1, false, false, false, false);
+        aura(rp.x, GROUND_Y, rp.z, b.level, p.faction, bv.tower ? 0.62 : bv.rig.scale * 0.55);
         // level stars (readable power at a glance)
         for (let i = 0; i < b.level && ns < 500; i++) {
           const top = rp.y + bv.rig.height * (bv.tower ? GARRISON_SCALE : 1) + 0.28;
@@ -715,8 +737,8 @@ export class Renderer {
         }
       }
     }
-    this.blobs.count = nr; this.rings.count = nr; this.hpBg.count = nb; this.hpFg.count = nb; this.stars.count = ns; this.bubbles.count = nu;
-    for (const m of [this.blobs, this.rings, this.hpBg, this.hpFg, this.stars, this.bubbles]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    this.blobs.count = nr; this.rings.count = nr; this.hpBg.count = nb; this.hpFg.count = nb; this.stars.count = ns; this.bubbles.count = nu; this.auras.count = na;
+    for (const m of [this.blobs, this.rings, this.hpBg, this.hpFg, this.stars, this.bubbles, this.auras]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
 
   private updateRunes(meta: MetaView, combat: boolean) {
@@ -1013,6 +1035,22 @@ export class Renderer {
         break;
       }
       case 'help': { const z = ev.z + arenaZ(ev.arena); this.fx.rise(ev.x, 0.6, z, 0x7dffb0, 6, 0.22, 0.8); break; }
+      // v0.7
+      case 'ghost': { const z = ev.z + arenaZ(ev.arena); this.fx.ring(ev.x, z, 1.4, 0xb0c8ff, 0.5); this.fx.rise(ev.x, 0.3, z, 0xd0e0ff, 10, 0.22, 0.8); this.fx.flash(ev.x, 1, z, 0xb0c8ff, 2.5, 0.25); break; }
+      case 'seal': {
+        const z = ev.z + arenaZ(ev.arena);
+        if (ev.k === 'open') { this.fx.ring(ev.x, z, 5, 0xc8a0ff, 0.9); this.fx.rise(ev.x, 0.5, z, 0xd0b0ff, 24, 0.24, 2.5); }
+        else if (ev.k === 'arm') { this.fx.ring(ev.x, z, 3, 0xe0c8ff, 0.5); this.fx.sparks(ev.x, 1.5, z, 0xe0c8ff, 12, 3); }
+        else {
+          this.fx.flash(ev.x, 2, z, 0xffe0a0, 9, 0.3);
+          this.fx.ring(ev.x, z, 7, 0xd0b0ff, 0.8); this.fx.ring(ev.x, z, 4, 0xffffff, 0.5);
+          this.fx.sparks(ev.x, 1.5, z, 0xfff0c0, 60, 7, 0.3);
+          this.fx.debrisBurst(ev.x, 1.2, z, 0xc8a0ff, 14, 4, 0.14);
+          this.shake = Math.min(1, this.shake + 0.6);
+          if (ev.arena === this.localTeam) { this.hitStop = 0.08; this.zoomPulse = 1; }
+        }
+        break;
+      }
     }
   }
 

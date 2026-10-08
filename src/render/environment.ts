@@ -241,11 +241,39 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
   const waterTex = fallTex.clone(); waterTex.needsUpdate = true; waterTex.repeat.set(2, 0.6);
   const waterMat = reflective(surfaceMaterial({ map: waterTex, color: 0x2a6a9a, transparent: true, opacity: 0.9, roughness: 0.15, metalness: 0.1, envMapIntensity: 1.2 }, true));
   updaters.push(dt => { fallTex.offset.y += dt * 0.9; waterTex.offset.y += dt * 0.35; });
+
   const lampMats: THREE.PointsMaterial[] = [];
   const lampSpots: { p: THREE.Vector3; c: number; torch: boolean }[] = [];
   const gateMats: { ring: THREE.MeshBasicMaterial; disc: THREE.MeshBasicMaterial; glow: THREE.SpriteMaterial }[] = [];
   const gateBoss: ((b: boolean) => void)[] = [];
   const mergedGlow = (parts: Part[]) => new THREE.Mesh(mergeParts(parts), glowMat);
+
+  // ---------------- v0.7: nearer floating isles (behind the arenas) with live waterfalls, gently bobbing ----------------
+  if (!lite) {
+    const n = ultra ? 5 : 4;
+    for (let i = 0; i < n; i++) {
+      // just beyond the far cliffs, at the level of the islands: their tops peek over the ruins in play and the
+      // whole chain shows when the camera is zoomed out (the tactical camera looks down: the sky is never in frame)
+      const ang = -Math.PI * 0.86 + (i / (n - 1)) * Math.PI * 0.72 + (r() - 0.5) * 0.1;
+      const x = Math.cos(ang) * (46 + r() * 36), z = mid - 14 - (16 + r() * 28), y = -3 + r() * 6, rad = 3 + r() * 3.5;
+      const parts: Part[] = [], glows: Part[] = [];
+      parts.push({ g: cyl(rad, rad * 0.9, 1.2, 10), c: 0x4a4656, p: [0, 0, 0] }, { g: cyl(rad * 1.03, rad * 1.03, 0.35, 10), c: 0x3a5a30, p: [0, 0.6, 0] });
+      parts.push({ g: cone(rad * 0.92, rad * (1.7 + r() * 0.6), 8), c: 0x363240, p: [0, -0.6 - rad * 0.85, 0], r: [Math.PI, 0, 0] });
+      for (let k = 0; k < 4; k++) { const h = 1.6 + r() * 2.2; parts.push({ g: cone(h * 0.45, h * 1.5, 6), c: mix(0x1e3a28, 0x2c5a34, r()), p: [(r() - 0.5) * rad * 1.1, 0.75 + h * 0.75, (r() - 0.5) * rad * 1.1] }); }
+      if (r() < 0.7) { const th = 2.5 + r() * 3; parts.push({ g: cyl(0.5, 0.6, th, 7), c: 0x5a5866, p: [(r() - 0.5) * rad * 0.6, 0.75 + th / 2, (r() - 0.5) * rad * 0.6] }); glows.push({ g: oct(0.3), c: i % 2 ? 0x6ad8ff : 0xc08aff, p: [0, 0.75 + th + 0.5, 0], s: [0.7, 1.5, 0.7] }); }
+      const group = new THREE.Group();
+      group.position.set(x, y, z);
+      const m = new THREE.Mesh(mergeParts(parts), propMat); group.add(m);
+      if (glows.length) group.add(mergedGlow(glows));
+      // waterfall pouring off the edge facing the arenas, animated by the shared texture offset
+      const fall = new THREE.Mesh(scaleUV(new THREE.PlaneGeometry(rad * 0.45, rad * 2.4), 1, 2.5), fallMat);
+      fall.position.set(rad * 0.35, -0.3 - rad * 1.2, rad * 0.92); fall.renderOrder = 2;
+      group.add(fall);
+      scene.add(group);
+      const ph = r() * 6.28, bob = 0.5 + r() * 0.5;
+      updaters.push((_dt, t) => { group.position.y = y + Math.sin(t * 0.25 + ph) * bob; group.rotation.y = Math.sin(t * 0.07 + ph) * 0.03; });
+    }
+  }
 
   const laneDecor = new Map<string, { f: FactionId; group: THREE.Group; update: (dt: number, t: number) => void }>();
   const env: Env = {

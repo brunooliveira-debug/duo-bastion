@@ -1,5 +1,6 @@
 // Résonance DUO — gauge bookkeeping (pure state, no combat helpers: the effects live in combat.ts → fireResonance).
 import { RESO_MAX, duoAbility, DuoAbility } from '../data/resonance';
+import { BLESS, blessingLv } from '../data/blessings';
 import { anomalyOf, GameState } from './state';
 
 /** Signature ability of a team (pair of its two armies). */
@@ -13,6 +14,7 @@ export function addReso(s: GameState, team: number, pts: number, pid: number) {
   const t = s.teams[team];
   if (!t || pts <= 0 || s.ending > 0 || s.phase === 'ended') return;
   if (anomalyOf(s, team) === 'resonance_instable') pts *= 2;
+  pts *= 1 + BLESS.harmonie * blessingLv(t, 'harmonie'); // blessing "Harmonie"
   const before = t.reso;
   t.reso = Math.min(RESO_MAX, t.reso + pts);
   const p = s.players[pid];

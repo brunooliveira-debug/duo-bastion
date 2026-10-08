@@ -82,6 +82,15 @@ describe('duo multiplayer (host-authoritative)', () => {
     expect(ents.length).toBeGreaterThan(10);
     await until(() => host.state!.phase === 'build' && host.state!.wave === 2, 20000);
     await until(() => guest.view.meta!.wave === 2);
+    // v0.7 blessing draft over the network: wave 2 is the host's turn; the guest is told so and sees the pick
+    const offer = host.state!.teams[0].blessingOffer!;
+    expect(offer.picker).toBe(0);
+    await until(() => !!guest.view.meta!.teams[0].blessingOffer);
+    const nErr = errors.length;
+    guest.send({ c: 'bless', id: offer.ids[0] });
+    await until(() => errors.length > nErr && /tour/.test(errors[errors.length - 1]));
+    expect(host.send({ c: 'bless', id: offer.ids[0] })).toBeNull();
+    await until(() => guest.view.meta!.teams[0].blessings.length === 1);
     clearInterval(pump);
     host.close(); guest.close();
   }, 40000);

@@ -3,9 +3,10 @@ import type { Ability, AttackType, Branch, DefenseType, FactionId } from '../dat
 import type { RuneTile } from '../data/synergies';
 import type { ModuleId } from '../data/modules';
 import type { AnomalyId, RiftReward } from '../data/tactics';
+import type { BlessingId } from '../data/blessings';
 import { CORE, ECONOMY, GRID, TIMING } from '../data/economy';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export type Phase = 'build' | 'combat' | 'resolution' | 'ended';
 export type GameMode = 'vsai' | 'survival' | 'duel';
@@ -145,6 +146,19 @@ export interface Proposal {
 }
 export interface ResoCast { by: number; fireAt: number; sync: boolean; syncBy: number }
 
+/** v0.7: blessing draft of the current preparation (3 ids, one picker). */
+export interface BlessingOffer { ids: BlessingId[]; picker: number }
+/**
+ * v0.7 "Sceaux jumeaux": a major boss arrives behind a seal shield. Each player of the team arms their seal (SCEAU
+ * button in combat); armed within SEAL_WINDOW seconds of each other, the seals break: the shield shatters and the boss
+ * is stunned. armed[slot] = combat time of the press (-99 = never). Never blocks the game: the shield simply absorbs.
+ */
+export interface SealState { boss: number; armed: [number, number]; broken: boolean }
+export const SEAL_WINDOW = 3;
+export const SEAL_SHIELD = 0.3; // fraction of the boss max HP
+export const SEAL_STUN = 2.5; // seconds (bosses halve stuns: the sim asks for twice that)
+export const SEAL_RESO = 12; // Résonance charge for a broken seal (co-op!)
+
 export interface TeamState {
   id: number;
   core: CoreState;
@@ -162,6 +176,10 @@ export interface TeamState {
   anomaly: { id: AnomalyId; until: number } | null;
   anomalyOffer: AnomalyId[] | null;
   bossBoost: number; // Fortune du Bastion: next boss HP multiplier
+  // v0.7
+  blessings: BlessingId[]; // permanent team upgrades picked between the waves (duplicates = levels)
+  blessingOffer: BlessingOffer | null;
+  seal: SealState | null; // twin seals of the current boss wave
 }
 
 export interface Ent {
@@ -290,7 +308,11 @@ export type GameEvent =
   | { t: 'anomaly'; team: number; k: 'offer' | 'vote' | 'pick'; id: string; pid: number }
   | { t: 'rift'; pid: number; k: 'open' | 'closed' | 'faded'; reward: string; arena: number; x: number; z: number }
   | { t: 'help'; pid: number; kind: string; arena: number; x: number; z: number }
-  | { t: 'portal'; arena: number; x: number; z: number; x2: number; z2: number };
+  | { t: 'portal'; arena: number; x: number; z: number; x2: number; z2: number }
+  // v0.7
+  | { t: 'bless'; team: number; k: 'offer' | 'pick'; id: string; pid: number }
+  | { t: 'seal'; team: number; k: 'open' | 'arm' | 'break'; pid: number; x: number; z: number; arena: number }
+  | { t: 'ghost'; arena: number; x: number; z: number };
 
 export interface HumanSlot { name: string; faction?: FactionChoice }
 
@@ -395,7 +417,20 @@ export function newTeam(id: number): TeamState {
     id, core: newCore(), alive: true, dmgWaves: 0, dmgSends: 0,
     reso: 0, resoCast: null, resoUses: 0, resoFullSeen: false, syncWave: 0, lastCast: null,
     modules: [null, null, null], proposal: null, anomaly: null, anomalyOffer: null, bossBoost: 1,
+    blessings: [], blessingOffer: null, seal: null,
   };
+}
+
+/** Members of a team: slot 0 first. */
+export function teamMembers(s: GameState, team: number) { return s.players.filter(p => p.team === team).sort((a, b) => a.slot - b.slot); }
+
+/** Who picks the blessing before wave `wave`: humans take turns; a human always picks over an AI partner. */
+export function blessingPicker(s: GameState, team: number, wave = s.wave) {
+  const members = teamMembers(s, team);
+  const humans = members.filter(p => !p.isAI);
+  if (humans.length === 1) return humans[0].pid;
+  if (humans.length >= 2) return humans[wave % humans.length].pid;
+  return members[0]?.pid ?? -1;
 }
 
 export function teamCount(s: GameState) { return s.settings.mode === 'survival' ? 1 : 2; }

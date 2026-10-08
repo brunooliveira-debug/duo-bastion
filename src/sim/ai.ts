@@ -10,6 +10,7 @@ import { FACTION_POWERS, POWER_UP_COST, powerUnlock } from '../data/powers';
 import { MODULES, moduleCost, ModuleId } from '../data/modules';
 import { RESO_MAX } from '../data/resonance';
 import type { AnomalyId } from '../data/tactics';
+import type { BlessingId } from '../data/blessings';
 import { zoneOf, RuneKind } from '../data/synergies';
 import { applyCommand, armyValue, buildPrice, riftThisWave, sameSends, upgradePrice, workerCost } from './game';
 import { fightRatio, groupStrength, recommendedValue, waveGroup } from './balance';
@@ -108,7 +109,17 @@ const ANOMALY_PREF: Record<Personality, AnomalyId[]> = {
   balanced: ['tempete', 'arsenal', 'veille', 'resonance_instable', 'rune_instable', 'eclipse', 'pacte', 'fortune', 'contrat', 'sacrifice'],
 };
 
+const BLESSING_PREF: Record<Personality, BlessingId[]> = {
+  defensive: ['remparts', 'phalange', 'egide', 'coeur', 'releve', 'givre', 'discipline', 'cadence', 'trempe', 'intendance', 'harmonie', 'primes', 'chasse', 'venin', 'rebonds', 'moisson'],
+  economic: ['intendance', 'primes', 'moisson', 'cadence', 'harmonie', 'trempe', 'remparts', 'rebonds', 'egide', 'phalange', 'chasse', 'venin', 'discipline', 'coeur', 'givre', 'releve'],
+  aggressive: ['trempe', 'chasse', 'venin', 'rebonds', 'cadence', 'primes', 'givre', 'harmonie', 'discipline', 'releve', 'egide', 'phalange', 'moisson', 'intendance', 'coeur', 'remparts'],
+  balanced: ['cadence', 'trempe', 'rebonds', 'egide', 'primes', 'remparts', 'phalange', 'harmonie', 'venin', 'intendance', 'chasse', 'givre', 'discipline', 'coeur', 'releve', 'moisson'],
+};
+
 function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) {
+  // v0.7 blessing draft: the AI picks when it is its turn (a human partner always picks over it)
+  const offer = s.teams[p.team].blessingOffer;
+  if (offer && offer.picker === p.pid) applyCommand(s, p.pid, { c: 'bless', id: BLESSING_PREF[p.personality].find(b => offer.ids.includes(b)) ?? offer.ids[0] });
   // passive power pick
   if (p.powerChoice) {
     const prefs: Record<string, string[]> = {
@@ -135,11 +146,16 @@ function think(s: GameState, p: PlayerState, prm: DiffParams, spendAll = false) 
   const wd = getWave(s.wave);
   const count = wd.groups.reduce((t, g) => t + g.count, 0);
   const fast = wd.groups.reduce((t, g) => t + ENEMIES[g.enemy].moveSpeed * g.count, 0) / Math.max(1, count) >= 3.2;
+  // v0.7: breachers ignore the front line — only reach, slows and interceptors stop them; summoners hide behind
+  const breach = wd.groups.some(g => ENEMIES[g.enemy].abilities.some(a => a.kind === 'breach'));
+  const kiters = wd.groups.some(g => ENEMIES[g.enemy].abilities.some(a => a.kind === 'kite'));
   const fit = (id: string) => {
     const u = UNITS[id];
     let k = 1;
     if (count >= 14 && u.abilities.some(a => a.kind === 'splash' || a.kind === 'poison' || a.kind === 'chain' || a.kind === 'novaPulse' || a.kind === 'slowPulse')) k *= 1.35;
     if (fast && (u.range > 3 || u.abilities.some(a => a.kind === 'slowOnHit' || a.kind === 'slowPulse' || a.kind === 'interceptor' || a.kind === 'taunt'))) k *= 1.2;
+    if (breach && (u.range > 3 || u.abilities.some(a => a.kind === 'slowOnHit' || a.kind === 'slowPulse' || a.kind === 'interceptor'))) k *= 1.3;
+    if (kiters && (u.range > 4 || u.abilities.some(a => a.kind === 'dash'))) k *= 1.15;
     return k;
   };
 
@@ -330,6 +346,18 @@ export function aiCombat(s: GameState) {
   // Résonance: AI-only teams trigger it when it matters; an AI partner synchronises the human's activation
   for (const t of s.teams) {
     const members = s.players.filter(p => p.team === t.id);
+    // v0.7 twin seals: an AI partner answers a human's seal at once; an all-AI team breaks them once the boss is engaged
+    if (t.seal && !t.seal.broken) {
+      const humans = members.filter(p => !p.isAI);
+      const boss = s.ents.find(e => e.id === t.seal!.boss && !e.dead);
+      if (boss) for (const p of members) {
+        if (!p.isAI) continue;
+        const prm = DIFF[difficultyOf(s, p)];
+        const humanArmed = humans.some(h => s.combatTime - t.seal!.armed[h.slot] < 2.6);
+        const engaged = !humans.length && boss.hp < boss.maxHp * 0.92;
+        if ((humanArmed && rand(s) < prm.powerSkill + 0.5) || engaged) applyCommand(s, p.pid, { c: 'seal' });
+      }
+    }
     if (t.resoCast) {
       const mate = members.find(p => p.pid !== t.resoCast!.by && p.isAI);
       if (mate && !t.resoCast.sync && rand(s) < DIFF[difficultyOf(s, mate)].powerSkill + 0.35) applyCommand(s, mate.pid, { c: 'reso' });

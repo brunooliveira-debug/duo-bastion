@@ -17,11 +17,12 @@ import {
 } from '../data/tactics';
 import type { Branch, FactionId } from '../data/types';
 import type { RuneKind, RuneTile } from '../data/synergies';
+import { BLESS, BLESSINGS, BLESSING_IDS, BLESSING_CHOICES, RARE_WAVE, BlessingId, blessingLv, blessingWave } from '../data/blessings';
 import {
   DT, GameSettings, GameState, PlayerState, TeamState, STATE_VERSION, newStats, newTeam, teamCount, raiderTarget, opponents, humanPlayers, humanPid,
-  Personality, partnerOf, moduleLv, anomalyOf, journal, type UndoStep } from './state';
+  Personality, partnerOf, moduleLv, anomalyOf, journal, blessingPicker, type UndoStep } from './state';
 import { rand, shuffle, worldRand, worldPick } from './rng';
-import { applyOrder, castPower, combatTick, enemiesAlive, fireResonance, hitCore, spawnEnemies, spawnRift, spawnUnits, SpawnSpec } from './combat';
+import { applyOrder, armSeal, castPower, combatTick, enemiesAlive, fireResonance, hitCore, openSeals, spawnEnemies, spawnRift, spawnUnits, SpawnSpec } from './combat';
 import { addReso, teamAbility } from './resonance';
 import { runAI, aiCombat } from './ai';
 
@@ -44,6 +45,8 @@ export type Command =
   | { c: 'order'; order: OrderId; x?: number; z?: number }
   | { c: 'anomaly'; id: AnomalyId }
   | { c: 'rift'; bid: number; on: boolean }
+  | { c: 'bless'; id: BlessingId }
+  | { c: 'seal' }
   | { c: 'reroll' }
   | { c: 'ready'; value: boolean }
   | { c: 'power'; power: string }
@@ -446,6 +449,19 @@ export function applyCommand(s: GameState, pid: number, cmd: Command): string | 
       b.rift = !!cmd.on;
       return null;
     }
+    case 'bless': {
+      const t = s.teams[p.team];
+      if (!building) return 'Les bénédictions se choisissent pendant la préparation.';
+      if (!t.blessingOffer) return 'Aucune bénédiction à choisir.';
+      if (t.blessingOffer.picker !== pid) return `C'est au tour de ${s.players[t.blessingOffer.picker]?.name ?? 'ton partenaire'} de choisir.`;
+      if (!t.blessingOffer.ids.includes(cmd.id)) return 'Bénédiction indisponible.';
+      applyBlessing(s, p.team, cmd.id, pid);
+      return null;
+    }
+    case 'seal': {
+      if (s.phase !== 'combat') return 'Les sceaux s\'activent pendant le combat.';
+      return armSeal(s, p);
+    }
     case 'reroll':
       return 'Ton armée est fixée par ta faction : pas de relance.';
     case 'ready': {
@@ -599,6 +615,40 @@ function applyAnomaly(s: GameState, team: number, id: AnomalyId) {
   s.events.push({ t: 'anomaly', team, k: 'pick', id, pid: -1 });
 }
 
+// ---------------------------------------------------------------- v0.7: blessings (draft between the waves)
+
+/** Offer 3 blessings to every team (world roll on the team's own pool: what it already owns shapes what it can get). */
+function offerBlessings(s: GameState) {
+  for (const t of s.teams) {
+    const pool = BLESSING_IDS.filter(id => blessingLv(t, id) < BLESSINGS[id].max && (!BLESSINGS[id].rare || s.wave >= RARE_WAVE));
+    const ids = worldPick(s.seed, pool, BLESSING_CHOICES, s.wave, 70 + t.id);
+    if (!ids.length) { t.blessingOffer = null; continue; }
+    t.blessingOffer = { ids, picker: blessingPicker(s, t.id) };
+    s.events.push({ t: 'bless', team: t.id, k: 'offer', id: ids.join(','), pid: t.blessingOffer.picker });
+  }
+}
+
+export function applyBlessing(s: GameState, team: number, id: BlessingId, pid: number) {
+  const t = s.teams[team];
+  t.blessings.push(id);
+  t.blessingOffer = null;
+  if (id === 'remparts') {
+    const add = Math.round(t.core.maxHp * BLESS.remparts);
+    t.core.maxHp += add; t.core.hp = Math.min(t.core.maxHp, t.core.hp + add);
+  }
+  journal(s, 'bless', pid, id);
+  s.events.push({ t: 'bless', team, k: 'pick', id, pid });
+}
+
+/** The wave starts with an offer still open: fate decides (world roll, same for everyone). */
+function resolveBlessings(s: GameState) {
+  for (const t of s.teams) {
+    const o = t.blessingOffer;
+    if (!o) continue;
+    applyBlessing(s, t.id, o.ids[Math.floor(worldRand(s.seed, s.wave, 80 + t.id) * o.ids.length)], -1);
+  }
+}
+
 function debugCommand(s: GameState, p: PlayerState, action: string): string | null {
   switch (action) {
     case 'gold': p.gold += 500; break;
@@ -612,6 +662,7 @@ function debugCommand(s: GameState, p: PlayerState, action: string): string | nu
     case 'event': s.waveEvent = WAVE_EVENTS[(WAVE_EVENTS.findIndex(e => e.id === s.waveEvent) + 1) % WAVE_EVENTS.length].id; break;
     case 'rift': s.rift = { reward: 'gold', hpMul: 1, spawnMul: 1, rewardMul: 1 }; break;
     case 'anomaly': for (const t of s.teams) t.anomalyOffer = worldPick(s.seed, ANOMALY_IDS, 3, s.wave, 4, s.tick); break;
+    case 'bless': offerBlessings(s); break;
     default: return 'Action debug inconnue.';
   }
   return null;
@@ -657,6 +708,7 @@ function startCombat(s: GameState) {
   // pending choices are settled now
   for (const p of s.players) if (p.powerChoice) applyCommand(s, p.pid, { c: 'power', power: p.powerChoice[0] });
   for (const t of s.teams) if (t.anomalyOffer) tryResolveAnomaly(s, t.id, true);
+  resolveBlessings(s);
   for (const t of s.teams) {
     const c = t.core;
     c.shield = MOD.egide[moduleLv(t, 'egide')] * (1 + 0.06 * (s.wave - 1));
@@ -674,7 +726,7 @@ function startCombat(s: GameState) {
     p.waveHelpKills = 0;
     p.souls = 0;
     p.riftReward = false;
-    p.orders = ORDER_CHARGES + (anomalyOf(s, p.team) === 'veille' ? 1 : 0);
+    p.orders = ORDER_CHARGES + (anomalyOf(s, p.team) === 'veille' ? 1 : 0) + BLESS.discipline * blessingLv(s.teams[p.team], 'discipline');
     p.orderCd = 0;
     const h = hexes.get(p.pid) ?? [];
     p.fogUntil = h.includes('brouillard') ? 10 : 0;
@@ -707,6 +759,7 @@ function startCombat(s: GameState) {
   for (const [to, list] of hexes) s.events.push({ t: 'hexed', to, list });
   for (const p of s.players) p.curseQueue = [];
   for (const e of s.ents) if (e.enemy && e.boss) { s.events.push({ t: 'bossIn', arena: e.arena, id: e.defId, eid: e.id }); s.teams[e.arena].bossBoost = 1; }
+  openSeals(s);
   s.events.push({ t: 'combat' });
 }
 
@@ -745,6 +798,7 @@ function endCombat(s: GameState) {
     const lost = start ? Math.round(start.hp[t.id] - t.core.hp) : 0;
     if (lost > 0) journal(s, 'core', t.id, lost, boss ? 1 : 0);
     else if (boss) journal(s, 'bossdown', t.id);
+    t.seal = null;
   }
   s.phase = 'resolution';
   s.timer = TIMING.resolution;
@@ -812,7 +866,7 @@ function startBuild(s: GameState) {
   }
   // payouts
   for (const p of s.players) {
-    let g = p.income + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')];
+    let g = p.income + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')] + BLESS.intendance * blessingLv(s.teams[p.team], 'intendance');
     if (p.leakedThisWave === 0) g += ECONOMY.waveClearBonus;
     p.gold += g;
     p.stats.goldEarned += g;
@@ -842,6 +896,8 @@ function startBuild(s: GameState) {
     const offer = worldPick(s.seed, ANOMALY_IDS, 3, s.wave, 4);
     for (const t of s.teams) { t.anomalyOffer = offer.slice(); s.events.push({ t: 'anomaly', team: t.id, k: 'offer', id: offer.join(','), pid: -1 }); }
   }
+  // v0.7: blessing draft (never on an anomaly wave: one decision at a time)
+  if (blessingWave(s.settings.mode, s.settings.totalWaves, s.wave, !!s.settings.tutorial)) offerBlessings(s);
   s.events.push({ t: 'wave', n: s.wave, boss: !!w.boss });
   if (s.wave === POWER_WAVE(s)) {
     for (const p of s.players) p.powerChoice = shuffle(s, POWERS.map(x => x.id)).slice(0, 3);
@@ -908,7 +964,7 @@ export function drainEvents(s: GameState) {
 /** Compact hash of the deterministic part of the state (reproducibility tests, desync checks). */
 export function stateHash(s: GameState): number {
   const parts = [s.wave, s.tick, Math.round(s.time * 100), s.phase, s.rng, s.nextId,
-    ...s.teams.flatMap(t => [Math.round(t.core.hp), Math.round(t.reso * 10), t.modules.map(m => (m ? m.id + m.lv : '-')).join('')]),
+    ...s.teams.flatMap(t => [Math.round(t.core.hp), Math.round(t.reso * 10), t.modules.map(m => (m ? m.id + m.lv : '-')).join(''), t.blessings.join(',')]),
     ...s.players.flatMap(p => [Math.round(p.gold), Math.round(p.ether * 10), p.builds.map(b => `${b.defId}${b.level}${b.col}${b.row}`).join('')]),
     ...s.ents.map(e => `${e.defId}${Math.round(e.x * 10)}${Math.round(e.z * 10)}${Math.round(e.hp)}`)];
   let h = 2166136261;

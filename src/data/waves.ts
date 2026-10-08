@@ -9,21 +9,21 @@ export const WAVES: WaveDef[] = [
   { n: 3, name: 'Galop Fêlé', groups: [{ enemy: 'coureur', count: 8 }, { enemy: 'alpha_coureur', count: 1 }], hpMul: 1.1, dmgMul: 1, danger: 'MINI-BOSS rapide : il file vers le Core.', boss: true },
   { n: 4, name: 'Carapaces', groups: [{ enemy: 'cuirasse', count: 6 }], hpMul: 1.1, dmgMul: 1, danger: 'Blindés : préférez l\'Énergie.' },
   { n: 5, name: 'La Brute', groups: [{ enemy: 'rampelin', count: 8 }, { enemy: 'brute', count: 1 }], hpMul: 1.0, dmgMul: 1, danger: 'MINI-BOSS : frappe en zone, s\'enrage.', boss: true },
-  { n: 6, name: 'Tirailleurs', groups: [{ enemy: 'rampelin', count: 5 }, { enemy: 'tireur', count: 8 }], hpMul: 1.2, dmgMul: 1.1, danger: 'Attaques à distance sur vos arrières.' },
+  { n: 6, name: 'Tirailleurs', groups: [{ enemy: 'rampelin', count: 5 }, { enemy: 'tireur', count: 8 }, { enemy: 'brecheur', count: 1 }], hpMul: 1.2, dmgMul: 1.1, danger: 'Tireurs sur vos arrières, et des BRÉCHEURS qui ignorent vos unités : visez-les.' },
   { n: 7, name: 'Fêlures', groups: [{ enemy: 'cuirasse', count: 3 }, { enemy: 'mage_fele', count: 7 }], hpMul: 1.25, dmgMul: 1.15, danger: 'Sorts de zone : espacez vos unités.' },
   { n: 8, name: 'Bêtes Runiques', groups: [{ enemy: 'bete_runique', count: 5 }, { enemy: 'alpha_runique', count: 1 }], hpMul: 1.3, dmgMul: 1.2, danger: 'MINI-BOSS : se régénère. Concentrez les dégâts.', boss: true },
-  { n: 9, name: 'Assaut Mixte', groups: [{ enemy: 'coureur', count: 8 }, { enemy: 'tireur', count: 7 }], hpMul: 1.5, dmgMul: 1.3, danger: 'Rapides + tireurs.' },
+  { n: 9, name: 'Assaut Mixte', groups: [{ enemy: 'coureur', count: 8 }, { enemy: 'tireur', count: 7 }, { enemy: 'brecheur', count: 2 }], hpMul: 1.5, dmgMul: 1.3, danger: 'Rapides + tireurs + brécheurs : de la portée et des intercepteurs.' },
   { n: 10, name: 'Le Colosse Fêlé', groups: [{ enemy: 'essaim', count: 10 }, { enemy: 'boss_colosse', count: 1 }], hpMul: 1, dmgMul: 1, danger: 'BOSS : bouclier qui se recharge.', boss: true },
   { n: 11, name: 'Marée d\'Essaims', groups: [{ enemy: 'essaim', count: 34 }], hpMul: 1.9, dmgMul: 1.5, danger: 'Submersion : il faut de la zone.' },
   { n: 12, name: 'Mur de Basalte', groups: [{ enemy: 'cuirasse', count: 9 }, { enemy: 'gardien_basalte', count: 1 }], hpMul: 1.8, dmgMul: 1.45, danger: 'MINI-BOSS : résiste au Physique.', boss: true },
-  { n: 13, name: 'Chœur Fêlé', groups: [{ enemy: 'mage_fele', count: 10 }, { enemy: 'bete_runique', count: 4 }], hpMul: 2.0, dmgMul: 1.6, danger: 'Mystiques + zone.' },
+  { n: 13, name: 'Chœur Fêlé', groups: [{ enemy: 'mage_fele', count: 10 }, { enemy: 'bete_runique', count: 4 }, { enemy: 'invocateur', count: 2 }], hpMul: 2.0, dmgMul: 1.6, danger: 'Mystiques + zone. Des INVOCATEURS restent en retrait et appellent des nuées : longue portée ou assassins.' },
   { n: 14, name: 'Double Brute', groups: [{ enemy: 'brute', count: 2 }, { enemy: 'coureur', count: 8 }], hpMul: 1.6, dmgMul: 1.4, danger: 'Deux mini-boss qui s\'enragent.', boss: true },
   { n: 15, name: 'La Reine-Essaim', groups: [{ enemy: 'essaim', count: 16 }, { enemy: 'reine_essaim', count: 1 }], hpMul: 1.1, dmgMul: 1.1, danger: 'BOSS MAJEUR : pond des moucherons.', boss: true },
-  { n: 16, name: 'Stampede', groups: [{ enemy: 'coureur', count: 24 }], hpMul: 2.6, dmgMul: 1.9, danger: 'Très rapides et nombreux.' },
+  { n: 16, name: 'Stampede', groups: [{ enemy: 'coureur', count: 24 }, { enemy: 'brecheur', count: 3 }], hpMul: 2.6, dmgMul: 1.9, danger: 'Très rapides et nombreux, brécheurs en tête.' },
   { n: 17, name: 'Artillerie', groups: [{ enemy: 'cuirasse', count: 4 }, { enemy: 'tireur', count: 11 }, { enemy: 'ingenieur_fele', count: 1 }], hpMul: 2.5, dmgMul: 1.9, danger: 'MINI-BOSS : résiste aux explosions, lance des drones.', boss: true },
-  { n: 18, name: 'Horde Runique', groups: [{ enemy: 'bete_runique', count: 14 }], hpMul: 2.8, dmgMul: 2.1, danger: 'Masse organique.' },
+  { n: 18, name: 'Horde Runique', groups: [{ enemy: 'bete_runique', count: 14 }, { enemy: 'chaman', count: 2 }], hpMul: 2.8, dmgMul: 2.1, danger: 'Masse organique soignée par des chamans : abattez-les d\'abord.' },
   { n: 19, name: 'Brutes en Marche', groups: [{ enemy: 'brute', count: 4 }], hpMul: 2.3, dmgMul: 1.8, danger: 'Quatre mini-boss.', boss: true },
-  { n: 20, name: 'L\'Armée Fêlée', groups: [{ enemy: 'rampelin', count: 12 }, { enemy: 'cuirasse', count: 6 }, { enemy: 'mage_fele', count: 6 }, { enemy: 'tireur', count: 6 }], hpMul: 3.2, dmgMul: 2.3, danger: 'Armée massive de tous types.' },
+  { n: 20, name: 'L\'Armée Fêlée', groups: [{ enemy: 'rampelin', count: 12 }, { enemy: 'cuirasse', count: 6 }, { enemy: 'mage_fele', count: 6 }, { enemy: 'tireur', count: 6 }, { enemy: 'invocateur', count: 2 }, { enemy: 'brecheur', count: 3 }], hpMul: 3.2, dmgMul: 2.3, danger: 'Armée massive de tous types, invocateurs et brécheurs compris.' },
   { n: 21, name: 'Le Dissonant Primordial', groups: [{ enemy: 'brute', count: 2 }, { enemy: 'primordial', count: 1 }], hpMul: 1.4, dmgMul: 1.3, danger: 'BOSS FINAL : régénère et s\'enrage.', boss: true },
 ];
 
@@ -34,7 +34,7 @@ export const WAVES: WaveDef[] = [
 export const WAVE_DIFF = [1.46, 1.83, 1.9, 1.75, 2.64, 3.6, 1.9, 2.2, 3.6, 1.05, 4.6, 1.05, 2.2, 4.2, 1.6, 4.4, 1.1, 2.5, 2.74, 2.3, 0.6];
 const ENDLESS_DIFF = 2.3;
 
-const ENDLESS_POOL = ['rampelin', 'essaim', 'coureur', 'cuirasse', 'tireur', 'mage_fele', 'bete_runique'];
+const ENDLESS_POOL = ['rampelin', 'essaim', 'coureur', 'cuirasse', 'tireur', 'mage_fele', 'bete_runique', 'brecheur', 'invocateur'];
 const ENDLESS_BOSSES = ['brute', 'alpha_runique', 'gardien_basalte', 'ingenieur_fele'];
 
 /**
