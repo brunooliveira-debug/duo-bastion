@@ -321,7 +321,7 @@ export type GameEvent =
   | { t: 'seal'; team: number; k: 'open' | 'arm' | 'break'; pid: number; x: number; z: number; arena: number }
   | { t: 'ghost'; arena: number; x: number; z: number };
 
-export interface HumanSlot { name: string; faction?: FactionChoice }
+export interface HumanSlot { name: string; faction?: FactionChoice; /** v0.7.3 mixed company (validated by the host) */ roster?: string[] | null }
 
 export interface GameSettings {
   mode: GameMode;

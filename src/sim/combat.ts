@@ -1192,15 +1192,15 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
   const hurt = (t: Ent, dmg: number, o: DmgOpts = {}) => applyDamage(s, caster, t, dmg, o);
   const strongest = (n: number) => foes.slice().sort((a, b) => b.hp - a.hp).slice(0, n);
   switch (def.id) {
-    case 'freeze': for (const e of foes) stun(s, e, 1.6); break;
+    case 'freeze': for (const e of foes) stun(s, e, 2.6); break;
     case 'starfall':
-      for (const e of strongest(5)) { hurt(e, 45 * m); e.slowUntil = s.time + 3; e.slowPct = Math.max(e.slowPct, 0.5); s.events.push({ t: 'pulse', arena: p.team, x: e.x, z: e.z, r: 1, fx: 'starfall' }); }
+      for (const e of strongest(5)) { hurt(e, 45 * m); e.slowUntil = s.time + 5; e.slowPct = Math.max(e.slowPct, 0.5); s.events.push({ t: 'pulse', arena: p.team, x: e.x, z: e.z, r: 1, fx: 'starfall' }); }
       break;
     case 'comet':
       for (const e of foes) if (dist2(e, f) <= 7.3) { hurt(e, 110 * m, { splash: true }); stun(s, e, 0.8); }
       s.events.push({ t: 'explode', arena: p.team, x: f.x, z: f.z, r: 3 });
       break;
-    case 'overdrive': for (const u of mine) { u.hasteUntil = s.combatTime + 6; u.hastePct = Math.max(u.hastePct, 0.6 * Math.min(1.6, POWER_LEVEL_FX[p.powerLv[slot]])); } break;
+    case 'overdrive': for (const u of mine) { u.hasteUntil = s.combatTime + 9; u.hastePct = Math.max(u.hastePct, 0.6 * Math.min(1.6, POWER_LEVEL_FX[p.powerLv[slot]])); } break;
     case 'missiles':
       for (let i = 0; i < 10 && foes.length; i++) {
         const t = foes[Math.floor(rand(s) * foes.length)];
@@ -1208,17 +1208,17 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
         s.events.push({ t: 'pulse', arena: p.team, x: t.x, z: t.z, r: 1.1, fx: 'missile' });
       }
       break;
-    case 'emp': for (const e of foes) { stun(s, e, 2.5); e.shield = 0; } break;
+    case 'emp': for (const e of foes) { stun(s, e, 3.5); e.shield = 0; } break;
     case 'heal': {
       const k = 0.35 * POWER_LEVEL_FX[p.powerLv[slot]];
       const targets = assist ? s.ents.filter(e => !e.enemy && !e.dead && e.arena === p.team) : mine;
       for (const u of targets) { u.hp = Math.min(u.maxHp, u.hp + u.maxHp * k); s.events.push({ t: 'heal', id: u.id }); }
       break;
     }
-    case 'roots': for (const e of foes) { stun(s, e, 2.5); poisonOn(s, caster, e, 6 * m, 4); } break;
+    case 'roots': for (const e of foes) { stun(s, e, 3.5); poisonOn(s, caster, e, 6 * m, 6); } break;
     case 'forest': {
       const c = cellCenter(lane.slot, 1, 3);
-      const t = spawnToken(s, p, 'sylvain', c.x, f.z * 0.5, m, 20);
+      const t = spawnToken(s, p, 'sylvain', c.x, f.z * 0.5, m, 30);
       t.x = (t.x + f.x) / 2;
       break;
     }
@@ -1231,13 +1231,13 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
       const d = laneDir(lane.slot);
       for (const e of foes) {
         if (!e.leaked) e.x = Math.max(-LANE.spawnX, Math.min(LANE.spawnX, e.x - d * 4.5));
-        e.slowUntil = s.time + 4; e.slowPct = Math.max(e.slowPct, 0.55);
+        e.slowUntil = s.time + 6; e.slowPct = Math.max(e.slowPct, 0.55);
       }
       break;
     }
-    case 'krakenCall': { const c = cellCenter(lane.slot, 0, 3); spawnToken(s, p, 'tentacule', c.x, f.z * 0.6, m, 12); break; }
-    case 'fervor': for (const u of mine) { u.hasteUntil = s.combatTime + 6; u.hastePct = Math.max(u.hastePct, 0.4); u.buffUntil = s.combatTime + 6; u.buffDmg = 0.2 * POWER_LEVEL_FX[p.powerLv[slot]]; } break;
-    case 'eruption': for (const e of foes) burnOn(s, caster, e, 6 * m, 5); break;
+    case 'krakenCall': { const c = cellCenter(lane.slot, 0, 3); spawnToken(s, p, 'tentacule', c.x, f.z * 0.6, m, 18); break; }
+    case 'fervor': for (const u of mine) { u.hasteUntil = s.combatTime + 9; u.hastePct = Math.max(u.hastePct, 0.4); u.buffUntil = s.combatTime + 9; u.buffDmg = 0.2 * POWER_LEVEL_FX[p.powerLv[slot]]; } break;
+    case 'eruption': for (const e of foes) burnOn(s, caster, e, 6 * m, 8); break;
     case 'sunstrike': {
       const t = strongest(1)[0];
       if (t) {
@@ -1248,11 +1248,11 @@ export function castPower(s: GameState, p: PlayerState, slot: number) {
       }
       break;
     }
-    case 'veil': for (const u of mine) { u.veilUntil = s.combatTime + 5; u.ambush = Math.max(u.ambush, 0.5); } break;
+    case 'veil': for (const u of mine) { u.veilUntil = s.combatTime + 8; u.ambush = Math.max(u.ambush, 0.5); } break;
     case 'harvest': {
       const c = cellCenter(lane.slot, 2, 3);
       for (let i = 0; i < 5; i++) spawnToken(s, p, 'squelette', c.x, (i - 2) * 1.3, m);
-      for (const u of mine) { u.lsUntil = s.combatTime + 8; u.lsPct = 0.3; }
+      for (const u of mine) { u.lsUntil = s.combatTime + 12; u.lsPct = 0.3; }
       break;
     }
     case 'doom':

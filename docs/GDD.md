@@ -115,6 +115,11 @@ src/save      SaveSystem (profil, préférences, records, défi du jour)
 - C'est une commande comme les autres : l'hôte la valide, la partie reste identique pour les deux joueurs.
 - Autres corrections possibles : glisser une unité posée pour la déplacer ; appui long → Vendre (100 % remboursé si posée pendant cette vague).
 
+## 16 quater. v0.7.3 : Codex et Compagnie mixte
+- **Unités +10 %** (`UNIT_POWER` dans `unitStats`) et **pouvoirs de commandant plus longs** (durées dans `castPower`, textes dans `powers.ts`).
+- **Codex** (`src/ui/codex.ts`) : toutes les unités par catégorie (avec le rôle de la catégorie, `CATEGORY_HELP`) et par armée ; stats niveau 1/5, efficacités attaque/défense, capacités, spécialisations, pouvoirs, matrice.
+- **Compagnie mixte** (`src/data/roster.ts`) : `validateCompany` = 6 unités de base distinctes, une par catégorie ; `companyCommander` = armée du commandant (doctrine, pouvoirs, entraide, paire de Résonance, palette des tours). Le roster voyage dans le lobby (`LobbyPlayer.roster`) et `GameSettings.humans[i].roster` ; `createGame` revalide et retombe sur l'armée native en cas de liste invalide ou d'armée aléatoire. Les IA gardent leurs armées natives.
+
 ## 16 ter. v0.7 « Siège » : bénédictions, brécheurs, sceaux jumeaux
 - **Bénédictions** (`src/data/blessings.ts`) : avant chaque préparation à partir de la vague 2 (sauf vagues d'anomalie), 3 bénédictions tirées par le monde ; l'équipe en garde une, permanente et commune. Les humains choisissent à tour de rôle (un humain choisit toujours avant un partenaire IA) ; sans choix au lancement, le hasard tranche. 16 bénédictions (5 rares à partir de la vague 6), cumulables 1–3 niveaux : cadence des tours, dégâts, première ligne, bouclier de départ, PV du Core, primes, revenu, Éther par élimination, givre au contact, venin, anti-colosses ; rares : projectiles rebondissants, aura du Cœur, Résonance +25 %, +1 ordre, Relève (fantômes). Commande `bless` validée par l'hôte.
 - **Brécheur** (`breach`) : ne cible jamais une unité, insensible à la provocation, fonce sur la porte ; contre-jeu portée / ralentis / intercepteurs. **Invocateur** (`kite` + `spawn`) : recule devant les unités, invoque des moucherons. Chaman en vague 18.

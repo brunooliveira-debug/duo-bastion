@@ -581,6 +581,8 @@ export const BRANCH_LEVEL = 4;
 export const LEVEL_COST = [0, 0, 0.6, 0.8, 1.0, 1.3];
 /** HP & damage multiplier at level L (≈ invested value, slightly rewarding upgrades) */
 export const LEVEL_MUL = [0, 1, 1.65, 2.5, 3.55, 4.95];
+/** v0.7.3: +10 % HP and damage on every player unit (the base units were too weak; the AI gets it too). */
+export const UNIT_POWER = 1.1;
 
 export function upgradeCost(id: string, toLevel: number): number {
   return Math.round((UNITS[id].cost * (LEVEL_COST[toLevel] ?? 0)) / 5) * 5;
@@ -634,8 +636,8 @@ export function unitStats(id: string, level = 1, branch: Branch | null = null): 
     level: L,
     branch: br ? branch : null,
     name: br ? br.name : u.name,
-    hp: Math.round(u.hp * k * (br?.hp ?? 1)),
-    dmg: u.dmg * k * (br?.dmg ?? 1),
+    hp: Math.round(u.hp * k * (br?.hp ?? 1) * UNIT_POWER),
+    dmg: u.dmg * k * (br?.dmg ?? 1) * UNIT_POWER,
     atkSpeed: u.atkSpeed * (br?.atkSpeed ?? 1),
     armor: Math.min(0.6, u.armor + 0.01 * (L - 1) + (br?.armor ?? 0)),
     range: Math.max(1, u.range + (br?.range ?? 0) + (u.range > 2 ? 0.1 * (L - 1) : 0)),

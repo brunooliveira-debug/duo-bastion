@@ -82,6 +82,14 @@ Retour du joueur sur téléphone (2400×1080) : HUD trop grand et chevauchements
 
 À la demande du joueur : **450 or au départ** (250 + 200 de bonus) et **plus on monte, plus on gagne** : le revenu de base augmente de 5 or à chaque vague franchie (30 à la vague 1, 75 à la vague 10, 130 à la vague 21) et les primes d'élimination gagnent 3 % par vague (×1,35 à la vague 1, ×1,71 à la vague 10, ×2,16 à la vague 21, ×1,35 inclus). Pour tout le monde (IA comprises, l'équilibre des duels reste symétrique) ; la pastille de revenu affiche le montant de la vague en cours. La courbe d'or attendue des outils d'équilibrage (`expectedGold`) inclut les primes ×1,35. Tests 75/75.
 
-## 8. Rappel sécurité
+## 8. v0.7.3 — Codex et Compagnie mixte
+
+- **Codex** dans le menu principal : les 36 unités classées par catégorie (Défense, Lourde, Longue portée, Anti-blindage, Zone, Soutien, Rapide, Spéciale), chaque catégorie expliquée ; pour chaque unité : armée, coût, PV, armure, dégâts × cadence, DPS, portée, type d'attaque avec ses efficacités (↑/↓) contre les 4 défenses, type de défense, capacité active et passive, forces / faiblesses, valeurs au niveau 5, spécialisations A et B du niveau 4. Filtre par armée. Second onglet par armée : doctrine, entraide, forces, faiblesses, pouvoirs de commandant, puis la matrice attaque / défense.
+- **Compagnie mixte** (dans « Choisir mon armée ») : le joueur compose 6 unités parmi toutes les armées, **une par catégorie** (6 catégories sur 8 : c'est le choix à faire), et désigne son **commandant** parmi les armées présentes : sa doctrine, ses pouvoirs, son entraide et sa Résonance DUO s'appliquent à toute la compagnie ; les unités gardent leur apparence et leurs capacités. Disponible en solo, survie et duo en ligne (l'hôte valide la liste ; une liste forgée retombe sur l'armée native). Le Défi du jour et le tutoriel gardent leurs armées fixes.
+- Tests 80/80 (validation, création de partie, repli, lobby réseau avec liste forgée refusée).
+- **Unités +10 %** : toutes les unités des joueurs ont +10 % de PV et de dégâts à tous les niveaux (les IA aussi : l'équilibre des duels reste symétrique ; les vagues deviennent un peu plus faciles).
+- **Pouvoirs de commandant plus longs** (ils passaient trop vite) : Gel Stellaire 1,6 → 2,6 s, IEM 2,5 → 3,5 s, Étreinte des Racines 2,5 → 3,5 s (poison 4 → 6 s), Pluie d'Étoiles ralentit 3 → 5 s, Raz-de-Marée 4 → 6 s, Surcharge et Ferveur 6 → 9 s, Voile d'Ombre 5 → 8 s, Moisson des Ombres 8 → 12 s, Éruption 5 → 8 s, Colère de la Forêt 20 → 30 s, Appel du Kraken 12 → 18 s. Les textes des pouvoirs sont à jour. Rappel : les boss ne subissent que la moitié des étourdissements.
+
+## 9. Rappel sécurité
 
 La clé secrète Supabase collée dans le chat (`sb_secret_…`) doit être révoquée (Supabase → Project Settings → API Keys). Le jeu ne l'utilise pas.

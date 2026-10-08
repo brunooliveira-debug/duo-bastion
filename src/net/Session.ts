@@ -11,9 +11,10 @@ import { LocalTransport, SupabaseTransport, Transport, Msg, ConnStatus } from '.
 import { ONLINE, log } from '../config';
 import { setLobbyStatus, loadLobbyState } from './backend';
 import { save } from '../save/SaveSystem';
+import { validateCompany } from '../data/roster';
 
 export interface LobbySettings { mode: GameMode; totalWaves: number; difficulty: Difficulty }
-export interface LobbyPlayer { uid: string; name: string; avatar: string; ready: boolean; faction: FactionChoice }
+export interface LobbyPlayer { uid: string; name: string; avatar: string; ready: boolean; faction: FactionChoice; /** v0.7.3 mixed company (validated) */ roster?: string[] | null }
 export interface LobbyState { code: string; hostUid: string; players: LobbyPlayer[]; settings: LobbySettings; started: boolean }
 
 export interface SessionEvents {
@@ -69,7 +70,7 @@ export class Session {
     this.lobby = { code, hostUid: role === 'guest' ? '' : uid, players: [], settings: { mode: 'vsai', totalWaves: 10, difficulty: 'normal' }, started: false };
   }
 
-  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, ready: false, faction: (save.profile.faction || 'random') as FactionChoice }; }
+  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, ready: false, faction: (save.profile.faction || 'random') as FactionChoice, roster: validateCompany(save.profile.roster) }; }
 
   /** pid of the lobby player at index i (co-op: 0/1, duel: 0/2). */
   pidOf(i: number) { return humanPid(this.state?.settings.mode ?? this.lobby.settings.mode, i); }
@@ -101,7 +102,7 @@ export class Session {
     }
   }
 
-  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, faction: save.profile.faction || 'random' }); }
+  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, faction: save.profile.faction || 'random', roster: validateCompany(save.profile.roster) }); }
 
   close() {
     if (this.lobbyTimer) clearInterval(this.lobbyTimer);
@@ -132,20 +133,21 @@ export class Session {
   }
 
   /** Army choice in the lobby (host applies it, guest asks the host). */
-  setFaction(f: FactionChoice) {
-    save.profile.faction = f; save.flush();
+  setFaction(f: FactionChoice, roster: string[] | null = null) {
+    const r = validateCompany(roster);
+    save.profile.faction = f; save.profile.roster = r; save.flush();
     if (this.role === 'host') {
       const p = this.lobby.players.find(x => x.uid === this.uid);
-      if (p) p.faction = f;
+      if (p) { p.faction = f; p.roster = r; }
       this.broadcastLobby();
-    } else this.transport?.send({ k: 'faction', uid: this.uid, f });
+    } else this.transport?.send({ k: 'faction', uid: this.uid, f, roster: r });
   }
 
   canStart() { return this.role === 'host' && this.lobby.players.every(p => p.ready) && this.lobby.players.length >= 1; }
 
   startGame() {
     if (this.role !== 'host') return;
-    const humans = this.lobby.players.slice(0, 2).map(p => ({ name: p.name, faction: p.faction ?? 'random' }));
+    const humans = this.lobby.players.slice(0, 2).map(p => ({ name: p.name, faction: p.faction ?? 'random', roster: validateCompany(p.roster) }));
     const settings: GameSettings = {
       mode: this.lobby.settings.mode,
       totalWaves: this.lobby.settings.mode === 'survival' ? 9999 : this.lobby.settings.totalWaves,
@@ -211,7 +213,7 @@ export class Session {
           let p = this.lobby.players.find(x => x.uid === uid);
           if (!p) {
             if (this.lobby.started || this.lobby.players.length >= 2) { this.transport?.send({ k: 'reject', to: uid, msg: this.lobby.started ? 'Cette partie a déjà commencé.' : 'Cette partie est déjà complète.' }); return; }
-            p = { uid, name: String(m.name).slice(0, 16) || 'Joueur', avatar: String(m.avatar ?? '🙂'), ready: false, faction: validFaction(m.faction) };
+            p = { uid, name: String(m.name).slice(0, 16) || 'Joueur', avatar: String(m.avatar ?? '🙂'), ready: false, faction: validFaction(m.faction), roster: validateCompany(m.roster) };
             this.lobby.players.push(p);
             log('Player joined', p.name);
             this.ev.toast(`${p.name} a rejoint la partie !`, 'info');
@@ -229,7 +231,7 @@ export class Session {
         }
         case 'faction': {
           const p = this.lobby.players.find(x => x.uid === m.uid);
-          if (p && !this.lobby.started) { p.faction = validFaction(m.f); this.broadcastLobby(); }
+          if (p && !this.lobby.started) { p.faction = validFaction(m.f); p.roster = validateCompany(m.roster); this.broadcastLobby(); }
           break;
         }
         case 'ready': {

@@ -13,6 +13,8 @@ export interface Profile {
   duoRecords: Record<string, number>;
   tutorialDone: boolean;
   faction: string; // last army choice ('random' or a faction id)
+  /** v0.7.3: mixed company (6 unit ids, one per category) led by `faction`; null = the army's native roster */
+  roster?: string[] | null;
   factionGames: Record<string, number>;
   daily: Record<string, DailyBest>; // 'YYYY-MM-DD' → best result
   duoGames: Record<string, number>; // DUO ability id → games played with that pair

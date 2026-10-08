@@ -754,3 +754,45 @@ h2 { font-size: clamp(16px, 3.4vh, 24px); margin: clamp(4px, 1.2vh, 12px) 0; }
   .screen > .card { width: min(640px, 100%); }
   .lobby-players { gap: 6px; }
 }
+
+/* ---------- v0.7.3 codex (units by category / by army) and company builder ---------- */
+.screen.codex { justify-content: flex-start; }
+.cx-tabs { width: min(520px, 100%); margin-bottom: 6px; }
+.cx-body { width: min(1100px, 100%); display: flex; flex-direction: column; gap: 8px; }
+.cx-filter { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.cx-chip { --fc: #c8b8ff; min-height: 30px; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid color-mix(in srgb, var(--fc) 60%, var(--line)); color: var(--text); font-weight: 800; font-size: 12px; }
+.cx-chip.on { background: color-mix(in srgb, var(--fc) 35%, #121a30); border-color: var(--fc); box-shadow: 0 0 10px color-mix(in srgb, var(--fc) 50%, transparent); }
+.cx-section { --cat: #c8b8ff; background: rgba(9, 11, 26, 0.84); border: 1px solid var(--line); border-left: 5px solid var(--cat); border-radius: 14px; padding: 8px 10px; }
+.cx-sh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.cx-sh b { font-family: var(--display); letter-spacing: 0.04em; font-size: clamp(14px, 2.4vh, 18px); }
+.cx-sh small { color: var(--muted); font-size: clamp(11px, 1.8vh, 13px); flex: 1 1 100%; line-height: 1.3; }
+.cx-cat { width: 24px; height: 24px; border-radius: 7px; background: var(--cat); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.cx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 8px; }
+.cx-unit { --fc: #c8b8ff; text-align: left; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-top: 3px solid var(--fc); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 5px; color: var(--text); font-size: clamp(11.5px, 1.85vh, 13px); line-height: 1.35; }
+.cx-unit.compact { padding: 6px 7px; gap: 3px; }
+.cx-unit.on { background: color-mix(in srgb, var(--fc) 22%, #121a30); border-color: var(--fc); box-shadow: 0 0 12px color-mix(in srgb, var(--fc) 55%, transparent); }
+.cx-unit:disabled { opacity: 0.4; }
+button.cx-unit:not(:disabled):active { transform: scale(0.985); }
+.cx-head { display: flex; align-items: center; gap: 8px; }
+.cx-head .cx-cat { width: 22px; height: 22px; }
+.cx-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cx-title b { font-size: clamp(13px, 2.1vh, 15px); }
+.cx-title small { font-size: 11px; font-weight: 700; }
+.cx-cost { font-weight: 900; color: var(--gold); white-space: nowrap; }
+.cx-stats { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: clamp(10.5px, 1.7vh, 12px); color: #e2daf5; }
+.cx-desc { margin: 0; color: var(--muted); font-style: italic; }
+.cx-text { display: flex; flex-direction: column; gap: 2px; }
+.cx-pc { display: grid; gap: 2px; }
+.cx-pc .pros { color: #bfffd8; } .cx-pc .cons { color: #ffc0c8; }
+.cx-br { display: grid; gap: 4px; background: rgba(255, 210, 74, 0.06); border-radius: 8px; padding: 5px 7px; }
+.cx-br b { color: #ffe08a; font-size: 12px; } .cx-br small { display: block; }
+.cx-army { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 12px; margin-bottom: 8px; font-size: clamp(11.5px, 1.85vh, 13px); }
+.cx-army b { display: block; color: var(--gold); } .cx-army small { display: block; line-height: 1.3; }
+.cx-army .pros { color: #bfffd8; } .cx-army .cons { color: #ffc0c8; }
+.cp-status { width: min(1100px, 100%); background: rgba(9, 11, 26, 0.9); border: 1px solid var(--edge); border-radius: 14px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; z-index: 2; }
+.cp-count b { font-family: var(--display); font-size: 18px; color: var(--gold); }
+.cp-cmd { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.cp-row.has { border-left-color: var(--ok); }
+.cp-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+@media (max-width: 700px) { .cx-grid, .cp-grid { grid-template-columns: 1fr 1fr; } .cx-stats { font-size: 10px; } }
+@media (max-width: 480px) { .cx-grid, .cp-grid { grid-template-columns: 1fr; } }

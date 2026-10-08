@@ -10,14 +10,11 @@ import { FACTION_POWERS } from '../data/powers';
 import { duoAbility } from '../data/resonance';
 import { ECONOMY } from '../data/economy';
 import { icon, categoryIcon } from './icons';
+import { codexScreen, companyScreen } from './codex';
+import { validateCompany, companyLabel, companyCommander } from '../data/roster';
 
-let current: HTMLElement | null = null;
-export function show(el: HTMLElement) {
-  current?.remove();
-  current = el;
-  document.body.append(el);
-}
-export function hideScreens() { current?.remove(); current = null; }
+import { show, hideScreens } from './screenHost';
+export { show, hideScreens };
 
 /** Small non-blocking message (replaces alert(), which freezes mobile browsers). */
 export function notify(text: string) {
@@ -92,6 +89,7 @@ export function menuScreen(a: MenuActions) {
       h('div', { class: 'row' },
         h('button', { class: 'btn', style: 'flex:1', onclick: () => { audio.unlock(); if (!save.profile.name) { save.profile.name = 'Recrue'; save.flush(); } a.tutorial(); } }, `🎓 Tutoriel${p.tutorialDone ? '' : ' ★'}`),
         h('button', { class: 'btn', style: 'flex:1', onclick: () => optionsScreen(() => show(menuScreen(a))) }, '⚙️ Options')),
+      h('button', { class: 'btn', onclick: () => codexScreen(() => show(menuScreen(a))) }, '📖 Codex des unités & armées'),
       h('div', { class: 'muted center', style: 'font-size:12px' }, `Niveau ${save.level()} · ${p.games} parties · ${p.wins} victoires · record survie : vague ${p.bestSurvival}`),
     ),
     h('div', { class: 'version' }, `v${VERSION}${ONLINE ? '' : ' · hors-ligne'}`));
@@ -119,14 +117,14 @@ function survivalScreen(a: MenuActions) {
     h('p', { class: 'muted center' }, 'Pas d\'adversaire : tenez le plus longtemps possible. Après la vague 21, la faille devient infinie.'),
     h('div', { class: 'menu' },
       h('button', { class: 'btn primary', onclick: () => a.duo('survival') }, '👥 Survie à deux'),
-      h('button', { class: 'btn', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, f => { save.profile.faction = f; save.flush(); a.solo('survival', 9999, 'normal'); }, () => survivalScreen(a), 'Lancer la survie') }, '🤖 Survie avec une IA partenaire'),
+      h('button', { class: 'btn', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, (f, roster) => { save.profile.faction = f; save.profile.roster = roster; save.flush(); a.solo('survival', 9999, 'normal'); }, () => survivalScreen(a), 'Lancer la survie') }, '🤖 Survie avec une IA partenaire'),
       h('button', { class: 'btn ghost', onclick: () => show(menuScreen(a)) }, '← Retour'))));
 }
 
 function soloScreen(a: MenuActions) {
   let waves = 21, diff: Difficulty = 'normal';
   const armyRow = h('div', { class: 'row' });
-  const drawArmy = () => { clear(armyRow); armyRow.append(armyBadge((save.profile.faction || 'random') as FactionChoice), h('button', { class: 'btn small gold', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, f => { save.profile.faction = f; save.flush(); show(scr); drawArmy(); }, () => show(scr)) }, 'Choisir mon armée')); };
+  const drawArmy = () => { clear(armyRow); armyRow.append(armyBadge((save.profile.faction || 'random') as FactionChoice, save.profile.roster), h('button', { class: 'btn small gold', onclick: () => armyPicker((save.profile.faction || 'random') as FactionChoice, (f, roster) => { save.profile.faction = f; save.profile.roster = roster; save.flush(); show(scr); drawArmy(); }, () => show(scr)) }, 'Choisir mon armée')); };
   drawArmy();
   const scr = h('div', { class: 'screen' },
     h('h2', {}, '🤖 SOLO — toi + une IA alliée contre 2 IA'),
@@ -182,8 +180,8 @@ export function lobbyScreen(session: Session, leave: () => void) {
       return h('div', { class: `lp ${i ? 'b' : 'a'}` },
         h('div', { class: 'muted', style: 'font-size:12px' }, l.settings.mode === 'duel' ? (i === 0 ? 'JOUEUR 1 · camp bleu' : 'JOUEUR 2 · camp rouge') : i === 0 ? 'JOUEUR 1 · voie gauche' : 'JOUEUR 2 · voie droite'),
         p ? h('div', { class: 'nm' }, `${p.avatar} ${p.name}${p.uid === session.uid ? ' (toi)' : ''}`) : h('div', { class: 'nm muted' }, '… en attente'),
-        p ? armyBadge(p.faction ?? 'random') : null,
-        p && p.uid === session.uid ? h('button', { class: 'btn small', onclick: () => armyPicker(p.faction ?? 'random', f => { session.setFaction(f); show(root); }, () => show(root)) }, 'Choisir mon armée') : null,
+        p ? armyBadge(p.faction ?? 'random', p.roster) : null,
+        p && p.uid === session.uid ? h('button', { class: 'btn small', onclick: () => armyPicker(p.faction ?? 'random', (f, roster) => { session.setFaction(f, roster); show(root); }, () => show(root)) }, 'Choisir mon armée') : null,
         p ? h('span', { class: `badge ${p.ready ? 'ok' : 'wait'}` }, p.ready ? 'PRÊT' : 'PAS PRÊT') : h('span', { class: 'muted', style: 'font-size:12px' }, host ? 'Partage le code !' : ''));
     });
     const s = l.settings;
@@ -258,26 +256,37 @@ export function optionsScreen(back: () => void) {
 
 // ---------------------------------------------------------------- army (faction) choice
 
-export function armyBadge(f: FactionChoice) {
+export function armyBadge(f: FactionChoice, roster?: string[] | null) {
   if (f === 'random') return h('span', { class: 'armybadge rnd' }, '🎲 Aléatoire');
   const d = FACTIONS[f];
+  const company = validateCompany(roster);
+  if (company) return h('span', { class: 'armybadge', style: `--fc:${d.color}` }, '🧩 Compagnie mixte', h('small', {}, `${companyLabel(company)} · commandant ${d.title}`));
   return h('span', { class: 'armybadge', style: `--fc:${d.color}` }, d.name, h('small', {}, d.title));
 }
 
 /** Full-screen army picker: list on the left, details (units, powers, strengths, weaknesses, style) on the right. */
-export function armyPicker(current: FactionChoice, onPick: (f: FactionChoice) => void, onBack: () => void, okLabel = 'Choisir cette armée') {
-  let sel: FactionChoice = current;
+export function armyPicker(current: FactionChoice, onPick: (f: FactionChoice, roster: string[] | null) => void, onBack: () => void, okLabel = 'Choisir cette armée') {
+  type Pick = FactionChoice | 'company';
+  const companyCommanderOf = (c: string[]) => companyCommander(c, save.profile.faction);
+  let sel: Pick = validateCompany(save.profile.roster) && current !== 'random' ? 'company' : current;
   const list = h('div', { class: 'armylist' });
   const detail = h('div', { class: 'armydetail' });
   const draw = () => {
     clear(list);
-    for (const f of [...FACTION_IDS, 'random'] as FactionChoice[]) {
-      const d = f === 'random' ? null : FACTIONS[f];
-      list.append(h('button', { class: `armyitem${sel === f ? ' on' : ''}`, style: d ? `--fc:${d.color}` : '--fc:#c8b8ff', onclick: () => { sel = f; audio.play('click'); draw(); } },
-        h('b', {}, d ? d.name : '🎲 Aléatoire'), h('small', {}, d ? d.title : `Bonus +${ECONOMY.randomFactionGold} or, +25 % XP`)));
+    for (const f of [...FACTION_IDS, 'random', 'company'] as Pick[]) {
+      const d = f === 'random' || f === 'company' ? null : FACTIONS[f];
+      list.append(h('button', { class: `armyitem${sel === f ? ' on' : ''}`, style: d ? `--fc:${d.color}` : f === 'company' ? '--fc:#ffe08a' : '--fc:#c8b8ff', onclick: () => { sel = f; audio.play('click'); draw(); } },
+        h('b', {}, d ? d.name : f === 'company' ? '🧩 Compagnie mixte' : '🎲 Aléatoire'), h('small', {}, d ? d.title : f === 'company' ? 'Compose 6 unités de toutes les armées' : `Bonus +${ECONOMY.randomFactionGold} or, +25 % XP`)));
     }
     clear(detail);
-    if (sel === 'random') {
+    if (sel === 'company') {
+      const c = validateCompany(save.profile.roster);
+      const cmd = c ? companyCommanderOf(c) : null;
+      detail.append(h('h3', {}, '🧩 Compagnie mixte'), h('p', { class: 'small' }, '6 unités piochées dans les 6 armées, une par catégorie (6 catégories sur 8). Le commandant choisi donne sa doctrine, ses pouvoirs, son entraide et sa Résonance à toute la compagnie. Les unités gardent leur apparence et leurs capacités d\'origine.'),
+        c ? h('div', { class: 'armyunits' }, ...c.map(id => { const u = UNITS[id]; return h('div', { class: 'au', style: `--cat:${CATEGORY_COLORS[u.category]}` }, h('span', { class: 'cat', html: icon(categoryIcon(u.category), 14, '#14112A', 3) }), h('div', {}, h('b', {}, u.name), h('small', {}, `${FACTIONS[u.faction].title} · ${CATEGORY_NAMES[u.category]} · ${u.cost} or`))); })) : h('p', { class: 'muted small' }, 'Aucune compagnie composée pour l\'instant.'),
+        cmd ? h('p', { class: 'small' }, h('b', {}, `Commandant : ${FACTIONS[cmd].name}`), ` — ${FACTIONS[cmd].doctrine.text}`) : h('span'),
+        h('button', { class: 'btn gold', onclick: () => companyScreen(c, save.profile.faction, (ids, commander) => { save.profile.roster = ids; save.profile.faction = commander; save.flush(); draw(); show(scrEl); }, () => show(scrEl)) }, c ? '✏️ Modifier ma compagnie' : '🧩 Composer ma compagnie'));
+    } else if (sel === 'random') {
       detail.append(h('h3', {}, '🎲 Armée aléatoire'), h('p', {}, 'Le jeu t\'attribue une armée au lancement de la partie.'),
         h('div', { class: 'pros' }, h('b', {}, 'Récompense : '), `+${ECONOMY.randomFactionGold} pièces d'or au départ et +25 % d'expérience en fin de partie.`),
         h('p', { class: 'muted small' }, 'Parfait pour apprendre toutes les armées et varier les parties.'));
@@ -302,8 +311,14 @@ export function armyPicker(current: FactionChoice, onPick: (f: FactionChoice) =>
         h('div', { class: 'armypowers' }, ...FACTION_POWERS[sel].map(p => h('div', { class: 'ap' }, h('span', { html: icon(p.icon, 22, '#FFC233') }), h('div', {}, h('b', {}, p.name), h('small', {}, p.text))))),
       );
     }
-    detail.append(h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn primary', style: 'flex:1', onclick: () => { audio.play('ready'); onPick(sel); } }, okLabel), h('button', { class: 'btn ghost', onclick: onBack }, '← Retour')));
+    const canOk = sel !== 'company' || !!validateCompany(save.profile.roster);
+    detail.append(h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn primary', style: 'flex:1', disabled: !canOk, onclick: () => {
+      audio.play('ready');
+      if (sel === 'company') { const c = validateCompany(save.profile.roster)!; onPick(companyCommanderOf(c), c); }
+      else onPick(sel, null);
+    } }, okLabel), h('button', { class: 'btn ghost', onclick: onBack }, '← Retour')));
   };
+  const scrEl = h('div', { class: 'screen armyscreen' }, h('h2', {}, '⚔️ Choisis ton armée'), h('div', { class: 'armywrap' }, list, detail));
   draw();
-  show(h('div', { class: 'screen armyscreen' }, h('h2', {}, '⚔️ Choisis ton armée'), h('div', { class: 'armywrap' }, list, detail)));
+  show(scrEl);
 }

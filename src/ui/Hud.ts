@@ -13,7 +13,7 @@ import { MODULES, MODULE_IDS, FAMILY_NAMES, FAMILY_COLORS, MODULE_REFUND, PROPOS
 import { RESO_MAX, RESO_GAIN, duoAbility, ALL_DUO_ABILITIES } from '../data/resonance';
 import { ORDERS, ORDER_IDS, OrderId, ANOMALIES, AnomalyId, RIFT_REWARDS, RIFT_MAX_UNITS, RIFT_MINIONS } from '../data/tactics';
 import { BLESSINGS, BlessingId, blessingWave } from '../data/blessings';
-import type { Ability, AttackType, Branch, DefenseType } from '../data/types';
+import type { AttackType, Branch, DefenseType } from '../data/types';
 import { recommendedValue, riskOf, powerBucket } from '../sim/balance';
 import { buildBonuses, previewSynergies } from '../sim/synergy';
 import { cellCenter, SEAL_WINDOW, SEAL_RESO } from '../sim/state';
@@ -29,6 +29,7 @@ import { DEBUG } from '../config';
 import { h, clear, fmt, vibrate } from './dom';
 import { icon, categoryIcon } from './icons';
 import { Tutorial } from './Tutorial';
+import { abilitiesText } from './unitText';
 
 type Sheet = 'raiders' | 'core' | 'stats' | 'pings' | 'menu' | 'unit' | 'info' | 'opp' | 'syn' | 'reso' | 'rift' | 'fusion' | 'bless' | null;
 
@@ -1883,30 +1884,3 @@ function summarize(names: string[]) {
   return [...c].map(([n, k]) => (k > 1 ? `${k}× ${n}` : n)).join(', ');
 }
 
-/** Short readable list of a unit's abilities. */
-function abilitiesText(list: Ability[]): string {
-  const t: string[] = [];
-  for (const a of list) {
-    switch (a.kind) {
-      case 'taunt': t.push(`provocation ${a.radius.toFixed(1)} m`); break;
-      case 'splash': t.push(`zone ${a.radius.toFixed(1)} m (${Math.round(a.pct * 100)} %)`); break;
-      case 'poison': t.push(`poison ${Math.round(a.dps)}/s`); break;
-      case 'burn': t.push(`brûlure ${Math.round(a.dps)}/s`); break;
-      case 'slowOnHit': t.push(`ralentit ${Math.round(a.slow * 100)} %`); break;
-      case 'stunOnHit': t.push(`étourdit ${Math.round(a.chance * 100)} %`); break;
-      case 'heal': t.push(`soin ${Math.round(a.amount)}/${a.every}s`); break;
-      case 'shieldPulse': t.push(`bouclier ${Math.round(a.amount)}/${a.every}s`); break;
-      case 'chain': t.push(`${a.targets} rebonds`); break;
-      case 'lifesteal': t.push(`vol de vie ${Math.round(a.pct * 100)} %`); break;
-      case 'summon': t.push(`invoque ${a.count}`); break;
-      case 'stealth': t.push('camouflage'); break;
-      case 'pierce': t.push(`perce ${Math.round(a.pct * 100)} % armure`); break;
-      case 'bonusVsBig': t.push(`+${Math.round(a.pct * 100)} % vs gros`); break;
-      case 'guardAura': t.push(`aura -${Math.round(a.pct * 100)} % dégâts`); break;
-      case 'auraAttackSpeed': t.push(`aura +${Math.round(a.pct * 100)} % cadence`); break;
-      case 'hastePulse': t.push(`accélération +${Math.round(a.pct * 100)} %`); break;
-      case 'regen': t.push(`régén ${(a.pct * 100).toFixed(1)} %/s`); break;
-    }
-  }
-  return t.length ? 'Capacités : ' + t.join(' · ') : '';
-}

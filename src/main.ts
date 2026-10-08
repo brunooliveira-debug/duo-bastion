@@ -58,7 +58,7 @@ const actions: MenuActions = {
     teardown();
     // ?seed=123 replays a given world (same waves, events, rifts and anomalies)
     const seedParam = Number(new URLSearchParams(location.search).get('seed'));
-    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice }] }, events, Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined);
+    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice, roster: save.profile.roster ?? null }] }, events, Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined);
     enterGame();
   },
   daily: () => {

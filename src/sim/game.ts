@@ -17,6 +17,7 @@ import {
 } from '../data/tactics';
 import type { Branch, FactionId } from '../data/types';
 import type { RuneKind, RuneTile } from '../data/synergies';
+import { validateCompany } from '../data/roster';
 import { BLESS, BLESSINGS, BLESSING_IDS, BLESSING_CHOICES, RARE_WAVE, BlessingId, blessingLv, blessingWave } from '../data/blessings';
 import {
   DT, GameSettings, GameState, PlayerState, TeamState, STATE_VERSION, newStats, newTeam, teamCount, raiderTarget, opponents, humanPlayers, humanPid,
@@ -105,7 +106,8 @@ export function createGame(settings: GameSettings, seed: number): GameState {
         name: human ? human.name : t === 0 && settings.mode !== 'duel' ? 'Allié IA' : `${AI_NAMES[Math.floor(rand(s) * AI_NAMES.length)]} (IA)`,
         isAI: !human, personality: pers, faction, randomFaction: random,
         gold: ECONOMY.startGold + (random ? ECONOMY.randomFactionGold : 0), ether: ECONOMY.startEther, income: ECONOMY.startIncome, workers: ECONOMY.startWorkers,
-        draft: FACTIONS[faction].units.slice(), rerolls: 0, builds: [], ready: false, powers: [], powerChoice: null,
+        // v0.7.3: a human with a fixed army may field a mixed company (validated here: anything odd -> native roster)
+        draft: (human && !random && validateCompany(human.roster)) || FACTIONS[faction].units.slice(), rerolls: 0, builds: [], ready: false, powers: [], powerChoice: null,
         raiderQueue: [], raiderCd: {}, curseQueue: [], curseCd: {}, powerLv: [1, 1, 1], powerCd: [0, 0, 0], fogUntil: 0, jamUntil: 0,
         runes: [], hazards: [], undo: [], orders: 0, orderCd: 0, anomalyVote: null, riftReward: false, waveHelpKills: 0, helpWave: 0, souls: 0,
         leakedThisWave: 0, waveDmg: 0, pauseVote: false, stats: newStats(),
