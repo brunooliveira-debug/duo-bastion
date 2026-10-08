@@ -1,6 +1,6 @@
 // Central config. The game name is only referenced here + index.html/manifest (easy to rename).
 export const GAME_NAME = 'DUO BASTION';
-export const VERSION = '0.7.1-alpha';
+export const VERSION = '0.7.2-alpha';
 
 export const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL ?? '';
 // The anon key is public by design (protected by RLS). Never put the service_role key in the client.

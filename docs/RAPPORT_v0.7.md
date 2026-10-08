@@ -78,6 +78,10 @@ Retour du joueur sur téléphone (2400×1080) : HUD trop grand et chevauchements
   Vérifié en 800×360 (téléphone), 1000×450, 1280×720, 1366×768, 1920×1080, 2560×1440 et 375×812 (portrait).
 - **Économie** : primes d'élimination **×1,35** (toutes les vagues, envois compris, IA incluse) ; **bonus de rapidité** par joueur quand la voie est tenue sans fuite : (10 + 4 × vague) × (40 − t) / 40, t = seconde à laquelle le dernier ennemi de la voie est tombé (vague 10 nettoyée en 15 s : +31 or) ; **récapitulatif** au début de chaque préparation : revenu, or des éliminations, bonus de rapidité, voie tenue ; le temps de combat s'affiche dans la barre de siège. Tests 75/75.
 
-## 7. Rappel sécurité
+## 7. v0.7.2 — or de départ
+
+À la demande du joueur : **450 or au départ** (250 + 200 de bonus) et **plus on monte, plus on gagne** : le revenu de base augmente de 5 or à chaque vague franchie (30 à la vague 1, 75 à la vague 10, 130 à la vague 21) et les primes d'élimination gagnent 3 % par vague (×1,35 à la vague 1, ×1,71 à la vague 10, ×2,16 à la vague 21, ×1,35 inclus). Pour tout le monde (IA comprises, l'équilibre des duels reste symétrique) ; la pastille de revenu affiche le montant de la vague en cours. La courbe d'or attendue des outils d'équilibrage (`expectedGold`) inclut les primes ×1,35. Tests 75/75.
+
+## 8. Rappel sécurité
 
 La clé secrète Supabase collée dans le chat (`sb_secret_…`) doit être révoquée (Supabase → Project Settings → API Keys). Le jeu ne l'utilise pas.

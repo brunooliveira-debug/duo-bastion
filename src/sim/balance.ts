@@ -2,7 +2,7 @@
 // Used for the "recommended army value" indicator, the AI, and scripts/balance-report.ts.
 import { UNITS, unitStats } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import { DAMAGE_MATRIX, ECONOMY } from '../data/economy';
+import { DAMAGE_MATRIX, ECONOMY, bountyScale, waveIncome } from '../data/economy';
 import { getWave } from '../data/waves';
 import type { CombatStats, AttackType, DefenseType } from '../data/types';
 
@@ -160,7 +160,7 @@ export function expectedGold(n: number): number {
   for (let w = 1; w < n; w++) {
     const wave = getWave(w);
     const bounty = wave.groups.reduce((t, gr) => t + ENEMIES[gr.enemy].bounty * gr.count, 0);
-    g += ECONOMY.startIncome + bounty + ECONOMY.waveClearBonus;
+    g += waveIncome(ECONOMY.startIncome, w) + bounty * bountyScale(w) + ECONOMY.waveClearBonus;
   }
   return g;
 }

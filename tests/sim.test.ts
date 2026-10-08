@@ -38,7 +38,7 @@ describe('economy & commands', () => {
     const p = s.players[0];
     const id = p.draft[0];
     expect(applyCommand(s, 0, { c: 'build', unit: id, col: 0, row: 0 })).toBeNull();
-    expect(p.gold).toBeLessThan(250);
+    expect(p.gold).toBeLessThan(ECONOMY.startGold);
     expect(applyCommand(s, 0, { c: 'build', unit: id, col: 0, row: 0 })).toMatch(/occupée/);
     expect(applyCommand(s, 0, { c: 'build', unit: id, col: 99, row: 0 })).toMatch(/occupée/);
     p.gold = 0;
@@ -49,14 +49,14 @@ describe('economy & commands', () => {
     const p = s.players[0];
     applyCommand(s, 0, { c: 'build', unit: p.draft[0], col: 0, row: 0 });
     applyCommand(s, 0, { c: 'sell', bid: p.builds[0].bid });
-    expect(p.gold).toBe(250);
+    expect(p.gold).toBe(ECONOMY.startGold);
   });
   it('workers cost gold and produce ether over time', () => {
     const s = game();
     const p = s.players[0];
     const c = workerCost(p);
     expect(applyCommand(s, 0, { c: 'worker' })).toBeNull();
-    expect(p.gold).toBe(250 - c);
+    expect(p.gold).toBe(ECONOMY.startGold - c);
     expect(p.workers).toBe(2);
     for (let i = 0; i < 200; i++) step(s); // 10 s
     expect(p.ether).toBeGreaterThan(1.9);

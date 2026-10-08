@@ -1,7 +1,7 @@
 import type { AttackType, DefenseType, RaiderDef, PowerDef, RaiderCategory } from './types';
 
 export const ECONOMY = {
-  startGold: 250,
+  startGold: 450, // v0.7.2: +200 starting bonus (the first preparation is where a game takes shape)
   startEther: 0,
   startIncome: 30,
   startWorkers: 1,
@@ -19,7 +19,15 @@ export const ECONOMY = {
   speedBonusBase: 10, // max speed bonus = base + perWave × wave (lane held without a leak, cleared at once)
   speedBonusPerWave: 4,
   speedRef: 40, // seconds: a lane cleared in t seconds earns max × (speedRef − t) / speedRef
+  // v0.7.2: the higher the wave, the more it pays — base income grows every wave, bounties too
+  incomePerWave: 5, // gold added to the per-wave income for every wave past the first
+  bountyWaveGrowth: 0.03, // bounty multiplier +3 % per wave past the first
 };
+
+/** Per-wave income of a player at wave n (base + sends + wave growth). */
+export function waveIncome(base: number, wave: number) { return base + ECONOMY.incomePerWave * Math.max(0, wave - 1); }
+/** Bounty multiplier at wave n (v0.7.1 flat boost × v0.7.2 wave growth). */
+export function bountyScale(wave: number) { return ECONOMY.bountyMul * (1 + ECONOMY.bountyWaveGrowth * Math.max(0, wave - 1)); }
 
 /** Speed bonus for a lane held (no leak) and cleared at `t` seconds of combat. */
 export function speedBonus(wave: number, t: number, held: boolean) {

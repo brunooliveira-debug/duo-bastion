@@ -5,7 +5,7 @@
 // Pure logic, no DOM. The host owns one instance; guests only receive snapshots.
 import { UNITS, FACTIONS, FACTION_IDS, MAX_LEVEL, BRANCH_LEVEL, upgradeCost, unitValueAt } from '../data/units';
 import {
-  CORE, ECONOMY, GRID, POWERS, RAIDERS, CURSES, TIMING, buildTime, raiderScale, raiderUnlock, raiderPrice, sendCap, curseUnlock, speedBonus,
+  CORE, ECONOMY, GRID, POWERS, RAIDERS, CURSES, TIMING, buildTime, raiderScale, raiderUnlock, raiderPrice, sendCap, curseUnlock, speedBonus, waveIncome,
 } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_CD, POWER_MAX_LEVEL, POWER_UP_COST, powerUnlock } from '../data/powers';
 import { getWave, WAVE_EVENTS } from '../data/waves';
@@ -873,7 +873,7 @@ function startBuild(s: GameState) {
   }
   // payouts
   for (const p of s.players) {
-    const income = p.income + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')] + BLESS.intendance * blessingLv(s.teams[p.team], 'intendance');
+    const income = waveIncome(p.income, s.wave) + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')] + BLESS.intendance * blessingLv(s.teams[p.team], 'intendance');
     const held = p.leakedThisWave === 0;
     const g = income + (held ? ECONOMY.waveClearBonus : 0) + p.waveBonus;
     p.gold += g;

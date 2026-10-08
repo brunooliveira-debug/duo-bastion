@@ -5,7 +5,7 @@ import { ENEMIES } from '../data/enemies';
 import { getWave, waveEvent } from '../data/waves';
 import {
   ATTACK_ICONS, ATTACK_NAMES, CORE, CURSES, DAMAGE_MATRIX, DEFENSE_ICONS, DEFENSE_NAMES, ECONOMY, PINGS, POWERS, RAIDERS, RAIDER_CATEGORY_NAMES,
-  curseUnlock, matrixArrow, raiderPrice, raiderScale, raiderUnlock, sendCap,
+  curseUnlock, matrixArrow, raiderPrice, raiderScale, raiderUnlock, sendCap, waveIncome,
 } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_CD, POWER_MAX_LEVEL, POWER_UP_COST, powerUnlock } from '../data/powers';
 import { SYNERGIES, ZONE_TEXT, RUNES, zoneOf } from '../data/synergies';
@@ -278,7 +278,7 @@ export class Hud {
     this.renderProgress(m, me);
     E.gold.textContent = fmt(me.gold);
     E.ether.textContent = fmt(me.ether);
-    E.income.textContent = `+${me.income}`;
+    E.income.textContent = `+${waveIncome(me.income, m.wave)}`;
     const value = me.builds.reduce((t, b) => t + b.value, 0);
     const rec = recommendedValue(m.wave, me.builds, value);
     const risk = riskOf(value, rec);

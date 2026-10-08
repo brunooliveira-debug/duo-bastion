@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { createGame, applyCommand, step, drainEvents, applyBlessing } from '../src/sim/game';
 import { BLESSINGS, BLESS, RARE_WAVE, blessingWave } from '../src/data/blessings';
 import { ENEMIES } from '../src/data/enemies';
-import { ECONOMY, speedBonus } from '../src/data/economy';
+import { ECONOMY, speedBonus, waveIncome, bountyScale } from '../src/data/economy';
 import { unitStats } from '../src/data/units';
 import { RESO_MAX } from '../src/data/resonance';
 import { addReso } from '../src/sim/resonance';
@@ -122,7 +122,8 @@ describe('wave economy (v0.7.1)', () => {
     const p = s.players[0];
     toCombat(s);
     const foe = s.ents.find(e => e.enemy && e.owner === 0)!;
-    expect(foe.bounty).toBeCloseTo(ENEMIES[foe.defId].bounty * ECONOMY.bountyMul, 6);
+    expect(foe.bounty).toBeCloseTo(ENEMIES[foe.defId].bounty * bountyScale(1), 6);
+    expect(bountyScale(1)).toBe(ECONOMY.bountyMul);
     const g0 = p.gold;
     run(s, 20); // 1 s in
     applyCommand(s, 0, { c: 'debug', action: 'kill' });
@@ -148,6 +149,22 @@ describe('wave economy (v0.7.1)', () => {
     expect(recap!.held).toBe(false);
     expect(recap!.speed).toBe(0);
     expect(recap!.total).toBe(recap!.income);
+  });
+
+  it('the higher the wave, the more it pays: income grows every wave, bounties too (v0.7.2)', () => {
+    const s = coop(['rouages', 'astreens'], 13);
+    const p = s.players[0];
+    s.wave = 10;
+    toCombat(s);
+    const foe = s.ents.find(e => e.enemy && e.owner === 0)!;
+    expect(foe.bounty).toBeCloseTo(ENEMIES[foe.defId].bounty * ECONOMY.bountyMul * (1 + ECONOMY.bountyWaveGrowth * 9), 6);
+    expect(waveIncome(p.income, 10)).toBe(p.income + ECONOMY.incomePerWave * 9);
+    applyCommand(s, 0, { c: 'debug', action: 'kill' });
+    const g0 = p.gold;
+    for (let i = 0; i < 200 && s.phase !== 'build'; i++) { step(s); drainEvents(s); }
+    expect(p.gold - g0).toBe(waveIncome(p.income, 10) + ECONOMY.waveClearBonus + p.waveBonus);
+    expect(p.waveBonus).toBe(speedBonus(10, p.waveTime, true));
+    expect(ECONOMY.startGold).toBe(450);
   });
 });
 

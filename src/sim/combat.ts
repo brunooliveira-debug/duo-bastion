@@ -3,7 +3,7 @@
 // secondary rifts, telegraphed boss attacks and boss phases, fusion bonus, per-unit statistics.
 import { UNITS, unitStats, LEVEL_MUL } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import { CORE, DAMAGE_MATRIX, ECONOMY } from '../data/economy';
+import { CORE, DAMAGE_MATRIX, bountyScale } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_FX } from '../data/powers';
 import type { Ability, CombatStats } from '../data/types';
 import { waveToughness } from '../data/waves';
@@ -197,7 +197,7 @@ function enemyEnt(s: GameState, it: SpawnSpec, team: number, owner: number): Ent
   e.enemy = true; e.arena = team; e.owner = owner; e.mul = it.hpMul;
   e.maxHp = e.hp = Math.round(def.hp * hpK);
   e.dmg = def.dmg * dmgK;
-  e.bounty = def.bounty * bountyK * ECONOMY.bountyMul;
+  e.bounty = def.bounty * bountyK * bountyScale(s.wave);
   e.leakDamage = Math.round(def.leakDamage * LEAK_MUL * Math.sqrt(it.dmgMul) * (it.elite ? 2 : 1));
   e.boss = !!def.boss; e.raider = !!it.raider; e.elite = !!it.elite; e.src = it.src ?? -1;
   e.moveSpeed *= (it.speedMul ?? 1) * (anom === 'tempete' ? 1.15 : 1) * (s.players[owner]?.faction === 'abysses' ? 0.92 : 1);
