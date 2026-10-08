@@ -3,7 +3,7 @@
 // secondary rifts, telegraphed boss attacks and boss phases, fusion bonus, per-unit statistics.
 import { UNITS, unitStats, LEVEL_MUL } from '../data/units';
 import { ENEMIES } from '../data/enemies';
-import { CORE, DAMAGE_MATRIX } from '../data/economy';
+import { CORE, DAMAGE_MATRIX, ECONOMY } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_FX } from '../data/powers';
 import type { Ability, CombatStats } from '../data/types';
 import { waveToughness } from '../data/waves';
@@ -197,7 +197,7 @@ function enemyEnt(s: GameState, it: SpawnSpec, team: number, owner: number): Ent
   e.enemy = true; e.arena = team; e.owner = owner; e.mul = it.hpMul;
   e.maxHp = e.hp = Math.round(def.hp * hpK);
   e.dmg = def.dmg * dmgK;
-  e.bounty = def.bounty * bountyK;
+  e.bounty = def.bounty * bountyK * ECONOMY.bountyMul;
   e.leakDamage = Math.round(def.leakDamage * LEAK_MUL * Math.sqrt(it.dmgMul) * (it.elite ? 2 : 1));
   e.boss = !!def.boss; e.raider = !!it.raider; e.elite = !!it.elite; e.src = it.src ?? -1;
   e.moveSpeed *= (it.speedMul ?? 1) * (anom === 'tempete' ? 1.15 : 1) * (s.players[owner]?.faction === 'abysses' ? 0.92 : 1);
@@ -312,6 +312,9 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
   const kp = killer && !killer.enemy ? s.players[killer.owner] : null;
   if (t.rift) { closeRift(s, t, kp); return; }
   if (t.enemy) {
+    // the lane remembers when its last enemy fell (speed bonus at the end of the wave)
+    const lane = s.players[t.owner];
+    if (lane) lane.lastKill = s.combatTime;
     // Bounty: lane owner if killed in its lane; otherwise the killer's owner (core kills give nothing).
     let pid = -1;
     if (!t.leaked) pid = t.owner;
@@ -322,6 +325,7 @@ function kill(s: GameState, t: Ent, killer: Ent | null) {
       const g = Math.round(t.bounty * ev * (p.powers.includes('fortune') ? 1.5 : 1) * (1 + BLESS.primes * blessingLv(s.teams[p.team], 'primes')));
       p.gold += g;
       p.stats.goldEarned += g;
+      p.waveKillGold += g;
     }
     if (kp) {
       const ks = kp.stats;
@@ -938,6 +942,7 @@ export function combatTick(s: GameState) {
         // reached the Core: detonates for its leak damage (no bounty)
         hitCore(s, e);
         e.dead = true; e.hp = 0;
+        s.players[e.owner].lastKill = s.combatTime;
         s.events.push({ t: 'die', id: e.id, boss: e.boss, x: e.x, z: e.z, arena: e.arena, enemy: true });
         continue;
       }

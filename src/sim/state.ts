@@ -121,6 +121,11 @@ export interface PlayerState {
   stats: PlayerStats;
   /** undo stack of the current preparation phase, emptied when combat starts (optional: older saves) */
   undo?: UndoStep[];
+  // v0.7.1 wave economy (recap at the end of the wave)
+  lastKill: number; // combat time of the last enemy removed from this lane
+  waveKillGold: number; // bounties earned this wave
+  waveBonus: number; // speed bonus granted at the end of the wave
+  waveTime: number; // seconds it took to clear the lane (maxCombat when not held)
 }
 
 export interface CoreState {
@@ -295,7 +300,9 @@ export type GameEvent =
   | { t: 'cast'; pid: number; power: string; arena: number; x: number; z: number; assist: boolean }
   | { t: 'wave'; n: number; boss: boolean }
   | { t: 'combat' }
-  | { t: 'income'; pid: number; gold: number }
+  | { t: 'income'; pid: number; gold: number; k?: 'wave' }
+  /** v0.7.1: end-of-wave recap (income, kill bounties, speed bonus, lane held) */
+  | { t: 'waveEnd'; pid: number; wave: number; income: number; kills: number; speed: number; held: boolean; time: number; total: number }
   | { t: 'msg'; pid: number; text: string }
   | { t: 'end'; result: string }
   // v0.4

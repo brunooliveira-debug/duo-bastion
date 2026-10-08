@@ -14,7 +14,19 @@ export const ECONOMY = {
   investChunk: 20,
   waveClearBonus: 10, // gold if no leak in your lane
   randomFactionGold: 40, // bonus for accepting a random army
+  // v0.7.1: gold between the waves — every kill pays more, and a lane cleared fast pays a speed bonus
+  bountyMul: 1.35, // multiplier on every enemy bounty
+  speedBonusBase: 10, // max speed bonus = base + perWave × wave (lane held without a leak, cleared at once)
+  speedBonusPerWave: 4,
+  speedRef: 40, // seconds: a lane cleared in t seconds earns max × (speedRef − t) / speedRef
 };
+
+/** Speed bonus for a lane held (no leak) and cleared at `t` seconds of combat. */
+export function speedBonus(wave: number, t: number, held: boolean) {
+  if (!held) return 0;
+  const k = Math.max(0, Math.min(1, (ECONOMY.speedRef - t) / ECONOMY.speedRef));
+  return Math.round(k * (ECONOMY.speedBonusBase + ECONOMY.speedBonusPerWave * wave));
+}
 
 export const TIMING = {
   firstBuild: 60,

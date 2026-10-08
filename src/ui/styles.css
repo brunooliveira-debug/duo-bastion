@@ -644,3 +644,113 @@ h2 { font-family: var(--display); letter-spacing: 0.05em; }
   .bossbar { top: calc(var(--pill-h) * 2 + 100px + var(--sat)); }
   .toasts { top: calc(var(--pill-h) * 2 + 104px + var(--sat)); }
 }
+
+/* =====================================================================
+   v0.7.1 — the interface follows the screen: every size is a function of the viewport height
+   (landscape game), menus never clip, compact HUD on short screens, larger on tall ones.
+   ===================================================================== */
+:root {
+  --pill-h: clamp(28px, 4.9vh, 60px);
+  --num: clamp(13px, 2.35vh, 24px);
+  --card-w: clamp(54px, 9.8vh, 118px);
+  --card-h: clamp(74px, 13.2vh, 158px);
+  --round: clamp(42px, 7.5vh, 90px);
+  --ui: clamp(11px, 1.85vh, 16px);
+}
+#hud { font-size: var(--ui); }
+.pill.small { height: clamp(24px, 4.1vh, 38px); font-size: clamp(10.5px, 1.7vh, 15px); padding: 0 clamp(7px, 1.4vh, 11px) 0 clamp(5px, 1.1vh, 8px); gap: clamp(4px, 0.8vh, 6px); }
+.hud-row2 { gap: clamp(4px, 0.8vh, 6px); }
+.hud-left { gap: clamp(3px, 0.8vh, 6px); }
+.next-detail { font-size: clamp(10.5px, 1.7vh, 12px); max-width: min(300px, 40vw); }
+.rwrap small { font-size: clamp(9px, 1.5vh, 12px); }
+.ready { font-size: clamp(15px, 2.8vh, 24px); min-width: clamp(88px, 16vh, 120px); }
+.ready .rl { font-size: clamp(13px, 2.5vh, 20px); }
+.ready .rs { font-size: clamp(8.5px, 1.4vh, 10px); }
+.ucard .nm { font-size: clamp(8px, 1.3vh, 11px); }
+.ucard .ct { font-size: clamp(10.5px, 1.9vh, 15px); }
+.pbtn b { font-size: clamp(9px, 1.5vh, 11px); }
+.pbtn .pl { font-size: clamp(8px, 1.3vh, 10px); }
+.obtn b, .sealbtn b, .ochip b { font-size: clamp(9px, 1.5vh, 11px); }
+.duobtn b { font-size: clamp(10px, 1.8vh, 13px); }
+.toast { font-size: clamp(11.5px, 1.85vh, 16px); padding: clamp(5px, 1vh, 8px) clamp(9px, 1.9vh, 14px); }
+.toast.ping { font-size: clamp(13px, 2.4vh, 19px); }
+.sheet { font-size: clamp(12px, 1.9vh, 14px); }
+.minimap { width: clamp(112px, 24vh, 240px); height: clamp(62px, 13.4vh, 134px); }
+.siege { width: clamp(220px, min(27vw, 56vh), 480px); padding: clamp(3px, 0.7vh, 5px) clamp(7px, 1.4vh, 10px) clamp(4px, 0.8vh, 6px); gap: clamp(2px, 0.4vh, 3px); }
+.sg-wave { font-size: clamp(10px, 1.6vh, 14px); }
+.sg-name { font-size: clamp(9px, 1.5vh, 11px); }
+.sg-wave .timer-chip { height: clamp(17px, 2.8vh, 20px); font-size: clamp(9.5px, 1.5vh, 11px); min-width: clamp(36px, 6vh, 42px); }
+.sg-core .bar { height: clamp(7px, 1.25vh, 9px); }
+.sg-core b { font-size: clamp(9.5px, 1.55vh, 14px); min-width: clamp(80px, 12.5vh, 118px); }
+.sg-prog small { font-size: clamp(8.5px, 1.35vh, 12px); min-width: clamp(78px, 12.5vh, 118px); }
+.bossbar { width: min(46vw, 520px); font-size: clamp(10.5px, 1.7vh, 15px); }
+.bb-head { font-size: inherit; }
+/* short screens (phones in landscape): one decision strip, nothing under the siege bar */
+@media (max-height: 460px) and (orientation: landscape) {
+  .hud-left { max-width: calc(50vw - 125px); }
+  .hud-row2 { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
+  .hud-row2::-webkit-scrollbar { display: none; }
+  .hud-row2 > * { flex: 0 0 auto; }
+  .anomchip, .blesschip, .riftchip, .fusechip { order: -1; }
+  .army .rec, .nx-l, .nx-d { display: none; }
+  .next-detail { display: none; }
+  .pills .pill.inc-pill { display: none; }
+  .hud-top .pill { padding: 0 8px 0 6px; gap: 4px; }
+  .partner .pf { display: none; }
+  .partner { padding: 0 4px; }
+  .oppchip .oc { display: none; }
+  .oppchip { padding: 0 8px; }
+  .top-right { gap: 4px; }
+  .sg-name { display: none; }
+  .bossbar { top: calc(var(--pill-h) * 2 + 16px + var(--sat)); }
+  .toasts { top: calc(var(--pill-h) * 2 + 22px + var(--sat)); }
+  .minimap { top: calc(var(--pill-h) + 12px + var(--sat)); }
+  .sheet { max-height: calc(100vh - var(--round) - 70px - var(--sat) - var(--sab)); }
+  .sheet.side { width: min(300px, 42vw); }
+  .anomaly, .proposal { bottom: calc(var(--card-h) + 8px + var(--sab)); }
+  .orderstrip { bottom: calc(var(--round) * 1.3 + 12px + var(--sab)); }
+}
+/* tall screens (large tablets / 4K desktops): a little larger still */
+@media (min-height: 1300px) {
+  :root { --pill-h: 68px; --num: 28px; --card-w: 132px; --card-h: 178px; --round: 102px; --ui: 18px; }
+  .siege { width: clamp(220px, 27vw, 540px); }
+  .minimap { width: 260px; height: 146px; }
+  .bossbar { width: min(46vw, 640px); font-size: 15px; }
+  .pill.small { height: 38px; font-size: 15px; }
+  .logo { font-size: clamp(26px, min(7.5vw, 9.5vh), 110px); }
+  .btn { min-height: 62px; font-size: 19px; }
+  .toast { font-size: 17px; }
+  .sheet { width: min(420px, calc(100vw - 20px)); font-size: 16px; }
+}
+/* menus: never clipped (content scrolls from the top when taller than the screen), sizes follow the height */
+.screen { justify-content: safe center; gap: 0; }
+.logo { font-size: clamp(26px, min(7.5vw, 9.5vh), 92px); }
+.logo small { margin-top: clamp(3px, 0.8vh, 8px); }
+h2 { font-size: clamp(16px, 3.4vh, 24px); margin: clamp(4px, 1.2vh, 12px) 0; }
+.menu { gap: clamp(5px, 1.3vh, 10px); margin-top: clamp(6px, 2vh, 16px); }
+.btn { min-height: clamp(38px, 6.6vh, 58px); font-size: clamp(13px, 2.2vh, 18px); padding: clamp(4px, 1.2vh, 10px) clamp(10px, 2.4vh, 18px); border-radius: clamp(10px, 1.9vh, 14px); }
+.btn.small { min-height: clamp(32px, 5.6vh, 40px); font-size: clamp(12px, 2vh, 14px); }
+.field { min-height: clamp(38px, 7vh, 50px); font-size: clamp(14px, 2.5vh, 18px); }
+.field.code { font-size: clamp(22px, 4.5vh, 32px); }
+.card { padding: clamp(8px, 1.9vh, 14px); font-size: clamp(12px, 1.95vh, 14px); }
+.card .col, .col { gap: clamp(4px, 1.1vh, 8px); }
+.seg button { min-height: clamp(32px, 5.8vh, 42px); font-size: clamp(11.5px, 1.95vh, 14px); }
+.code-big { font-size: clamp(30px, 9vh, 64px); }
+.lp { min-height: clamp(60px, 12vh, 86px); padding: clamp(7px, 1.6vh, 12px); }
+.lp .nm { font-size: clamp(14px, 2.5vh, 18px); }
+.avatars button { width: clamp(34px, 6.2vh, 44px); height: clamp(34px, 6.2vh, 44px); font-size: clamp(18px, 3.4vh, 24px); }
+.armydetail h3 { font-size: clamp(16px, 3vh, 22px); }
+.version { font-size: clamp(9px, 1.5vh, 11px); }
+/* phones in landscape: the home menu in two columns so it fits without scrolling */
+@media (max-height: 460px) and (orientation: landscape) {
+  .screen { padding-top: calc(6px + var(--sat)); padding-bottom: calc(6px + var(--sab)); }
+  .logo { font-size: clamp(22px, 7.5vh, 34px); }
+  .logo small { font-size: 0.26em; letter-spacing: 0.3em; margin-top: 2px; }
+  .menu { width: min(620px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin-top: 6px; }
+  .menu > .row:first-child, .menu > .btn.primary, .menu > .btn.gold, .menu > .btn.daily, .menu > .muted { grid-column: 1 / -1; }
+  .menu > .row { display: contents; }
+  .menu > .row:first-child { display: flex; }
+  .menu.row { display: flex; }
+  .screen > .card { width: min(640px, 100%); }
+  .lobby-players { gap: 6px; }
+}

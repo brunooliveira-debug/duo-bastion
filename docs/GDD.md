@@ -80,7 +80,7 @@ Introduction courte (épithète, nom, mécanique, assombrissement, léger zoom),
 - **Défi du jour** : Survie, graine et armées du jour, record local. Classement en ligne prêt (`supabase/migrations/002_daily_challenge.sql`, non appliqué).
 
 ## 12. Économie (`src/data/economy.ts`)
-Or (unités, ouvriers), Éther (ouvriers, Forge : envois, malédictions, modules, pouvoirs). Revenu par vague + primes + bonus voie tenue + Trésor. Envois : prix +30 % par copie, plafond par vague, recharges ; **v0.4 : leur puissance suit la courbe des vagues et ils marchent avec la vague**.
+Or (unités, ouvriers), Éther (ouvriers, Forge : envois, malédictions, modules, pouvoirs). Revenu par vague + primes (×1,35 depuis la v0.7.1) + bonus voie tenue + **bonus de rapidité** (v0.7.1 : voie tenue sans fuite, `speedBonus(vague, t)` = (10 + 4 × vague) × (40 − t) / 40, t = seconde où le dernier ennemi de la voie est tombé) + Trésor + Intendance. Un récapitulatif (`waveEnd`) détaille le tout au début de la préparation. Envois : prix +30 % par copie, plafond par vague, recharges ; **v0.4 : leur puissance suit la courbe des vagues et ils marchent avec la vague**.
 
 ## 13. Réseau (hôte autoritaire)
 L'invité envoie des **commandes** numérotées ; l'hôte **valide** (coûts, phases, recharges, propriétaire, cibles), **applique**, puis diffuse le méta-état (≤ 3 Hz) et les entités (≈ 8 Hz). v0.4 :
@@ -94,6 +94,7 @@ L'invité envoie des **commandes** numérotées ; l'hôte **valide** (coûts, ph
 Modèle : force ≈ √(ΣDPS × ΣPV effectifs), PV effectifs des tireurs ×1,6 (ils combattent derrière la ligne de front).
 
 ## 15. Confort et lisibilité
+- **Interface adaptative (v0.7.1)** : toutes les dimensions de l'interface sont des fonctions de la hauteur de l'écran (`clamp`), avec un mode compact sous 460 px de haut (téléphones en paysage) et des plafonds relevés au-delà de 1300 px (1440p, 4K). Les menus défilent depuis le haut plutôt que d'être coupés.
 Options : graphismes ÉLEVÉ / MOYEN / BAS, secousses (normales / réduites / aucune), flashs, vibrations. Micro-ralentis visuels (jamais de la simulation) sur les gros impacts. Flèches de direction des ennemis en préparation, zones rouges télégraphiées, anneaux de couleur (cible FOCUS, unités affectées à la Faille, ralliement, paires fusionnables), cases dangereuses.
 
 ## 16. Architecture

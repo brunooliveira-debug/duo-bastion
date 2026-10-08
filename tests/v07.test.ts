@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { createGame, applyCommand, step, drainEvents, applyBlessing } from '../src/sim/game';
 import { BLESSINGS, BLESS, RARE_WAVE, blessingWave } from '../src/data/blessings';
 import { ENEMIES } from '../src/data/enemies';
+import { ECONOMY, speedBonus } from '../src/data/economy';
 import { unitStats } from '../src/data/units';
 import { RESO_MAX } from '../src/data/resonance';
 import { addReso } from '../src/sim/resonance';
@@ -111,7 +112,42 @@ describe('blessings (draft between the waves)', () => {
     applyCommand(s, 0, { c: 'debug', action: 'kill' });
     const g0 = p.gold;
     for (let i = 0; i < 200 && s.phase !== 'build'; i++) { step(s); drainEvents(s); }
-    expect(p.gold - g0).toBe(p.income + BLESS.intendance + 10); // + "voie tenue" bonus
+    expect(p.gold - g0).toBe(p.income + BLESS.intendance + 10 + p.waveBonus); // + "voie tenue" + speed bonus
+  });
+});
+
+describe('wave economy (v0.7.1)', () => {
+  it('bounties are boosted and tallied per wave; a lane held and cleared fast earns a speed bonus', () => {
+    const s = coop(['rouages', 'astreens'], 11);
+    const p = s.players[0];
+    toCombat(s);
+    const foe = s.ents.find(e => e.enemy && e.owner === 0)!;
+    expect(foe.bounty).toBeCloseTo(ENEMIES[foe.defId].bounty * ECONOMY.bountyMul, 6);
+    const g0 = p.gold;
+    run(s, 20); // 1 s in
+    applyCommand(s, 0, { c: 'debug', action: 'kill' });
+    for (let i = 0; i < 200 && s.phase !== 'build'; i++) { step(s); drainEvents(s); }
+    expect(p.leakedThisWave).toBe(0);
+    expect(p.waveBonus).toBe(speedBonus(1, p.waveTime, true));
+    expect(p.waveBonus).toBeGreaterThan(0);
+    expect(speedBonus(10, 0, true)).toBe(ECONOMY.speedBonusBase + ECONOMY.speedBonusPerWave * 10);
+    expect(speedBonus(10, ECONOMY.speedRef, true)).toBe(0);
+    expect(speedBonus(10, 5, false)).toBe(0);
+    expect(p.gold - g0).toBe(p.income + ECONOMY.waveClearBonus + p.waveBonus);
+  });
+
+  it('a lane that leaks gets no speed bonus, and the recap event sums it all up', () => {
+    const s = coop(['rouages', 'astreens'], 12); // no units: everything leaks
+    toCombat(s);
+    let recap: Extract<ReturnType<typeof drainEvents>[number], { t: 'waveEnd' }> | undefined;
+    for (let i = 0; i < 20 * 100 && s.phase !== 'build'; i++) { step(s); for (const e of drainEvents(s)) if (e.t === 'waveEnd' && e.pid === 0) recap = e; }
+    expect(s.phase).toBe('build');
+    expect(s.players[0].leakedThisWave).toBeGreaterThan(0);
+    expect(s.players[0].waveBonus).toBe(0);
+    expect(recap).toBeTruthy();
+    expect(recap!.held).toBe(false);
+    expect(recap!.speed).toBe(0);
+    expect(recap!.total).toBe(recap!.income);
   });
 });
 

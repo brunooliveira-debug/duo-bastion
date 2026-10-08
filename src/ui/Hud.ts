@@ -412,7 +412,8 @@ export class Hud {
     if (E.next.dataset.k === nKey) return;
     E.next.dataset.k = nKey;
     E.next.className = `pill small next${w.boss ? ' boss' : ''}${ev ? ' event' : ''}`;
-    E.next.innerHTML = `${ev ? `<span class="evb">${icon(ev.icon, 14, '#1a1020', 3)}${ev.name}</span>` : ''}<span>${m.phase === 'build' ? 'Prochaine' : 'En cours'} : ${esc(w.name)} · ${[...def].map(d => DEFENSE_NAMES[d]).join('/')}${hint} · ×${count}</span>`;
+    // split in spans so small screens can drop the label and the defence types (CSS)
+    E.next.innerHTML = `${ev ? `<span class="evb">${icon(ev.icon, 14, '#1a1020', 3)}${ev.name}</span>` : ''}<span><span class="nx-l">${m.phase === 'build' ? 'Prochaine' : 'En cours'} : </span>${esc(w.name)}<span class="nx-d"> · ${[...def].map(d => DEFENSE_NAMES[d]).join('/')}${hint}</span> · ×${count}</span>`;
     clear(E.nextDetail);
     E.nextDetail.append(
       h('b', {}, `${m.phase === 'build' ? 'PROCHAINE' : 'EN COURS'} : ${w.name}`), h('br'),
@@ -462,7 +463,7 @@ export class Hud {
       this.waveTotal = Math.max(this.waveTotal, n);
       const k = this.waveTotal ? 1 - n / this.waveTotal : 0;
       E.progFill.style.width = `${k * 100}%`;
-      E.progTxt.textContent = `${n} ennemi${n > 1 ? 's' : ''} restant${n > 1 ? 's' : ''}`;
+      E.progTxt.textContent = `${n} restant${n > 1 ? 's' : ''} · ${Math.floor(m.combatTime)} s`;
       E.siege.dataset.mode = 'combat';
     } else {
       if (m.phase === 'build') this.waveTotal = 0;
@@ -756,7 +757,15 @@ export class Hud {
       }
       case 'portal': if (ev.arena === me.team && !this.hints.has('portal')) { this.hints.add('portal'); this.toast('🌀 Portail de Repli : un fuyard renvoyé au début de la voie !', 'info'); } break;
       case 'powerUp': if (ev.pid === me.pid) audio.play('upgrade'); break;
-      case 'income': if (ev.pid === me.pid && ev.gold > 0) { audio.play('coin'); this.toast(`+${ev.gold} 🪙`, 'info'); } break;
+      case 'income': if (ev.pid === me.pid && ev.gold > 0 && ev.k !== 'wave') { audio.play('coin'); this.toast(`+${ev.gold} 🪙`, 'info'); } break;
+      // v0.7.1: end-of-wave recap — income, kill bounties, speed bonus, lane held
+      case 'waveEnd': if (ev.pid === me.pid) {
+        audio.play('coin');
+        const parts = [`+${ev.income} revenu`, `+${ev.kills} éliminations`];
+        if (ev.speed > 0) parts.push(`+${ev.speed} rapidité (${ev.time} s)`);
+        if (ev.held) parts.push(`+${ECONOMY.waveClearBonus} voie tenue`);
+        this.toast(`💰 Vague ${ev.wave} : ${parts.join(' · ')} = +${ev.total + ev.kills} 🪙`, 'ping');
+      } break;
       case 'ping': {
         if (m.players[ev.pid]?.team !== me.team) break;
         const p = PINGS.find(x => x.id === ev.ping);
@@ -803,7 +812,7 @@ export class Hud {
       this.cancelPlacement();
       this.tutorial?.on('combat');
     } else if (m.phase === 'resolution') {
-      if (me.leakedThisWave === 0) this.toast('✔ Voie tenue ! Bonus +' + ECONOMY.waveClearBonus + ' 🪙', 'info');
+      if (me.leakedThisWave === 0) this.toast('✔ Voie tenue ! Bonus de rapidité en route…', 'info');
       this.tutorial?.on('resolution');
     } else if (m.phase === 'ended') {
       this.showEnd(m);

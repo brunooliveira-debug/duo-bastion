@@ -70,6 +70,14 @@ DUO BASTION est un auto-battler : il n'y a pas d'avatar de héros à déplacer. 
 - Navigateur (1280×720 et 812×375 paysage) : panneau de bénédictions et choix, puce et liste, barre de siège en préparation / combat / résolution, mini-carte, vague de boss avec SCEAU, bris des sceaux par l'IA partenaire, auras niveau 4/5, îles flottantes. Captures : `docs/captures/v07_*.jpg`.
 - Sauvegardes : format d'état passé en version 4 ; une partie v0.6 en cours n'est pas reprise (ignorée proprement, comme aux versions précédentes).
 
-## 6. Rappel sécurité
+## 6. v0.7.1 — interface adaptative et économie de fin de vague
+
+Retour du joueur sur téléphone (2400×1080) : HUD trop grand et chevauchements, titre du menu coupé ; et pas assez d'or entre les vagues.
+
+- **Interface** : toutes les tailles (pastilles, cartes d'unités, boutons ronds, barre de siège, mini-carte, boutons et champs des menus) sont désormais calculées en fonction de la **hauteur** de l'écran (`clamp(min, vh, max)`), ce qui couvre téléphones, portables, moniteurs 1080p et 1440p/4K (plafonds relevés au-delà de 1300 px de haut). Les écrans de menu ne coupent plus leur haut (`justify-content: safe center`) et l'accueil passe en deux colonnes sur téléphone. Sur les écrans de moins de 460 px de haut : une seule ligne d'indicateurs (défilante, décisions en tête), rien ne passe sous la barre de siège, étiquettes abrégées.
+  Vérifié en 800×360 (téléphone), 1000×450, 1280×720, 1366×768, 1920×1080, 2560×1440 et 375×812 (portrait).
+- **Économie** : primes d'élimination **×1,35** (toutes les vagues, envois compris, IA incluse) ; **bonus de rapidité** par joueur quand la voie est tenue sans fuite : (10 + 4 × vague) × (40 − t) / 40, t = seconde à laquelle le dernier ennemi de la voie est tombé (vague 10 nettoyée en 15 s : +31 or) ; **récapitulatif** au début de chaque préparation : revenu, or des éliminations, bonus de rapidité, voie tenue ; le temps de combat s'affiche dans la barre de siège. Tests 75/75.
+
+## 7. Rappel sécurité
 
 La clé secrète Supabase collée dans le chat (`sb_secret_…`) doit être révoquée (Supabase → Project Settings → API Keys). Le jeu ne l'utilise pas.

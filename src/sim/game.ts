@@ -5,7 +5,7 @@
 // Pure logic, no DOM. The host owns one instance; guests only receive snapshots.
 import { UNITS, FACTIONS, FACTION_IDS, MAX_LEVEL, BRANCH_LEVEL, upgradeCost, unitValueAt } from '../data/units';
 import {
-  CORE, ECONOMY, GRID, POWERS, RAIDERS, CURSES, TIMING, buildTime, raiderScale, raiderUnlock, raiderPrice, sendCap, curseUnlock,
+  CORE, ECONOMY, GRID, POWERS, RAIDERS, CURSES, TIMING, buildTime, raiderScale, raiderUnlock, raiderPrice, sendCap, curseUnlock, speedBonus,
 } from '../data/economy';
 import { FACTION_POWERS, POWER_LEVEL_CD, POWER_MAX_LEVEL, POWER_UP_COST, powerUnlock } from '../data/powers';
 import { getWave, WAVE_EVENTS } from '../data/waves';
@@ -109,6 +109,7 @@ export function createGame(settings: GameSettings, seed: number): GameState {
         raiderQueue: [], raiderCd: {}, curseQueue: [], curseCd: {}, powerLv: [1, 1, 1], powerCd: [0, 0, 0], fogUntil: 0, jamUntil: 0,
         runes: [], hazards: [], undo: [], orders: 0, orderCd: 0, anomalyVote: null, riftReward: false, waveHelpKills: 0, helpWave: 0, souls: 0,
         leakedThisWave: 0, waveDmg: 0, pauseVote: false, stats: newStats(),
+        lastKill: 0, waveKillGold: 0, waveBonus: 0, waveTime: 0,
       };
       s.players.push(p);
     }
@@ -725,6 +726,7 @@ function startCombat(s: GameState) {
     p.waveDmg = 0;
     p.waveHelpKills = 0;
     p.souls = 0;
+    p.lastKill = 0; p.waveKillGold = 0; p.waveBonus = 0; p.waveTime = 0;
     p.riftReward = false;
     p.orders = ORDER_CHARGES + (anomalyOf(s, p.team) === 'veille' ? 1 : 0) + BLESS.discipline * blessingLv(s.teams[p.team], 'discipline');
     p.orderCd = 0;
@@ -777,9 +779,14 @@ function endCombat(s: GameState) {
     if (e.rift && !e.dead) s.events.push({ t: 'rift', pid: e.owner, k: 'faded', reward: s.rift?.reward ?? 'gold', arena: e.arena, x: e.x, z: e.z });
   }
   s.ents = [];
+  const timedOut = s.combatTime >= TIMING.maxCombat;
   for (const p of s.players) {
     const dps = p.waveDmg / Math.max(1, s.combatTime);
     p.stats.maxDps = Math.max(p.stats.maxDps, Math.round(dps));
+    // v0.7.1 speed bonus: a lane held without a leak pays more the faster it was cleared (paid with the income)
+    const held = p.leakedThisWave === 0 && !timedOut;
+    p.waveTime = held ? Math.min(p.lastKill, TIMING.maxCombat) : TIMING.maxCombat;
+    p.waveBonus = speedBonus(s.wave, p.waveTime, held);
     for (const b of p.builds) { if (b.dmgTotal > p.stats.bestUnitDmg) { p.stats.bestUnitDmg = b.dmgTotal; p.stats.bestUnit = b.defId; } b.rift = false; }
     if (p.riftReward) { p.powerCd = [0, 0, 0]; p.riftReward = false; }
     if (p.waveHelpKills >= 6) journal(s, 'save', p.pid, p.waveHelpKills);
@@ -866,11 +873,13 @@ function startBuild(s: GameState) {
   }
   // payouts
   for (const p of s.players) {
-    let g = p.income + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')] + BLESS.intendance * blessingLv(s.teams[p.team], 'intendance');
-    if (p.leakedThisWave === 0) g += ECONOMY.waveClearBonus;
+    const income = p.income + MOD.tresor[moduleLv(s.teams[p.team], 'tresor')] + BLESS.intendance * blessingLv(s.teams[p.team], 'intendance');
+    const held = p.leakedThisWave === 0;
+    const g = income + (held ? ECONOMY.waveClearBonus : 0) + p.waveBonus;
     p.gold += g;
     p.stats.goldEarned += g;
-    s.events.push({ t: 'income', pid: p.pid, gold: g });
+    s.events.push({ t: 'income', pid: p.pid, gold: g, k: 'wave' });
+    s.events.push({ t: 'waveEnd', pid: p.pid, wave: s.wave, income, kills: Math.round(p.waveKillGold), speed: p.waveBonus, held, time: Math.round(p.waveTime), total: g });
     p.ready = false;
   }
   for (const t of s.teams) {
