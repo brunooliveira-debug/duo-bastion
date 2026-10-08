@@ -3,12 +3,16 @@
 //  • a procedural dusk environment map (PMREM) so gold, steel and crystals catch light;
 //  • a physically based material whose metalness / roughness come from a per-vertex attribute (aPbr),
 //    filled automatically from each part's colour (gold, steel, iron → metal; cloth, stone, skin → matte);
-//  • quality levels: ÉLEVÉ (bloom + MSAA + shadows), MOYEN (bloom, lighter), BAS (no post-processing).
+//  • quality levels: ULTRA (dedicated GPUs: MSAA 4x, GTAO ambient occlusion, light shafts, filmic finish, reflections
+//    everywhere), ÉLEVÉ (bloom + FXAA + shadows), MOYEN (bloom, lighter materials), BAS (no post-processing).
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
+import { GTAOShader, generateMagicSquareNoise } from 'three/examples/jsm/shaders/GTAOShader.js';
+import { PoissonDenoiseShader, generatePdSamplePointInitializer } from 'three/examples/jsm/shaders/PoissonDenoiseShader.js';
 import type { Quality } from './Renderer';
 
 // ---------------------------------------------------------------- material classes from colour
@@ -59,11 +63,13 @@ export function sharedEnvMap() { return sharedEnv; }
  *  ÉLEVÉ: PBR everywhere · MOYEN: PBR + reflections on the heroes (units, Bastion, gold, water), cheap Lambert on the
  *  big surfaces (ground, path, rocks, ruins, trees) · BAS: Lambert everywhere (same colours and rim light).
  */
-let tier: 'pbr' | 'mid' | 'low' = 'pbr';
-export function setMaterialTier(q: Quality) { tier = q === 'battery' ? 'low' : q === 'medium' ? 'mid' : 'pbr'; }
+let tier: 'ultra' | 'pbr' | 'mid' | 'low' = 'pbr';
+export function setMaterialTier(q: Quality) { tier = q === 'battery' ? 'low' : q === 'medium' ? 'mid' : q === 'ultra' ? 'ultra' : 'pbr'; }
+export function isUltraTier() { return tier === 'ultra'; }
 export function isLowTier() { return tier === 'low'; }
 /** Standard (PBR) or Lambert depending on the tier. hero = keeps PBR on MOYEN (small, shiny things: water, gold). */
 export function surfaceMaterial(p: THREE.MeshStandardMaterialParameters, hero = false): THREE.MeshStandardMaterial | THREE.MeshLambertMaterial {
+  if (tier === 'ultra') return reflective(new THREE.MeshStandardMaterial(p));
   if (tier === 'pbr' || (tier === 'mid' && hero)) return new THREE.MeshStandardMaterial(p);
   const { roughness: _r, metalness: _m, envMapIntensity: _e, normalScale: _n, ...rest } = p;
   return new THREE.MeshLambertMaterial(rest as THREE.MeshLambertMaterialParameters);
@@ -83,7 +89,7 @@ export function litMaterial(opts: { flat?: boolean; transparent?: boolean; opaci
     return l;
   }
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: opts.flat ?? true, metalness: 1, roughness: 1, transparent: opts.transparent, opacity: opts.opacity ?? 1, envMapIntensity: 0.85 });
-  if (opts.reflect) reflective(m);
+  if (opts.reflect || tier === 'ultra') reflective(m);
   m.onBeforeCompile = sh => {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 aPbr;\nvarying vec2 vPbr;')
@@ -144,6 +150,14 @@ const GradeShader = {
     uBloom: { value: 0 },
     uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
     uFxaa: { value: 1 },
+    // ULTRA only (compiled out elsewhere)
+    tAO: { value: null as THREE.Texture | null },
+    uAO: { value: 0.85 },
+    uShaft: { value: new THREE.Vector3(0.5, 0.5, 0) }, // light-shaft source (screen uv) + strength
+    uSharpen: { value: 0.32 },
+    uCA: { value: 0.0022 },
+    uGrain: { value: 0.022 },
+    uTime: { value: 0 },
     uExposure: { value: 1.1 },
     uContrast: { value: 1.12 },
     uSaturation: { value: 1.14 },
@@ -157,6 +171,10 @@ const GradeShader = {
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform sampler2D tBloom; uniform float uBloom; uniform vec2 uTexel; uniform float uFxaa; uniform float uExposure; uniform float uContrast; uniform float uSaturation; uniform vec3 uShadow; uniform vec3 uHighlight;
     uniform float uVignette; uniform vec3 uTint; uniform float uFlash; uniform vec3 uFlashColor; varying vec2 vUv;
+    #ifdef ULTRA
+    uniform sampler2D tAO; uniform float uAO; uniform vec3 uShaft; uniform float uSharpen; uniform float uCA; uniform float uGrain; uniform float uTime;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    #endif
     vec3 rrtOdt(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
     vec3 aces(vec3 c){
       const mat3 IN = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
@@ -181,8 +199,26 @@ const GradeShader = {
     }
     vec3 srgb(vec3 c){ return mix(pow(c, vec3(0.41666)) * 1.055 - vec3(0.055), c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308)))); }
     void main(){
+      #ifdef ULTRA
+      // radial chromatic aberration (corners only) + light sharpening of the MSAA image, then ambient occlusion
+      vec2 dc = vUv - 0.5; float r2 = dot(dc, dc);
+      vec3 base = vec3(T(vUv - dc * uCA * r2 * 4.0).r, T(vUv).g, T(vUv + dc * uCA * r2 * 4.0).b);
+      vec3 nb = T(vUv + vec2(uTexel.x, 0.0)) + T(vUv - vec2(uTexel.x, 0.0)) + T(vUv + vec2(0.0, uTexel.y)) + T(vUv - vec2(0.0, uTexel.y));
+      base = max(base + (base - nb * 0.25) * uSharpen, vec3(0.0));
+      base *= mix(1.0, texture2D(tAO, vUv).r, uAO);
+      vec3 hdr = base + texture2D(tBloom, vUv).rgb * uBloom;
+      // light shafts: march the (blurred, bright-only) bloom buffer toward the reactor of the Bastion
+      if (uShaft.z > 0.001) {
+        vec2 step = (uShaft.xy - vUv) * (0.85 / 28.0);
+        vec2 p = vUv; vec3 acc = vec3(0.0); float w = 1.0;
+        for (int i = 0; i < 28; i++) { p += step; acc += texture2D(tBloom, p).rgb * w; w *= 0.94; }
+        float fall = 1.0 - smoothstep(0.0, 0.85, length((vUv - uShaft.xy) * vec2(1.7, 1.0)));
+        hdr += acc * (uShaft.z / 28.0) * fall;
+      }
+      #else
       vec3 base = uFxaa > 0.5 ? fxaa(vUv) : T(vUv);
       vec3 hdr = base + texture2D(tBloom, vUv).rgb * uBloom;
+      #endif
       vec3 c = srgb(aces(hdr));
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c += uShadow * (1.0 - smoothstep(0.0, 0.5, l)) + uHighlight * smoothstep(0.45, 1.0, l);
@@ -193,6 +229,9 @@ const GradeShader = {
       vec2 d = vUv - 0.5; d.x *= 1.25;
       c *= 1.0 - uVignette * smoothstep(0.32, 0.95, length(d));
       c = mix(c, uFlashColor, uFlash);
+      #ifdef ULTRA
+      c += (hash(vUv * vec2(1931.7, 1213.3) + fract(uTime * 7.31)) - 0.5) * uGrain; // fine film grain
+      #endif
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
 };
@@ -203,6 +242,10 @@ export interface Look {
   /** brief full-screen light change (Résonance, boss): tint multiplies the image, flash mixes a colour in */
   setTint(r: number, g: number, b: number): void;
   setFlash(k: number, color?: THREE.Color): void;
+  /** ULTRA: light shafts from a screen point (uv 0..1) with a strength (0 = off) */
+  setShafts(u: number, v: number, k: number): void;
+  /** ULTRA: animated grain */
+  setTime(t: number): void;
   bloom: UnrealBloomPass | null;
   composer?: EffectComposer;
   enabled: boolean;
@@ -214,20 +257,26 @@ export function createLook(renderer: THREE.WebGLRenderer, scene: THREE.Scene, ca
   const tint = new THREE.Vector3(1, 1, 1);
   if (quality === 'battery') {
     // BAS: no post-processing at all (tone mapping happens in the materials)
-    return { render: () => renderer.render(scene, camera), setSize: () => {}, setTint: () => {}, setFlash: () => {}, bloom: null, enabled: false };
+    return { render: () => renderer.render(scene, camera), setSize: () => {}, setTint: () => {}, setFlash: () => {}, setShafts: () => {}, setTime: () => {}, bloom: null, enabled: false };
   }
+  const ultra = quality === 'ultra';
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-  // no MSAA on the HDR buffer: measured with a GPU timer, 2x MSAA cost 4-7 ms per frame on an Intel UHD at 720p.
-  // Edges are smoothed by the FXAA of the final pass instead (a few texture reads).
-  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 0 });
+  // ÉLEVÉ / MOYEN: no MSAA on the HDR buffer (measured with a GPU timer: 2x MSAA cost 4-7 ms per frame on an Intel UHD
+  // at 720p), edges smoothed by the FXAA of the final pass. ULTRA (dedicated GPUs): 4x MSAA + a depth texture for the AO.
+  const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: ultra ? 4 : 0 });
+  if (ultra) rt.depthTexture = new THREE.DepthTexture(size.x, size.y);
   const composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), quality === 'high' ? 0.72 : 0.6, 0.45, 0.95);
+  const ao = ultra ? new AOPass(camera as THREE.PerspectiveCamera) : null;
+  if (ao) composer.addPass(ao);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), ultra ? 0.8 : quality === 'high' ? 0.72 : 0.6, ultra ? 0.5 : 0.45, 0.95);
   composer.addPass(bloom);
   const grade = new ShaderPass(GradeShader);
+  if (ultra) { grade.material.defines.ULTRA = 1; grade.material.needsUpdate = true; }
   composer.addPass(grade);
   const u = grade.uniforms as typeof GradeShader.uniforms;
   u.uExposure.value = renderer.toneMappingExposure;
+  if (ao) { u.tAO.value = ao.texture; u.uFxaa.value = 0; }
   // the bloom is added in the final pass (texture lookup) instead of UnrealBloomPass's own full-screen additive blend
   // into the (multisampled) HDR buffer: one full-screen pass + one MSAA resolve fewer
   bloom.blendMaterial.visible = false;
@@ -243,15 +292,82 @@ export function createLook(renderer: THREE.WebGLRenderer, scene: THREE.Scene, ca
       // the bloom chain runs on a reduced buffer: UnrealBloomPass ignores .resolution after construction and
       // sizes its first mip at half of what setSize gets, so we hand it a smaller size (first mip at 1/4 on ÉLEVÉ,
       // 1/6 on MOYEN of the screen): same soft glow, a fraction of the fill cost
-      const k = quality === 'high' ? 0.5 : 0.34;
+      const k = ultra ? 0.6 : quality === 'high' ? 0.5 : 0.34;
       bloom.setSize(Math.max(64, Math.round(w * pr * k)), Math.max(64, Math.round(h * pr * k)));
     },
     setTint: (r, g, b) => { tint.set(r, g, b); u.uTint.value.copy(tint); },
     setFlash: (k, color) => { u.uFlash.value = k; if (color) u.uFlashColor.value.set(color.r, color.g, color.b); },
+    setShafts: (x, y, k) => { u.uShaft.value.set(x, y, ultra ? k : 0); },
+    setTime: t => { u.uTime.value = t; },
     bloom,
     composer,
     enabled: true,
   };
+}
+
+// ---------------------------------------------------------------- ULTRA ambient occlusion
+
+/**
+ * GTAO from the main pass's depth buffer only (normals reconstructed from depth), at half resolution, then a
+ * Poisson denoise. Three's GTAOPass would render the whole scene a second time for normals (and crashes in r169 when
+ * handed an existing depth texture), which doubles the draw calls — this keeps the CPU budget for 144 FPS.
+ */
+class AOPass extends Pass {
+  private ao: THREE.WebGLRenderTarget;
+  private pd: THREE.WebGLRenderTarget;
+  private gtao: THREE.ShaderMaterial;
+  private pdm: THREE.ShaderMaterial;
+  private quad = new FullScreenQuad();
+  constructor(private camera: THREE.PerspectiveCamera) {
+    super();
+    this.needsSwap = false;
+    this.ao = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+    this.pd = this.ao.clone();
+    this.gtao = new THREE.ShaderMaterial({
+      defines: { ...GTAOShader.defines, NORMAL_VECTOR_TYPE: 0, SAMPLES: 12, PERSPECTIVE_CAMERA: 1 },
+      uniforms: THREE.UniformsUtils.clone(GTAOShader.uniforms),
+      vertexShader: GTAOShader.vertexShader, fragmentShader: GTAOShader.fragmentShader,
+      blending: THREE.NoBlending, depthTest: false, depthWrite: false,
+    });
+    const g = this.gtao.uniforms;
+    g.tNoise.value = generateMagicSquareNoise();
+    g.radius.value = 0.9; g.distanceExponent.value = 1.6; g.thickness.value = 1.4; g.distanceFallOff.value = 1.0; g.scale.value = 1.15;
+    const noise = new Uint8Array(64 * 64 * 4);
+    for (let i = 0; i < noise.length; i++) noise[i] = Math.floor(Math.random() * 256);
+    const noiseTex = new THREE.DataTexture(noise, 64, 64, THREE.RGBAFormat);
+    noiseTex.wrapS = noiseTex.wrapT = THREE.RepeatWrapping; noiseTex.needsUpdate = true;
+    this.pdm = new THREE.ShaderMaterial({
+      defines: { ...PoissonDenoiseShader.defines, NORMAL_VECTOR_TYPE: 0, SAMPLES: 16, SAMPLE_VECTORS: generatePdSamplePointInitializer(16, 2, 1) },
+      uniforms: THREE.UniformsUtils.clone(PoissonDenoiseShader.uniforms),
+      vertexShader: PoissonDenoiseShader.vertexShader, fragmentShader: PoissonDenoiseShader.fragmentShader,
+      blending: THREE.NoBlending, depthTest: false, depthWrite: false,
+    });
+    const p = this.pdm.uniforms;
+    p.tNoise.value = noiseTex; p.lumaPhi.value = 10; p.depthPhi.value = 2; p.normalPhi.value = 3; p.radius.value = 6;
+  }
+  get texture() { return this.pd.texture; }
+  setSize(w: number, h: number) {
+    const W = Math.max(2, w >> 1), H = Math.max(2, h >> 1);
+    this.ao.setSize(W, H); this.pd.setSize(W, H);
+    this.gtao.uniforms.resolution.value.set(W, H);
+    this.pdm.uniforms.resolution.value.set(W, H);
+  }
+  render(renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget) {
+    const depth = read.depthTexture;
+    if (!depth) return;
+    const c = this.camera, g = this.gtao.uniforms, p = this.pdm.uniforms;
+    g.tDepth.value = depth;
+    g.cameraNear.value = c.near; g.cameraFar.value = c.far;
+    g.cameraProjectionMatrix.value.copy(c.projectionMatrix);
+    g.cameraProjectionMatrixInverse.value.copy(c.projectionMatrixInverse);
+    g.cameraWorldMatrix.value.copy(c.matrixWorld);
+    renderer.setRenderTarget(this.ao);
+    this.quad.material = this.gtao; this.quad.render(renderer);
+    p.tDiffuse.value = this.ao.texture; p.tDepth.value = depth;
+    p.cameraProjectionMatrixInverse.value.copy(c.projectionMatrixInverse);
+    renderer.setRenderTarget(this.pd);
+    this.quad.material = this.pdm; this.quad.render(renderer);
+  }
 }
 
 // ---------------------------------------------------------------- debug performance overlay
@@ -266,14 +382,14 @@ export class PerfOverlay {
     this.el.className = 'perf';
     document.body.append(this.el);
   }
-  update(dt: number, renderer: THREE.WebGLRenderer, scene: THREE.Scene, particles: () => number) {
+  update(dt: number, renderer: THREE.WebGLRenderer, scene: THREE.Scene, particles: () => number, extra = '') {
     this.frames++; this.acc += dt;
     if (this.acc < 0.5) return;
     this.fps = this.frames / this.acc; this.frames = 0; this.acc = 0;
     let lights = 0;
     scene.traverse(o => { if ((o as THREE.Light).isLight && o.visible) lights++; });
     const i = renderer.info;
-    this.el.textContent = `${this.fps.toFixed(0)} FPS · ${i.render.calls} draw · ${(i.render.triangles / 1000).toFixed(0)}k tri · ${i.memory.textures} tex · ${i.memory.geometries} geo · ${lights} lum · ${particles()} part`;
+    this.el.textContent = `${this.fps.toFixed(0)} FPS · ${i.render.calls} draw · ${(i.render.triangles / 1000).toFixed(0)}k tri · ${i.memory.textures} tex · ${i.memory.geometries} geo · ${lights} lum · ${particles()} part${extra}`;
   }
   dispose() { this.el.remove(); }
 }

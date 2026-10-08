@@ -10,6 +10,7 @@ import { log, ONLINE, DEBUG } from './config';
 import { step, drainEvents } from './sim/game';
 import type { Difficulty, FactionChoice, GameMode } from './sim/state';
 import { h } from './ui/dom';
+import { benchHooks, runBenchmark } from './bench';
 
 let session: Session | null = null;
 let renderer: Renderer | null = null;
@@ -28,7 +29,7 @@ const events: SessionEvents = {
   conn: () => { /* HUD reads session.partnerOnline each refresh */ },
   kicked: msg => { teardown(); errorScreen(msg, goMenu); },
   rematch: () => {
-    cancelAnimationFrame(raf);
+    cancelFrame(raf);
     hud?.destroy(); hud = null;
     if (renderer) { renderer.dispose(); renderer.renderer.forceContextLoss(); renderer.renderer.domElement.remove(); renderer = null; }
     if (session) lobbyRender = lobbyScreen(session, leaveLobby);
@@ -36,7 +37,7 @@ const events: SessionEvents = {
 };
 
 function teardown() {
-  cancelAnimationFrame(raf);
+  cancelFrame(raf);
   hud?.destroy(); hud = null;
   if (renderer) { renderer.dispose(); renderer.renderer.forceContextLoss(); renderer.renderer.domElement.remove(); renderer = null; }
   session?.close(); session = null;
@@ -166,7 +167,7 @@ function enterGame() {
         enterGame();
       } else if (sess.role === 'host') {
         // back to the same lobby with the same partner
-        cancelAnimationFrame(raf);
+        cancelFrame(raf);
         hud?.destroy(); hud = null;
         if (renderer) { renderer.dispose(); renderer.renderer.forceContextLoss(); renderer.renderer.domElement.remove(); renderer = null; }
         sess.state = null; sess.view.meta = null; sess.lobby.started = false;
@@ -185,16 +186,19 @@ function enterGame() {
   let last = performance.now();
   let frameSkip = 0;
   const loop = (now: number) => {
-    raf = requestAnimationFrame(loop);
+    raf = nextFrame(loop);
     const dt = Math.min(0.1, (now - last) / 1000);
     if (save.prefs.quality === 'battery' && (frameSkip++ & 1)) return; // ~30 fps cap
     last = now;
     if (!session || !renderer || !hud) return;
+    benchHooks.pre?.(dt);
+    const t0 = performance.now();
     session.update(dt);
     const ev = session.view.takeEvents();
     hud.feedEvents(ev);
     hud.update(dt);
     renderer.frame(dt, session.view, { localPid: session.myPid, ghost: hud.ghostState(), selected: hud.selected, showGrid: true, events: ev });
+    benchHooks.post?.(dt, performance.now() - t0);
     const m = session.view.meta;
     if (m?.phase === 'ended' && !reported) {
       reported = true;
@@ -206,8 +210,21 @@ function enterGame() {
       upsertProfile();
     }
   };
-  raf = requestAnimationFrame(loop);
+  raf = nextFrame(loop);
 }
+
+/** ?bench: built-in performance test on a fixed scene (see bench.ts) */
+function startBench() {
+  teardown();
+  session = Session.solo({ mode: 'vsai', totalWaves: 21, difficulty: 'normal', humans: [{ name: save.profile.name || 'Bench', faction: 'astreens' }] }, events, 777);
+  enterGame();
+  runBenchmark(() => session, () => renderer, save.prefs.quality, () => { history.replaceState(null, '', import.meta.env.BASE_URL); goMenu(); });
+}
+
+/** test hook: ?debug&timerloop drives the loop with a timer (hidden / headless browsers do not fire rAF) */
+const TIMER_LOOP = DEBUG && new URLSearchParams(location.search).has('timerloop');
+const nextFrame: (cb: FrameRequestCallback) => number = TIMER_LOOP ? cb => window.setTimeout(() => cb(performance.now()), 8) : cb => requestAnimationFrame(cb);
+const cancelFrame = (id: number) => (TIMER_LOOP ? clearTimeout(id) : cancelAnimationFrame(id));
 
 // ------------------------------------------------------------------ boot
 function boot() {
@@ -215,6 +232,7 @@ function boot() {
   const qs = new URLSearchParams(location.search);
   const joinMatch = path.match(/\/join\/([A-Za-z0-9]{5})/) ?? (qs.get('join') ? [, qs.get('join')!] : null);
   audio.setMood('menu');
+  if (qs.has('bench')) { startBench(); return; }
   if (joinMatch) {
     const code = joinMatch[1]!.toUpperCase();
     const active = save.data.active;

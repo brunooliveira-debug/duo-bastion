@@ -19,10 +19,13 @@ const LANE_END = 46;
 const CORE_R = 10.5;
 const PATH_HW = 4.6; // flagstone half-width (battlefield)
 const ISLE_HW = 7.2; // island half-width (ledges beyond the walls)
+const BRIDGE_X0 = 10.3; // where the Core island flagstones hand over to the bridge flagstones
 
 export interface Env {
   update(dt: number, time: number): void;
   setMood(t: number, boss: boolean): void;
+  /** ULTRA: the warm lantern / brazier lights follow the camera focus */
+  setFocus(x: number, z: number): void;
   /** Dress a lane with its player's faction (decor + ambient particles). Cheap when unchanged. */
   setLaneFaction(arena: number, slot: number, f: FactionId): void;
   coreCrystals: THREE.Mesh[];
@@ -128,7 +131,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
   const r = rng(4242);
   const updaters: ((dt: number, t: number) => void)[] = [];
   const mid = (arenaZ(0) + arenaZ(arenas - 1)) / 2;
-  const high = quality === 'high', lite = quality === 'battery';
+  const ultra = quality === 'ultra', high = quality === 'high' || ultra, lite = quality === 'battery';
 
   // ---------------- lights (driven by the mood) ----------------
   const hemi = new THREE.HemisphereLight(0xd8ecff, 0x6a5a3a, 1.2);
@@ -142,7 +145,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
   scene.add(rim);
   if (high) {
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(ultra ? 4096 : 2048, ultra ? 4096 : 2048);
     const c = sun.shadow.camera as THREE.OrthographicCamera;
     c.left = -55; c.right = 55; c.top = 40; c.bottom = -40; c.near = 1; c.far = 220;
     sun.shadow.bias = -0.0006;
@@ -212,9 +215,10 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
   }
 
   // ---------------- materials ----------------
-  const flag = flagstoneTextures('flag', [104, 106, 116], 0.55);
+  const flag = flagstoneTextures('flag', [104, 106, 116], 0.55, ultra ? 2 : 1);
   const pathMat = surfaceMaterial({ map: flag.map, normalMap: flag.normal, normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.88, metalness: 0, envMapIntensity: 0.45, color: 0xc4c4cc });
   const mossT = mossTexture();
+  if (ultra) for (const t of [flag.map, flag.normal, mossT]) { t.anisotropy = 16; t.needsUpdate = true; }
   const groundMat = surfaceMaterial({ map: mossT, roughness: 1, metalness: 0, envMapIntensity: 0.3, color: 0xb8c8a8 });
   const propMat = litMaterial({ rim: 0.18 });
   const windUniform = { value: 0 };
@@ -238,6 +242,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
   const waterMat = reflective(surfaceMaterial({ map: waterTex, color: 0x2a6a9a, transparent: true, opacity: 0.9, roughness: 0.15, metalness: 0.1, envMapIntensity: 1.2 }, true));
   updaters.push(dt => { fallTex.offset.y += dt * 0.9; waterTex.offset.y += dt * 0.35; });
   const lampMats: THREE.PointsMaterial[] = [];
+  const lampSpots: { p: THREE.Vector3; c: number; torch: boolean }[] = [];
   const gateMats: { ring: THREE.MeshBasicMaterial; disc: THREE.MeshBasicMaterial; glow: THREE.SpriteMaterial }[] = [];
   const gateBoss: ((b: boolean) => void)[] = [];
   const mergedGlow = (parts: Part[]) => new THREE.Mesh(mergeParts(parts), glowMat);
@@ -247,6 +252,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
     update: (dt, t) => { updaters.forEach(u => u(dt, t)); laneDecor.forEach(d => d.update(dt, t)); },
     setMood: () => {},
     setLaneFaction: () => {},
+    setFocus: () => {},
     coreCrystals: [], coreGroups: [], coreLights: [], bastions: [], sun,
   };
 
@@ -339,7 +345,9 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
       const slot = sg < 0 ? 0 : 1;
       const len = LANE_END - LANE_START, cx = sg * (LANE_START + len / 2);
       // flagstone battlefield over a mossy island top (top 0.12: the path edges sink into it)
-      path.push(pathGeometry(cx, z0, len + 0.6, PATH_HW, sg * 1.7 + a * 3.1));
+      // lane flagstones start exactly where the bridge ones end (x = 13): abutting, never overlapping
+      const laneLen = LANE_END + 0.3 - LANE_START;
+      path.push(pathGeometry(sg * (LANE_START + laneLen / 2), z0, laneLen, PATH_HW, sg * 1.7 + a * 3.1));
       ground.push(worldUV(new THREE.BoxGeometry(len + 1, 0.6, ISLE_HW * 2).translate(cx, -0.18, z0), 0.22));
       cliffColumns(r, cliffs, cx, z0, len / 2, ISLE_HW, 9);
       rocks.push(cliffCore(r, len * 0.46, ISLE_HW * 0.8, 20 + r() * 5, cx, z0));
@@ -387,13 +395,15 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
       props.push({ g: box(LANE_START - CORE_R + 0.6, 1.2, ISLE_HW * 2 + 2), c: 0x3a3844, p: [gx, -1.45, z0] });
       for (const ez of [-1, 1]) mist.push(new THREE.Vector3(gx, -14, z0 + ez * (ISLE_HW + 1)));
       stoneBridge(props, torches, gx, z0, LANE_START - CORE_R + 1.4, PATH_HW * 2 - 0.4);
-      path.push(pathGeometry(gx, z0, LANE_START - CORE_R + 1.4, PATH_HW - 0.6, 9 + sg));
+      // bridge flagstones: from the island edge (10.3) to the lane (13), edges folded under the deck
+      path.push(pathGeometry(sg * ((BRIDGE_X0 + LANE_START) / 2), z0, LANE_START - BRIDGE_X0, PATH_HW - 0.6, 9 + sg, 1 / 3, 0.2, PATH_HW - 0.35));
     }
 
     // ---------------- Core island: plaza, guardians, lanterns, crystals, the Bastion ----------------
     ground.push(worldUV(new THREE.CylinderGeometry(CORE_R, CORE_R, 0.6, 40).translate(0, -0.18, z0), 0.22));
     path.push(plazaGeometry(z0, 5.6));
-    for (const sg of [-1, 1]) path.push(pathGeometry(sg * (4.6 + (CORE_R + 0.6 - 4.6) / 2), z0, CORE_R + 0.6 - 4.6, PATH_HW - 0.6, 5 + sg));
+    // plaza → bridge strips, 1 cm lower than the plaza so the plaza wins where they overlap (no z-fighting)
+    for (const sg of [-1, 1]) path.push(pathGeometry(sg * ((5.0 + BRIDGE_X0) / 2), z0, BRIDGE_X0 - 5.0, PATH_HW - 0.6, 5 + sg, 1 / 3, 0.19));
     cliffColumns(r, cliffs, 0, z0, CORE_R, CORE_R, 11, true);
     rocks.push(cliffCore(r, CORE_R * 0.85, CORE_R * 0.8, 26, 0, z0));
     for (const ang of [-0.55, -1.0, -2.15, -2.6]) pine(trees, Math.cos(ang) * (CORE_R - 1.6), 0.12, z0 + Math.sin(ang) * (CORE_R - 1.6), 1.0 + r() * 0.3, r);
@@ -446,6 +456,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
     gg.setAttribute('color', new THREE.Float32BufferAttribute(mistCols, 3));
     scene.add(new THREE.Points(gg, new THREE.PointsMaterial({ map: glowTex, size: 5, vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })));
 
+    lampSpots.push(...lanterns.map(p => ({ p, c: 0xffa456, torch: false })), ...torches.map(p => ({ p, c: 0xff8a3a, torch: true })));
     // lantern halos (night lights, mood-driven)
     const lampGeo = new THREE.BufferGeometry().setFromPoints(lanterns);
     const lampMat = new THREE.PointsMaterial({ map: glowTex, size: 1.8, color: 0xffa050, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -489,7 +500,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
       group.add(new THREE.Points(gg, new THREE.PointsMaterial({ map: glowTex, size: 3.2, color: new THREE.Color(L.glow).multiplyScalar(0.55), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
     }
     // ambient particles (motion by faction)
-    const N = lite ? 18 : 46;
+    const N = lite ? 18 : ultra ? 90 : 46;
     const seeds = Array.from({ length: N }, () => ({ x: sg * (LANE_START + 1 + rr() * (LANE_END - LANE_START - 4)), z: z0 + (rr() - 0.5) * ISLE_HW * 2, y: rr() * 3, s: 0.4 + rr() * 0.8, ph: rr() * 6.28 }));
     const pos = new Float32Array(N * 3);
     const pg = new THREE.BufferGeometry();
@@ -517,6 +528,23 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
     };
     laneDecor.set(key, { f, group, update });
   };
+
+  // ---------------- ULTRA: real warm lights on the 8 lanterns / braziers nearest to the camera focus ----------------
+  if (ultra) {
+    const pool = Array.from({ length: 8 }, () => { const l = new THREE.PointLight(0xffa456, 0, 7.5, 2); scene.add(l); return { l, spot: null as null | (typeof lampSpots)[number] }; });
+    let fx = 0, fz = 0, acc = 1;
+    env.setFocus = (x, z) => { fx = x; fz = z; };
+    updaters.push((dt, t) => {
+      acc += dt;
+      if (acc > 0.3) { // re-pick the nearest spots a few times per second (light count stays fixed: no shader recompiles)
+        acc = 0;
+        const near = lampSpots.map(s => ({ s, d: (s.p.x - fx) ** 2 + (s.p.z - fz) ** 2 })).sort((a, b) => a.d - b.d).slice(0, pool.length);
+        pool.forEach((e, i) => { e.spot = near[i]?.s ?? null; if (e.spot) { e.l.position.copy(e.spot.p); e.l.color.setHex(e.spot.c); } });
+      }
+      pool.forEach((e, i) => { e.l.intensity = e.spot ? (e.spot.torch ? 5.5 + Math.sin(t * 13 + i * 1.7) * 0.9 : 3.6 + Math.sin(t * 3 + i) * 0.2) * lampLevel : 0; });
+    });
+  }
+  let lampLevel = 1;
 
   // ---------------- birds ----------------
   if (!lite) {
@@ -567,6 +595,7 @@ export function buildEnvironment(scene: THREE.Scene, arenas: number, quality: Qu
     hemi.color.copy(cHs); hemi.groundColor.copy(cHg); hemi.intensity = L(A.hemiI, B.hemiI);
     const lamps = L(A.lamps, B.lamps);
     for (const m of lampMats) { m.opacity = Math.min(1, lamps * 0.8); m.size = 1.4 + lamps * 1.2; }
+    lampLevel = lamps;
     // the abyss takes the colour of the hour, darker than the sky so the islands stand out
     const cloud = tmp.copy(cFog).lerp(cTop, 0.3).multiplyScalar(0.85);
     for (const m of seaMats) m.color.copy(cloud);

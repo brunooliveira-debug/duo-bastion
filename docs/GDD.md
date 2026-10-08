@@ -114,4 +114,4 @@ src/save      SaveSystem (profil, préférences, records, défi du jour)
 - **Bastion** (`src/render/bastion.ts`) : monument vertical ; ses 3 modules changent la silhouette (forme par famille, taille par niveau, bannière).
 - **Factions** (`src/render/terrain.ts`, `characters.ts`) : décor de voie, particules ambiantes, signature sur chaque unité, palettes des tours.
 - **Boss** : le Primordial évolue visuellement à 66 % et 33 % de PV ; les portails passent au rouge pendant les vagues de boss.
-- **Qualité** : ÉLEVÉ (PBR, ombres, halo ½ rés.), MOYEN (PBR sur les héros, halo ⅓ rés.), BAS (Lambert, sans post-traitement).
+- **Qualité** : ULTRA (cartes dédiées : MSAA 4×, GTAO, rayons de lumière, ombres 4096, lanternes éclairantes, reflets partout), ÉLEVÉ (PBR, ombres, halo ½ rés., FXAA), MOYEN (PBR sur les héros, halo ⅓ rés.), BAS (Lambert, sans post-traitement). Résolution dynamique sur ÉLEVÉ / ULTRA (vise la fréquence de l'écran, 144 Hz compris). Test de performance : `?bench`.

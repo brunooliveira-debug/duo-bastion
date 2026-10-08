@@ -12,8 +12,12 @@ export type Rand = () => number;
 
 const noise1 = (x: number, ph: number) => Math.sin(x * 0.55 + ph) * 0.28 + Math.sin(x * 1.7 + ph * 2.1) * 0.14 + Math.sin(x * 3.9 + ph * 0.7) * 0.06;
 
-/** Battlefield top: flat where units fight (y = 0.2), edges sinking under the grass along a wobbly line. World-space UVs. */
-export function pathGeometry(cx: number, z0: number, len: number, hw: number, ph: number, uvScale = 1 / 3): THREE.BufferGeometry {
+/**
+ * Battlefield top: flat where units fight (y0, 0.2 by default), edges sinking under the grass along a wobbly line.
+ * World-space UVs, so abutting pieces tile seamlessly. maxZ: on a bridge, the edges fold under the deck instead of
+ * hanging over the void. Pieces must ABUT, never overlap at the same height (z-fighting).
+ */
+export function pathGeometry(cx: number, z0: number, len: number, hw: number, ph: number, uvScale = 1 / 3, y0 = 0.2, maxZ = Infinity): THREE.BufferGeometry {
   const W = hw * 2 + 2.4;
   const g = new THREE.PlaneGeometry(len, W, Math.ceil(len * 1.2), 26);
   g.rotateX(-Math.PI / 2);
@@ -22,7 +26,8 @@ export function pathGeometry(cx: number, z0: number, len: number, hw: number, ph
     const x = pos.getX(i) + cx, z = pos.getZ(i);
     const edge = hw - 0.15 + noise1(x, ph + (z < 0 ? 0 : 2.3));
     const az = Math.abs(z);
-    const y = az > edge ? 0.2 - (az - edge) * 0.55 : 0.2;
+    let y = az > edge ? y0 - (az - edge) * 0.55 : y0;
+    if (az > maxZ) { pos.setZ(i, Math.sign(z) * maxZ); y = Math.min(y, 0.05); } // folded under the bridge deck
     pos.setY(i, y);
     uv.setXY(i, x * uvScale, (z + z0) * uvScale);
   }
@@ -157,7 +162,7 @@ export function deadTree(out: Part[], x: number, z: number, h: number, r: Rand, 
 
 /** Stone bridge (deck + parapets with balusters + brazier pillars at both ends). Deck top = 0.2. */
 export function stoneBridge(out: Part[], torches: THREE.Vector3[], gx: number, z0: number, blen: number, bw: number) {
-  out.push({ g: box(blen, 0.5, bw), c: ST.stone, p: [gx, -0.05, z0] });
+  out.push({ g: box(blen, 0.46, bw), c: ST.stone, p: [gx, -0.09, z0] }); // top at 0.14, under the path (0.2)
   out.push({ g: box(blen + 0.1, 0.12, bw + 0.3), c: ST.light, p: [gx, -0.36, z0] });
   // arch under the deck (two half rings, front and back faces)
   for (const ez of [-1, 1]) out.push({ g: new THREE.TorusGeometry(blen / 2 - 0.1, 0.32, 5, 12, Math.PI), c: ST.dark, p: [gx, -0.32, z0 + ez * (bw / 2 - 0.3)], r: [Math.PI, 0, 0] });

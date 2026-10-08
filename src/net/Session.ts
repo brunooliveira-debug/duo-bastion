@@ -257,6 +257,8 @@ export class Session {
           times.push(now);
           this.cmdTimes.set(uid, times);
           if (times.length > 15) { if (times.length === 16) this.transport?.send({ k: 'err', to: uid, msg: 'Trop de commandes à la fois : patiente une seconde.' }); return; }
+          // debug commands (gold, kill all, …) are for local testing only: never accepted from the network (anti-cheat)
+          if ((m.cmd as Command | undefined)?.c === 'debug') { this.transport?.send({ k: 'err', to: m.uid, msg: 'Commande réservée aux tests locaux.' }); return; }
           const pid = this.pidOf(idx);
           const err = applyCommand(this.state, pid, m.cmd as Command);
           if (err) this.transport?.send({ k: 'err', to: m.uid, msg: err });

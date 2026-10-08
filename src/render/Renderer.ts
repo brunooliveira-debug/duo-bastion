@@ -10,6 +10,7 @@ import type { GameEvent } from '../sim/state';
 import type { Branch, FactionId } from '../data/types';
 import { litMaterial, buildEnvMap, createLook, Look, PerfOverlay, sharedEnvMap, setMaterialTier } from './look';
 import { DEBUG } from '../config';
+import { FrameGovernor } from './governor';
 import { Batcher, Rig } from './characters';
 import { TowerRig } from './towers';
 import { Fx, ProjKind } from './fx';
@@ -23,7 +24,7 @@ import { ALL_DUO_ABILITIES } from '../data/resonance';
 import { MODULES, FAMILY_COLORS, ModuleId } from '../data/modules';
 import { save } from '../save/SaveSystem';
 
-export type Quality = 'high' | 'medium' | 'battery';
+export type Quality = 'ultra' | 'high' | 'medium' | 'battery';
 export const ARENA_GAP = 34;
 const arenaZ = (a: number) => a * ARENA_GAP;
 const GROUND_Y = 0.2;
@@ -127,6 +128,7 @@ export class Renderer {
   private resoStars: { group: THREE.Group; core: THREE.Mesh; halo: THREE.Sprite; k: number }[] = [];
   private hitStop = 0;
   private zoomPulse = 0;
+  private shaftTmp = new THREE.Vector3();
   // Résonance DUO cinematic: faction colours converge on the reactor during the channel, the grade warms toward the
   // ability colour, then a flash + an expanding rune glyph on impact
   private resoCh: ({ t: number; c: [number, number]; color: number; emit: number } | null)[] = [];
@@ -146,16 +148,18 @@ export class Renderer {
     this.applyQuality();
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.camera = new THREE.PerspectiveCamera(35, 1, 0.5, 1200);
-    if (quality === 'high') {
+    if (quality === 'high' || quality === 'ultra') {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     }
+    // dynamic resolution on ÉLEVÉ / ULTRA: holds the refresh rate of the screen (144 Hz on a gaming monitor)
+    if ((quality === 'high' || quality === 'ultra') && save.prefs.dynRes !== false) this.gov = new FrameGovernor(quality === 'ultra' ? 0.6 : 0.7, 1);
     const s = this.scene;
     this.look = createLook(this.renderer, s, this.camera, quality);
     buildEnvMap(this.renderer); // reflections only on the materials that ask for them (see look.ts)
     this.renderer.info.autoReset = false;
     if (DEBUG) this.perf = new PerfOverlay();
-    this.batch = new Batcher(s, this.mat, this.glowMat, quality === 'high');
+    this.batch = new Batcher(s, this.mat, this.glowMat, quality === 'high' || quality === 'ultra');
     this.fx = new Fx(s, this.camera, quality);
     this.numbers = new DamageNumbers();
 
@@ -171,7 +175,7 @@ export class Renderer {
     this.bubbles = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.09, depthWrite: false, blending: THREE.AdditiveBlending }), 120);
     const padGeo = new THREE.RingGeometry(0.34, 0.47, 10).rotateX(-Math.PI / 2);
     this.pads = new THREE.InstancedMesh(padGeo, new THREE.MeshBasicMaterial({ color: 0x5a4632, transparent: true, opacity: 0.55, depthWrite: false }), 200);
-    this.pads.receiveShadow = quality === 'high';
+    this.pads.receiveShadow = quality === 'high' || quality === 'ultra';
     for (const m of [this.hpBg, this.hpFg, this.blobs, this.rings, this.stars, this.bubbles, this.pads]) { m.count = 0; m.frustumCulled = false; s.add(m); }
     this.hpFg.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
     this.rings.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
@@ -216,9 +220,13 @@ export class Renderer {
 
   applyQuality() {
     const dpr = window.devicePixelRatio || 1;
-    const cap = this.quality === 'high' ? 2 : this.quality === 'medium' ? 1.5 : 1;
-    this.renderer.setPixelRatio(Math.min(dpr, cap));
+    const cap = this.quality === 'ultra' || this.quality === 'high' ? 2 : this.quality === 'medium' ? 1.5 : 1;
+    this.renderer.setPixelRatio(Math.min(dpr, cap) * (this.gov?.scale ?? 1));
   }
+  /** dynamic resolution (null on MOYEN / BAS or when turned off in the options) */
+  gov: FrameGovernor | null = null;
+  private vw = 1280;
+  private vh = 720;
 
   /** Build the floating-island arenas (one per team) + grid overlays. */
   buildArenas(n: number) {
@@ -264,6 +272,7 @@ export class Renderer {
   }
 
   resize(w: number, h: number) {
+    this.vw = w; this.vh = h;
     this.renderer.setSize(w, h, false);
     this.look.setSize(w, h);
     this.camera.aspect = w / h;
@@ -342,6 +351,7 @@ export class Renderer {
   // ---------------------------------------------------------------- per-frame
 
   frame(dt: number, view: ViewState, opts: { localPid: number; ghost: DragGhost | null; selected: { pid: number; bid: number } | null; showGrid: boolean; events: GameEvent[] }) {
+    if (this.gov?.tick(dt * 1000)) { this.applyQuality(); this.resize(this.vw, this.vh); }
     // hit-stop: a very short slow-down of the animations on huge impacts (never on the simulation)
     if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.15; }
     this.time += dt;
@@ -585,6 +595,18 @@ export class Renderer {
     const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch)).multiplyScalar(this.dist * (1 - zp));
     this.camera.position.copy(this.target).add(off).add(new THREE.Vector3((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh, 0));
     this.camera.lookAt(this.target);
+    // ULTRA: light shafts from the local Bastion's reactor (stronger while a Résonance is channelled); lantern lights
+    // follow the camera focus
+    if (this.quality === 'ultra') {
+      this.camera.updateMatrixWorld();
+      const rp = this.shaftTmp.set(0, CORE_Y, arenaZ(this.localTeam)).project(this.camera);
+      const on = rp.z < 1 && Math.abs(rp.x) < 1.25 && Math.abs(rp.y) < 1.25;
+      const edge = Math.max(Math.abs(rp.x), Math.abs(rp.y));
+      const k = on ? (0.8 + (this.resoCh[this.localTeam] ? 1.0 : 0)) * Math.min(1, (1.25 - edge) * 3) : 0;
+      this.look.setShafts((rp.x + 1) / 2, (rp.y + 1) / 2, k);
+      this.look.setTime(this.time);
+    }
+    this.env?.setFocus(this.target.x, this.target.z);
     if (this.env?.sun.castShadow) {
       // keep the shadow frustum centred on what we look at (sharp shadows at a modest map size)
       this.env.sun.target.position.set(this.target.x, 0, this.target.z);
@@ -595,7 +617,7 @@ export class Renderer {
     }
     this.renderer.info.reset();
     this.look.render();
-    this.perf?.update(dt, this.renderer, this.scene, () => this.fx.add.active + this.fx.smokeL.active);
+    this.perf?.update(dt, this.renderer, this.scene, () => this.fx.add.active + this.fx.smokeL.active, this.gov ? ` · rés. ${Math.round(this.gov.scale * 100)} % · cible ${this.gov.targetFps} i/s` : '');
   }
 
   private bossFlag = false;

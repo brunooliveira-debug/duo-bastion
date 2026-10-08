@@ -287,19 +287,21 @@ function normalFromHeight(h: Uint8ClampedArray, S: number, strength: number) {
  * Worn flagstones (irregular slabs, dark mortar, moss, cracks) + matching normal map: the battlefield path.
  * tint: base stone colour (cold grey-blue by default).
  */
-export function flagstoneTextures(key = 'flag', base: [number, number, number] = [104, 106, 116], moss = 0.5) {
-  const map = cached(key + ':map', () => buildFlag(key, base, moss).map);
-  const normal = cached(key + ':nrm', () => buildFlag(key, base, moss).normal);
+export function flagstoneTextures(key = 'flag', base: [number, number, number] = [104, 106, 116], moss = 0.5, res = 1) {
+  const k = key + '@' + res;
+  const map = cached(k + ':map', () => buildFlag(k, base, moss, res).map);
+  const normal = cached(k + ':nrm', () => buildFlag(k, base, moss, res).normal);
   return { map, normal };
 }
 const flagCache = new Map<string, { map: THREE.Texture; normal: THREE.Texture }>();
-function buildFlag(key: string, base: [number, number, number], moss: number) {
+function buildFlag(key: string, base: [number, number, number], moss: number, res = 1) {
   const hit = flagCache.get(key);
   if (hit) return hit;
-  const S = 512;
-  const col = canvas(S, S), hgt = canvas(S, S);
-  const r = rng(key.length * 977 + 13);
+  const S = 512, P = Math.round(S * res); // drawn in 512-space, rasterised at P×P (1024 on ULTRA)
+  const col = canvas(P, P), hgt = canvas(P, P);
+  const r = rng(key.split('@')[0].length * 977 + 13);
   const g = col.g, hg = hgt.g;
+  g.scale(res, res); hg.scale(res, res);
   g.fillStyle = 'rgb(28,26,30)'; g.fillRect(0, 0, S, S);
   hg.fillStyle = '#000'; hg.fillRect(0, 0, S, S);
   const rows = 6, rh = S / rows;
@@ -360,7 +362,7 @@ function buildFlag(key: string, base: [number, number, number], moss: number) {
   }
   const map = new THREE.CanvasTexture(col.c);
   map.wrapS = map.wrapT = THREE.RepeatWrapping; map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 8;
-  const normal = normalFromHeight(hg.getImageData(0, 0, S, S).data, S, 2.2);
+  const normal = normalFromHeight(hg.getImageData(0, 0, P, P).data, P, 2.2 * res);
   const out = { map, normal };
   flagCache.set(key, out);
   return out;

@@ -128,7 +128,7 @@ export class Fx {
 
   constructor(private scene: THREE.Scene, private camera: THREE.Camera, private quality: Quality) {
     const lite = quality === 'battery';
-    this.budget = lite ? 0.4 : quality === 'medium' ? 0.75 : 1;
+    this.budget = lite ? 0.4 : quality === 'medium' ? 0.75 : quality === 'ultra' ? 1.3 : 1;
     this.add = new ParticleLayer(lite ? 500 : 1400, starTexture(), true);
     this.smokeL = new ParticleLayer(lite ? 160 : 420, smokeTexture(), false);
     scene.add(this.add.points, this.smokeL.points);
@@ -181,7 +181,7 @@ export class Fx {
     this.decalMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: dtex, color: 0x1a0e08, transparent: true, opacity: 0.55, depthWrite: false }), 24);
     this.decalMesh.count = 0; this.decalMesh.frustumCulled = false; this.decalMesh.renderOrder = 1;
     scene.add(this.decalMesh);
-    if (quality === 'high') {
+    if (quality === 'high' || quality === 'ultra') {
       for (let i = 0; i < 3; i++) {
         const l = new THREE.PointLight(0xffa040, 0, 9, 1.6);
         scene.add(l);

@@ -535,3 +535,31 @@ h2 { font-family: var(--display); letter-spacing: 0.05em; }
 .btn { background: linear-gradient(180deg, #262c58, #11142c); border-color: var(--edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 0 #05060f, 0 8px 18px rgba(0, 0, 0, 0.3); }
 .ucard { background: linear-gradient(180deg, #252c56 0%, #151a36 58%, #0d1026 100%); border-color: var(--edge); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 3px 0 #05060f, 0 8px 16px rgba(0, 0, 0, 0.42); }
 .ucard::before { content: ''; position: absolute; inset: 0; border-radius: 10px; background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.07) 50%, transparent 62%); pointer-events: none; }
+
+/* ---------- v0.6 benchmark overlay ---------- */
+.bench { position: fixed; top: calc(14px + var(--sat)); left: 50%; transform: translateX(-50%); z-index: 70; background: linear-gradient(180deg, rgba(24, 28, 56, 0.94), rgba(9, 11, 26, 0.94)); border: 1px solid var(--edge, #d6ba80); border-radius: 14px; padding: 10px 16px; font-weight: 800; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); pointer-events: none; }
+.bench.result { top: 50%; transform: translate(-50%, -50%); pointer-events: auto; display: flex; flex-direction: column; gap: 10px; max-width: calc(100vw - 32px); }
+.bench pre { margin: 0; font: 700 13px/1.5 ui-monospace, monospace; color: #e8f4ff; white-space: pre-wrap; }
+
+/* ---------- v0.6 title key art: rendered by the game engine itself (ULTRA, 3840×2160) ---------- */
+.screen {
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 44%, rgba(5, 7, 18, 0.62), rgba(5, 7, 18, 0.18) 70%, transparent 100%),
+    linear-gradient(180deg, rgba(5, 7, 20, 0.5) 0%, rgba(5, 7, 20, 0.08) 38%, rgba(5, 7, 20, 0.2) 70%, rgba(5, 7, 20, 0.78) 100%),
+    url('./art/menu-1080.webp') 50% 40% / cover no-repeat,
+    #070a1c;
+}
+@media (min-width: 1600px), (min-width: 1000px) and (min-resolution: 1.5dppx) {
+  .screen {
+    background:
+      radial-gradient(ellipse 60% 55% at 50% 44%, rgba(5, 7, 18, 0.62), rgba(5, 7, 18, 0.18) 70%, transparent 100%),
+      linear-gradient(180deg, rgba(5, 7, 20, 0.5) 0%, rgba(5, 7, 20, 0.08) 38%, rgba(5, 7, 20, 0.2) 70%, rgba(5, 7, 20, 0.78) 100%),
+      url('./art/menu-4k.webp') 50% 40% / cover no-repeat,
+      #070a1c;
+  }
+}
+/* phones held upright: keep the Bastion (right third of the picture) in view */
+@media (orientation: portrait) {
+  .screen { background-position: 50% 44%, 0 0, 74% 50%, 0 0; }
+}
+.screen.transparent { background: rgba(5, 7, 20, 0.78); }

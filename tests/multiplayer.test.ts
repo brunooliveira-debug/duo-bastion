@@ -59,6 +59,11 @@ describe('duo multiplayer (host-authoritative)', () => {
     guest.send({ c: 'build', unit: notInDraft, col: 5, row: 3 });
     await wait(150);
     expect(host.state!.players[1].builds.length).toBe(1);
+    // cheating attempt: a debug command (free gold) sent over the network is refused by the host
+    const goldBefore = host.state!.players[1].gold;
+    guest.send({ c: 'debug', action: 'gold' });
+    await until(() => errors.some(e => /tests locaux/i.test(e)));
+    expect(host.state!.players[1].gold).toBe(goldBefore);
     // host builds too, both ready → combat
     host.send({ c: 'build', unit: host.state!.players[0].draft[0], col: 2, row: 3 });
     host.send({ c: 'ready', value: true });
