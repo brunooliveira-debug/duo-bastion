@@ -1,4 +1,5 @@
 // TACTICAL ORDERS, ANOMALIES and SECONDARY RIFTS — the small decisions that make each game tell a story.
+import { tr } from '../i18n';
 import type { GameMode } from '../sim/state';
 
 // ---------------------------------------------------------------- tactical orders (during combat)
@@ -8,11 +9,11 @@ export interface OrderDef { id: OrderId; name: string; icon: string; text: strin
 export const ORDER_CHARGES = 2;
 export const ORDER_COOLDOWN = 4;
 export const ORDERS: Record<OrderId, OrderDef> = {
-  focus: { id: 'focus', name: 'FOCUS', icon: 'target', dur: 7, target: true, text: 'Tes unités frappent en priorité la cible (+15 % dégâts sur elle) pendant 7 s. Sans cible : le plus dangereux.' },
-  rally: { id: 'rally', name: 'RALLIEMENT', icon: 'flag', dur: 6, target: true, text: 'Zone de 3,5 m : tes unités y subissent -25 % de dégâts et frappent 15 % plus vite (6 s).' },
-  retreat: { id: 'retreat', name: 'REPLI', icon: 'back', dur: 5, target: false, text: 'Tes unités mobiles reculent de 3 m et subissent -30 % de dégâts pendant 5 s (esquive une attaque de boss).' },
-  intercept: { id: 'intercept', name: 'INTERCEPTION', icon: 'run', dur: 8, target: false, text: 'Tes unités rapides (et mobiles) chassent les ennemis qui filent vers le Core, +30 % vitesse (8 s).' },
-  purge: { id: 'purge', name: 'PURGE', icon: 'sparkle', dur: 0, target: false, text: 'Retire brouillard et brouillage de ta voie, libère tes unités (étourdissement, poison, brûlure, ralentissement) et les soigne de 10 %.' },
+  focus: { id: 'focus', name: tr('FOCUS'), icon: 'target', dur: 7, target: true, text: tr('Tes unités frappent en priorité la cible (+15 % dégâts sur elle) pendant 7 s. Sans cible : le plus dangereux.') },
+  rally: { id: 'rally', name: tr('RALLIEMENT'), icon: 'flag', dur: 6, target: true, text: tr('Zone de 3,5 m : tes unités y subissent -25 % de dégâts et frappent 15 % plus vite (6 s).') },
+  retreat: { id: 'retreat', name: tr('REPLI'), icon: 'back', dur: 5, target: false, text: tr('Tes unités mobiles reculent de 3 m et subissent -30 % de dégâts pendant 5 s (esquive une attaque de boss).') },
+  intercept: { id: 'intercept', name: tr('INTERCEPTION'), icon: 'run', dur: 8, target: false, text: tr('Tes unités rapides (et mobiles) chassent les ennemis qui filent vers le Core, +30 % vitesse (8 s).') },
+  purge: { id: 'purge', name: tr('PURGE'), icon: 'sparkle', dur: 0, target: false, text: tr('Retire brouillard et brouillage de ta voie, libère tes unités (étourdissement, poison, brûlure, ralentissement) et les soigne de 10 %.') },
 };
 export const ORDER_IDS = Object.keys(ORDERS) as OrderId[];
 
@@ -22,16 +23,16 @@ export interface AnomalyDef { id: AnomalyId; name: string; icon: string; good: s
 /** Each anomaly lasts this many waves (including the one it is picked for). */
 export const ANOMALY_WAVES = 3;
 export const ANOMALIES: Record<AnomalyId, AnomalyDef> = {
-  pacte: { id: 'pacte', name: 'PACTE DE LA FAILLE', icon: 'skull', good: 'Primes d\'élimination +40 %.', bad: 'Ennemis +20 % PV.' },
-  tempete: { id: 'tempete', name: 'TEMPÊTE D\'ÉTHER', icon: 'ether', good: 'Pouvoirs 35 % plus rapides, Éther +30 %.', bad: 'Ennemis 15 % plus rapides.' },
-  rune_instable: { id: 'rune_instable', name: 'RUNE INSTABLE', icon: 'rune', good: 'Une rune surpuissante (+50 % dégâts, +30 % cadence) apparaît dans chaque voie.', bad: '2 cases deviennent des failles : une unité posée dessus perd 3 % PV/s.' },
-  fortune: { id: 'fortune', name: 'FORTUNE DU BASTION', icon: 'coin', good: '+X or immédiatement pour chaque joueur.', bad: 'Le prochain boss a +35 % PV.' },
-  sacrifice: { id: 'sacrifice', name: 'SACRIFICE DU CORE', icon: 'heart', good: 'Toutes tes unités +12 % dégâts.', bad: 'Le Core perd 12 % de ses PV max.' },
-  eclipse: { id: 'eclipse', name: 'ÉCLIPSE', icon: 'moon', good: 'Ennemis -15 % PV.', bad: 'Portée de tes unités -15 %.' },
-  resonance_instable: { id: 'resonance_instable', name: 'RÉSONANCE INSTABLE', icon: 'duo', good: 'Charge de Résonance ×2.', bad: 'Ennemis +12 % dégâts.' },
-  arsenal: { id: 'arsenal', name: 'ARSENAL', icon: 'up', good: 'Améliorations -20 %.', bad: 'Nouvelles unités +15 %.' },
-  veille: { id: 'veille', name: 'VEILLE TACTIQUE', icon: 'flag', good: '+1 charge d\'ordre par vague.', bad: 'Ennemis : bouclier de 10 % de leurs PV.' },
-  contrat: { id: 'contrat', name: 'CONTRAT DE FAILLE', icon: 'portal', good: 'Une Faille secondaire à chaque vague, récompenses +50 %.', bad: 'Les failles crachent 2× plus d\'ennemis, 2× plus vite.' },
+  pacte: { id: 'pacte', name: tr('PACTE DE LA FAILLE'), icon: 'skull', good: tr('Primes d\'élimination +40 %.'), bad: tr('Ennemis +20 % PV.') },
+  tempete: { id: 'tempete', name: tr('TEMPÊTE D\'ÉTHER'), icon: 'ether', good: tr('Pouvoirs 35 % plus rapides, Éther +30 %.'), bad: tr('Ennemis 15 % plus rapides.') },
+  rune_instable: { id: 'rune_instable', name: tr('RUNE INSTABLE'), icon: 'rune', good: tr('Une rune surpuissante (+50 % dégâts, +30 % cadence) apparaît dans chaque voie.'), bad: tr('2 cases deviennent des failles : une unité posée dessus perd 3 % PV/s.') },
+  fortune: { id: 'fortune', name: tr('FORTUNE DU BASTION'), icon: 'coin', good: tr('+X or immédiatement pour chaque joueur.'), bad: tr('Le prochain boss a +35 % PV.') },
+  sacrifice: { id: 'sacrifice', name: tr('SACRIFICE DU CORE'), icon: 'heart', good: tr('Toutes tes unités +12 % dégâts.'), bad: tr('Le Core perd 12 % de ses PV max.') },
+  eclipse: { id: 'eclipse', name: tr('ÉCLIPSE'), icon: 'moon', good: tr('Ennemis -15 % PV.'), bad: tr('Portée de tes unités -15 %.') },
+  resonance_instable: { id: 'resonance_instable', name: tr('RÉSONANCE INSTABLE'), icon: 'duo', good: tr('Charge de Résonance ×2.'), bad: tr('Ennemis +12 % dégâts.') },
+  arsenal: { id: 'arsenal', name: tr('ARSENAL'), icon: 'up', good: tr('Améliorations -20 %.'), bad: tr('Nouvelles unités +15 %.') },
+  veille: { id: 'veille', name: tr('VEILLE TACTIQUE'), icon: 'flag', good: tr('+1 charge d\'ordre par vague.'), bad: tr('Ennemis : bouclier de 10 % de leurs PV.') },
+  contrat: { id: 'contrat', name: tr('CONTRAT DE FAILLE'), icon: 'portal', good: tr('Une Faille secondaire à chaque vague, récompenses +50 %.'), bad: tr('Les failles crachent 2× plus d\'ennemis, 2× plus vite.') },
 };
 export const ANOMALY_IDS = Object.keys(ANOMALIES) as AnomalyId[];
 /** Waves before which the team chooses an anomaly. */
@@ -45,11 +46,11 @@ export function fortuneGold(wave: number) { return 60 + wave * 12; }
 export type RiftReward = 'gold' | 'ether' | 'reso' | 'rune' | 'cd';
 export interface RiftRewardDef { id: RiftReward; name: string; icon: string; text: (wave: number) => string }
 export const RIFT_REWARDS: Record<RiftReward, RiftRewardDef> = {
-  gold: { id: 'gold', name: 'Or', icon: 'coin', text: w => `+${riftGold(w)} or` },
-  ether: { id: 'ether', name: 'Éther', icon: 'ether', text: w => `+${riftEther(w)} Éther` },
-  reso: { id: 'reso', name: 'Résonance', icon: 'duo', text: () => '+22 charge de Résonance' },
-  rune: { id: 'rune', name: 'Rune de faille', icon: 'rune', text: () => 'Rune de faille (+35 % dégâts, +20 % cadence) sur une case de ta voie, 3 vagues' },
-  cd: { id: 'cd', name: 'Pouvoirs', icon: 'bolt', text: () => 'Tous tes pouvoirs rechargés pour la prochaine vague' },
+  gold: { id: 'gold', name: tr('Or'), icon: 'coin', text: w => tr('+{0} or', riftGold(w)) },
+  ether: { id: 'ether', name: tr('Éther'), icon: 'ether', text: w => tr('+{0} Éther', riftEther(w)) },
+  reso: { id: 'reso', name: tr('Résonance'), icon: 'duo', text: () => tr('+22 charge de Résonance') },
+  rune: { id: 'rune', name: tr('Rune de faille'), icon: 'rune', text: () => tr('Rune de faille (+35 % dégâts, +20 % cadence) sur une case de ta voie, 3 vagues') },
+  cd: { id: 'cd', name: tr('Pouvoirs'), icon: 'bolt', text: () => tr('Tous tes pouvoirs rechargés pour la prochaine vague') },
 };
 export const RIFT_REWARD_IDS = Object.keys(RIFT_REWARDS) as RiftReward[];
 export function riftGold(w: number) { return 50 + w * 9; }

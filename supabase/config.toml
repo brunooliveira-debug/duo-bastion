@@ -1,0 +1,6 @@
+# Supabase CLI configuration (only what the edge-function deployment needs).
+project_id = "duo-bastion"
+
+[functions.submit-daily]
+# the function checks the caller itself (auth.getUser): anonymous players have a JWT too
+verify_jwt = false

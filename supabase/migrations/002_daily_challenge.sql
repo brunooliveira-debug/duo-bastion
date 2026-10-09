@@ -1,7 +1,10 @@
--- DUO BASTION — Défi du jour (classement). PRÉPARÉ, NON APPLIQUÉ.
--- À exécuter dans Supabase → SQL Editor quand le classement en ligne sera activé.
--- Le jeu fonctionne sans : les records du défi du jour sont gardés localement.
--- Free tier : une ligne par joueur et par jour (meilleur score), lecture publique, écriture via RPC contrôlée.
+-- DUO BASTION v0.8 — Défi du jour : classement en ligne VALIDÉ PAR LE SERVEUR.
+-- À exécuter dans Supabase → SQL Editor (après 001_init.sql ; indépendant de 003).
+--
+-- Principe : le client n'écrit JAMAIS directement un score. Il envoie le journal de ses commandes à la fonction Edge
+-- `submit-daily`, qui rejoue la partie (même graine, même simulation) et enregistre le score qu'elle a calculé
+-- elle-même, avec la clé service_role (côté serveur uniquement). Les joueurs (anonymes compris) lisent le classement.
+-- Les parties longues sont vérifiées en plusieurs passes : point de reprise dans `daily_pending`.
 
 create table if not exists public.daily_scores (
   day date not null,
@@ -13,34 +16,34 @@ create table if not exists public.daily_scores (
   updated_at timestamptz not null default now(),
   primary key (day, user_id)
 );
+create index if not exists daily_scores_rank_idx on public.daily_scores (day, wave desc, seconds asc);
 
 alter table public.daily_scores enable row level security;
-
--- everybody (signed in, including anonymous players) can read the leaderboard
+-- everybody signed in (anonymous players included) can read the leaderboard; nobody can write through the API
+drop policy if exists "daily read" on public.daily_scores;
 create policy "daily read" on public.daily_scores for select to authenticated using (true);
--- no direct insert / update: only through the function below (keeps the best score, validates the day)
 
-create or replace function public.submit_daily(p_day date, p_pseudo text, p_wave int, p_core_hp int, p_seconds int)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  -- only today's (or yesterday's, for players around midnight) challenge
-  if p_day < (now() at time zone 'utc')::date - 1 or p_day > (now() at time zone 'utc')::date then raise exception 'bad_day'; end if;
-  insert into public.daily_scores (day, user_id, pseudo, wave, core_hp, seconds)
-  values (p_day, auth.uid(), left(p_pseudo, 16), p_wave, p_core_hp, p_seconds)
-  on conflict (day, user_id) do update
-    set pseudo = excluded.pseudo, wave = excluded.wave, core_hp = excluded.core_hp, seconds = excluded.seconds, updated_at = now()
-    where excluded.wave > daily_scores.wave
-       or (excluded.wave = daily_scores.wave and excluded.core_hp > daily_scores.core_hp);
-end;
+-- the old declarative RPC (scores sent by the client) must not exist any more
+drop function if exists public.submit_daily(date, text, int, int, int);
+
+-- checkpoints of games being verified (service role only: RLS enabled, no policy)
+create table if not exists public.daily_pending (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  day date not null,
+  pseudo text not null default 'Joueur',
+  log jsonb not null,
+  state jsonb not null,
+  cursor int not null default 0,
+  claim jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.daily_pending enable row level security;
+
+-- past leaderboards are not needed: keep the free database tiny (callable by the service role only)
+create or replace function public.purge_daily() returns void
+language sql security definer set search_path = public as $$
+  delete from public.daily_scores where day < (now() at time zone 'utc')::date - 7;
+  delete from public.daily_pending where updated_at < now() - interval '15 minutes';
 $$;
-
-revoke all on function public.submit_daily(date, text, int, int, int) from public;
-grant execute on function public.submit_daily(date, text, int, int, int) to authenticated;
-
--- Remarque : un score envoyé par le client reste déclaratif (le jeu solo tourne sur l'appareil du joueur).
--- Pour un classement compétitif, rejouer côté serveur le journal déterministe (graine + commandes) — piste v0.5.
+revoke all on function public.purge_daily() from public, anon, authenticated;

@@ -3,6 +3,7 @@
 // one player proposes (and pays), the partner validates (and co-finances half if they can) or refuses.
 // Without an answer, the proposal is accepted automatically after PROPOSAL_TIMEOUT seconds (AI partners answer at once).
 // Effects are interpreted by sim/combat.ts (Core) and sim/game.ts (economy).
+import { tr } from '../i18n';
 
 export type ModuleFamily = 'defense' | 'artillerie' | 'soutien' | 'controle';
 export type ModuleId =
@@ -25,40 +26,40 @@ export const PROPOSAL_TIMEOUT = 15;
 /** Refund when dismantling a module (fraction of the Éther invested). */
 export const MODULE_REFUND = 0.5;
 
-export const FAMILY_NAMES: Record<ModuleFamily, string> = { defense: 'Défense', artillerie: 'Artillerie', soutien: 'Soutien', controle: 'Contrôle' };
+export const FAMILY_NAMES: Record<ModuleFamily, string> = { defense: tr('Défense'), artillerie: tr('Artillerie'), soutien: tr('Soutien'), controle: tr('Contrôle') };
 export const FAMILY_COLORS: Record<ModuleFamily, string> = { defense: '#8fb8ff', artillerie: '#ff8a5a', soutien: '#7dffb0', controle: '#c8a0ff' };
 
 export const MODULES: Record<ModuleId, ModuleDef> = {
   // ---- DÉFENSE
-  rempart: { id: 'rempart', family: 'defense', name: 'Rempart', icon: 'shield', costs: [35, 60, 95],
-    levels: ['Le Core subit -12 % de dégâts de fuite.', '-20 % de dégâts de fuite.', '-28 % de dégâts de fuite.'] },
-  egide: { id: 'egide', family: 'defense', name: 'Égide', icon: 'bubble', costs: [40, 65, 100],
-    levels: ['Bouclier de 250 PV sur le Core à chaque vague.', 'Bouclier de 450 PV.', 'Bouclier de 700 PV.'] },
-  restauration: { id: 'restauration', family: 'defense', name: 'Restauration', icon: 'heart', costs: [30, 55, 85],
-    levels: ['+90 PV rendus au Core après chaque vague.', '+170 PV par vague.', '+260 PV par vague, et +5 % des PV max si aucune fuite.'] },
+  rempart: { id: 'rempart', family: 'defense', name: tr('Rempart'), icon: 'shield', costs: [35, 60, 95],
+    levels: [tr('Le Core subit -12 % de dégâts de fuite.'), tr('-20 % de dégâts de fuite.'), tr('-28 % de dégâts de fuite.')] },
+  egide: { id: 'egide', family: 'defense', name: tr('Égide'), icon: 'bubble', costs: [40, 65, 100],
+    levels: [tr('Bouclier de 250 PV sur le Core à chaque vague.'), tr('Bouclier de 450 PV.'), tr('Bouclier de 700 PV.')] },
+  restauration: { id: 'restauration', family: 'defense', name: tr('Restauration'), icon: 'heart', costs: [30, 55, 85],
+    levels: [tr('+90 PV rendus au Core après chaque vague.'), tr('+170 PV par vague.'), tr('+260 PV par vague, et +5 % des PV max si aucune fuite.')] },
   // ---- ARTILLERIE
-  canon: { id: 'canon', family: 'artillerie', name: 'Canon du Bastion', icon: 'cannon', costs: [35, 60, 95],
-    levels: ['Tirs du Core +40 % dégâts.', '+80 % dégâts, portée +1 m.', '+130 % dégâts, portée +2 m.'] },
-  rayon: { id: 'rayon', family: 'artillerie', name: 'Rayon Prismatique', icon: 'beam', costs: [45, 75, 110],
-    levels: ['Toutes les 6 s, un rayon frappe l\'ennemi le plus robuste à 13 m.', 'Rayon plus puissant (+70 %).', 'Rayon toutes les 4 s, +140 %.'] },
-  orage: { id: 'orage', family: 'artillerie', name: 'Chaîne d\'Orage', icon: 'bolt', costs: [40, 65, 100],
-    levels: ['Les tirs du Core rebondissent sur 2 ennemis.', '3 rebonds.', '4 rebonds, rebonds à 70 %.'] },
-  onde: { id: 'onde', family: 'artillerie', name: 'Onde Bastion', icon: 'pulse', costs: [45, 75, 115],
-    levels: ['Choc de zone (5 m) toutes les 7 s.', 'Choc plus puissant, 6 m.', 'Choc dévastateur, 7 m, toutes les 5 s.'] },
+  canon: { id: 'canon', family: 'artillerie', name: tr('Canon du Bastion'), icon: 'cannon', costs: [35, 60, 95],
+    levels: [tr('Tirs du Core +40 % dégâts.'), tr('+80 % dégâts, portée +1 m.'), tr('+130 % dégâts, portée +2 m.')] },
+  rayon: { id: 'rayon', family: 'artillerie', name: tr('Rayon Prismatique'), icon: 'beam', costs: [45, 75, 110],
+    levels: [tr('Toutes les 6 s, un rayon frappe l\'ennemi le plus robuste à 13 m.'), tr('Rayon plus puissant (+70 %).'), tr('Rayon toutes les 4 s, +140 %.')] },
+  orage: { id: 'orage', family: 'artillerie', name: tr('Chaîne d\'Orage'), icon: 'bolt', costs: [40, 65, 100],
+    levels: [tr('Les tirs du Core rebondissent sur 2 ennemis.'), tr('3 rebonds.'), tr('4 rebonds, rebonds à 70 %.')] },
+  onde: { id: 'onde', family: 'artillerie', name: tr('Onde Bastion'), icon: 'pulse', costs: [45, 75, 115],
+    levels: [tr('Choc de zone (5 m) toutes les 7 s.'), tr('Choc plus puissant, 6 m.'), tr('Choc dévastateur, 7 m, toutes les 5 s.')] },
   // ---- SOUTIEN
-  cadence: { id: 'cadence', family: 'soutien', name: 'Aura de Cadence', icon: 'ff', costs: [40, 65, 100],
-    levels: ['Unités de l\'arrière-ligne : +10 % cadence.', '+18 % cadence.', '+26 % cadence et +10 % portée.'] },
-  forge: { id: 'forge', family: 'soutien', name: 'Forge d\'Éther', icon: 'ether', costs: [30, 50, 80],
-    levels: ['+1 Éther / 10 s pour chaque joueur.', '+2 Éther / 10 s.', '+3 Éther / 10 s.'] },
-  tresor: { id: 'tresor', family: 'soutien', name: 'Trésor du Bastion', icon: 'coin', costs: [35, 60, 90],
-    levels: ['+8 or par vague pour chaque joueur.', '+16 or par vague.', '+26 or par vague.'] },
+  cadence: { id: 'cadence', family: 'soutien', name: tr('Aura de Cadence'), icon: 'ff', costs: [40, 65, 100],
+    levels: [tr('Unités de l\'arrière-ligne : +10 % cadence.'), tr('+18 % cadence.'), tr('+26 % cadence et +10 % portée.')] },
+  forge: { id: 'forge', family: 'soutien', name: tr('Forge d\'Éther'), icon: 'ether', costs: [30, 50, 80],
+    levels: [tr('+1 Éther / 10 s pour chaque joueur.'), tr('+2 Éther / 10 s.'), tr('+3 Éther / 10 s.')] },
+  tresor: { id: 'tresor', family: 'soutien', name: tr('Trésor du Bastion'), icon: 'coin', costs: [35, 60, 90],
+    levels: [tr('+8 or par vague pour chaque joueur.'), tr('+16 or par vague.'), tr('+26 or par vague.')] },
   // ---- CONTRÔLE
-  givre: { id: 'givre', family: 'controle', name: 'Champ de Givre', icon: 'snow', costs: [35, 60, 95],
-    levels: ['Ennemis à moins de 8 m du Core : -25 % vitesse.', '-35 %.', '-45 %, et 10 m.'] },
-  portail: { id: 'portail', family: 'controle', name: 'Portail de Repli', icon: 'portal', costs: [50, 80, 120],
-    levels: ['1 fois par vague : le premier ennemi qui fuit est renvoyé au début de la voie.', '2 fois par vague.', '3 fois par vague, l\'ennemi renvoyé est ralenti.'] },
-  entrave: { id: 'entrave', family: 'controle', name: 'Entrave', icon: 'chain', costs: [45, 75, 110],
-    levels: ['Toutes les 14 s, étourdit le boss le plus proche (1,2 s) et interrompt sa capacité.', 'Toutes les 11 s, 1,6 s.', 'Toutes les 8 s, 2 s.'] },
+  givre: { id: 'givre', family: 'controle', name: tr('Champ de Givre'), icon: 'snow', costs: [35, 60, 95],
+    levels: [tr('Ennemis à moins de 8 m du Core : -25 % vitesse.'), '-35 %.', tr('-45 %, et 10 m.')] },
+  portail: { id: 'portail', family: 'controle', name: tr('Portail de Repli'), icon: 'portal', costs: [50, 80, 120],
+    levels: [tr('1 fois par vague : le premier ennemi qui fuit est renvoyé au début de la voie.'), tr('2 fois par vague.'), tr('3 fois par vague, l\'ennemi renvoyé est ralenti.')] },
+  entrave: { id: 'entrave', family: 'controle', name: tr('Entrave'), icon: 'chain', costs: [45, 75, 110],
+    levels: [tr('Toutes les 14 s, étourdit le boss le plus proche (1,2 s) et interrompt sa capacité.'), tr('Toutes les 11 s, 1,6 s.'), tr('Toutes les 8 s, 2 s.')] },
 };
 export const MODULE_IDS = Object.keys(MODULES) as ModuleId[];
 export const FAMILY_OF = (id: string) => MODULES[id as ModuleId]?.family;

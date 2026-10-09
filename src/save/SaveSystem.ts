@@ -6,7 +6,7 @@ import { isDedicatedGpu } from '../render/gpu';
 /** dynRes: dynamic resolution on ÉLEVÉ / ULTRA (holds the screen refresh rate) · ultraOffered: one-time switch to ULTRA on a dedicated GPU */
 export interface Prefs { sfx: number; music: number; quality: Quality; vibrate: boolean; shake: number; flash: boolean; dynRes?: boolean; ultraOffered?: boolean }
 /** Best result of a daily challenge (seeded game, same world for everyone). */
-export interface DailyBest { wave: number; hp: number; time: number }
+export interface DailyBest { wave: number; hp: number; time: number; /** v0.8: rank on the online leaderboard when the score was validated */ rank?: number }
 export interface Profile {
   name: string; avatar: string; localId: string;
   games: number; wins: number; xp: number; bestSurvival: number;

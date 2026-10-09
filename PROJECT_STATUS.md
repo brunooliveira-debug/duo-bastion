@@ -1,8 +1,9 @@
 # PROJECT_STATUS — DUO BASTION
 
-**VERSION ACTUELLE :** 0.7.3-alpha (Codex des unités dans le menu, Compagnie mixte : 6 unités de toutes les armées ; or de départ 450 = +200 de bonus, revenu +5 or / vague, primes +3 % / vague ; interface qui s'adapte à l'écran — téléphone, portable, moniteur 1440p/4K — et économie de fin de vague : primes ×1,35 + bonus de rapidité + récapitulatif ; v0.7 « Siège » : bénédictions, Brécheurs / Invocateurs, Sceaux jumeaux, HUD avec mini-carte, auras, îles — rapport : `docs/RAPPORT_v0.7.md`)
+**VERSION ACTUELLE :** 0.8.0-alpha « Ensemble » (Partie rapide avec salons publics ; classement du défi du jour validé par le serveur — rejeu du journal de commandes dans une fonction Edge ; jeu entièrement traduit en anglais, langue automatique ou au choix dans les Options — rapport : `docs/RAPPORT_v0.8.md`. Versions précédentes : v0.7.3 Codex et Compagnie mixte, v0.7.2 économie, v0.7.1 interface adaptative, v0.7 « Siège » — rapport : `docs/RAPPORT_v0.7.md`)
 **URL PUBLIQUE (GitHub Pages) :** https://brunooliveira-debug.github.io/duo-bastion/
-**DERNIER TEST :** 2026-10-08
+**DERNIER TEST :** 2026-10-09
+- v0.8 : `vitest` 89/89 (+9 tests : rejeu déterministe continu et en passes avec points de reprise JSON, partie complète, journaux refusés, défi du jour, journal de la session, partie rapide hors-ligne, libération de place, traduction exacte / motifs / dictionnaire). `tsc` + `npm run build` OK. Fonction Edge bundlée (`npm run build:edge`, 256 Ko) et testée en Node avec une Supabase simulée (`scripts/edge-smoke.mjs`, 1 passe et 35 passes). `npm run i18n:check` : EN couvre les 1 665 clés. Navigateur (version de production, Supabase réelle) : menu, « Jouer à deux », défi du jour, HUD en anglais ; écrans d'erreur propres tant que la base n'est pas migrée.
 - v0.7.1 : `vitest` 75/75 (+2 tests économie : primes, bonus de rapidité, récapitulatif, pas de bonus en cas de fuite). Interface vérifiée en 800×360, 1000×450, 1280×720, 1366×768, 1920×1080, 2560×1440 et 375×812 portrait.
 - v0.7 : `vitest` 73/73 (65 + 8 tests v0.7 : draft de bénédictions, tour de rôle, tirage forcé, IA, rares, effets en combat, brécheurs, invocateurs, sceaux ×3 ; test réseau étendu au tour de rôle). `tsc` + `npm run build` OK. Navigateur : PC 1280×720, téléphone paysage 812×375 (émulé) — bénédictions, barre de siège, mini-carte, boss scellé, bris par l'IA partenaire, auras, îles. Équilibrage : `scripts/leaks-by-wave.ts 30` avant / après (voir le rapport §4).
 - v0.5 : `vitest` 55/55 (48 + 7 tests v0.5 : modèles, Primordial 3 phases, signatures de faction, branches A/B, champ de bataille plat, décor hors voie, rendu sans effet sur la simulation). `npm run build` OK. Navigateur : PC 1280×720 en ÉLEVÉ / MOYEN / BAS, téléphone paysage 812×375 et portrait 375×812 (émulés), 6 factions, Résonance, vague du Primordial. Performances mesurées au chronomètre GPU (voir le rapport, section 11).
@@ -11,11 +12,13 @@
 - Navigateur (dev) : PC 1280×720, téléphone paysage 844×390, portrait 390×844 : construction, fusion, faille, anomalie, Bastion (module installé), combat, ordres (FOCUS), introduction de boss, Résonance DUO synchronisée, écran de fin (timeline, moments forts).
 
 ## INFRA (0 €)
-- Supabase Free : projet `duo-bastion` (Europe), migration `001_init.sql` appliquée, connexion anonyme activée. `002_daily_challenge.sql` **préparée, non appliquée** (classement du défi du jour).
-- GitHub : https://github.com/brunooliveira-debug/duo-bastion (public, requis pour Pages gratuit) · GitHub Pages via Actions.
-- Clé client : clé *publishable* Supabase (publique par conception, RLS). Aucune clé secrète dans le code.
+- Supabase Free : projet `duo-bastion` (Europe), migration `001_init.sql` appliquée, connexion anonyme activée.
+- **v0.8, À APPLIQUER par l'utilisateur** (le jeu fonctionne sans, avec des messages clairs) : `003_quick_match.sql` (salons publics, `quick_join`, `free_slot`) et `002_daily_challenge.sql` révisée (`daily_scores` en lecture seule pour les clients, `daily_pending`) dans Supabase → SQL Editor ; fonction Edge `submit-daily` à déployer (`supabase/functions/submit-daily/index.ts`, « Verify JWT » désactivé) — soit via le workflow `supabase-edge.yml` avec le secret GitHub `SUPABASE_ACCESS_TOKEN`, soit via le tableau de bord.
+- GitHub : https://github.com/brunooliveira-debug/duo-bastion (public, requis pour Pages gratuit) · GitHub Pages via Actions · `keepalive.yml` (lundi et jeudi : une lecture REST avec la clé publiable, pour que le projet Supabase Free ne se mette jamais en pause).
+- Clé client : clé *publishable* Supabase (publique par conception, RLS). Aucune clé secrète dans le code ; la fonction Edge reçoit la clé service_role de Supabase, côté serveur uniquement.
 
 ## TERMINÉ
+- v0.8 — « Ensemble » : **Partie rapide** (bouton dans « Jouer à deux », liste des salons publics rafraîchie, appariement atomique côté base, battement de cœur, bascule « Visible par tous / Sur invitation » dans le lobby, place libérée quand l'invité part) ; **classement du défi du jour validé par le serveur** (journal des commandes avec leur tick, rejeu déterministe dans la fonction Edge `submit-daily` en passes de 0,9 s avec points de reprise, score calculé par le serveur, tableau du jour dans l'écran du défi, statut en fin de partie) ; **anglais** (couche `src/i18n`, 1 665 clés, données traduites au chargement, messages de la simulation traduits à l'affichage par motifs, langue automatique / `?lang=` / Options) ; workflows keepalive et déploiement Edge. Tests 89/89.
 - v0.7.3 — **Codex** (menu → « Codex des unités & armées ») : les 36 unités par catégorie (rôle de chaque catégorie, stats niveau 1 et 5, types attaque/défense et efficacités, capacités, forces/faiblesses, spécialisations A/B, filtre par armée) et par armée (doctrine, entraide, forces, faiblesses, pouvoirs), matrice attaque/défense. **Compagnie mixte** (choix d'armée → « Compagnie mixte ») : 6 unités piochées dans les 6 armées, une par catégorie, commandant choisi parmi les armées présentes (doctrine, pouvoirs, entraide, Résonance) ; valable en solo, survie et duo en ligne (l'hôte valide la compagnie, une liste forgée retombe sur l'armée native) ; le Défi du jour et le tutoriel gardent leurs armées fixes. **+10 % PV et dégâts** sur toutes les unités des joueurs (`UNIT_POWER`, IA comprises). **Pouvoirs plus longs** : Gel 2,6 s (1,6), IEM 3,5 s (2,5), Racines 3,5 s + poison 6 s, Pluie d'Étoiles ralentit 5 s, Raz-de-Marée 6 s, Surcharge et Ferveur 9 s, Voile 8 s, Moisson 12 s, Éruption 8 s, Gardien Sylvestre 30 s, Kraken 18 s. Tests 80/80.
 - v0.7.2 — **Or de départ 450** (+200) pour tout le monde, IA comprises ; **plus on monte, plus on gagne** : revenu de base +5 or par vague franchie (30 → 130 à la vague 21), primes d'élimination +3 % par vague (×1,6 à la vague 21), revenu affiché pour la vague en cours ; la courbe d'or attendue des outils d'équilibrage inclut les primes ×1,35.
 - v0.7.1 — **Interface adaptative** : toutes les tailles (pastilles, cartes, boutons, barre de siège, mini-carte, menus) suivent la hauteur de l'écran (`clamp(min, vh, max)`), menus jamais coupés (`safe center`), HUD compact sur téléphone paysage (une ligne d'indicateurs défilante, rien sous la barre de siège), menu d'accueil en deux colonnes sur téléphone, plafonds relevés pour 1440p / 4K. **Économie** : primes d'élimination ×1,35, **bonus de rapidité** par voie tenue sans fuite (max 10 + 4 × vague, décroissant jusqu'à 40 s), récapitulatif de fin de vague (revenu, éliminations, rapidité, voie tenue), temps de combat affiché. Tests 75/75.
@@ -44,20 +47,23 @@
 - v0.3 et avant : 6 armées × 6 unités, niveaux 1→5 + spécialisations, synergies, pouvoirs, envois, malédictions, duel, rendu 3D procédural (îles flottantes, tours, effets), multijoueur hôte autoritaire, PWA, tutoriel, survie.
 
 ## À FAIRE
+- v0.8 côté Supabase (utilisateur) : appliquer `003_quick_match.sql` et `002_daily_challenge.sql`, déployer la fonction `submit-daily` (voir INFRA).
+- v0.8 suite : carte de partage en fin de partie, hôte en arrière-plan (boucle minuteur quand l'onglet est caché), télémétrie anonyme des parties.
 - Jouabilité (suite v0.7) : pièges consommables posables pendant la préparation (Éther) ; modèle dédié au Brécheur (bélier) ; IA qui réserve ses intercepteurs pour les vagues à brécheurs.
 - Graphismes (suite v0.5) : resculpter les maillages des unités, modèles dédiés pour les autres boss, effets d'impact par faction.
 - Duels : la pression offensive reste faible (envois surtout économiques, 15 % des duels finis par destruction d'un Core) → aperçu des envois entrants + IA plus offensive.
 - IA : certaines unités à distance coûteuses restent rarement choisies (Lancière, Astromancienne, Bombardière, Harponneuse, Méduse, Arbalétrière, Archère des Cendres).
-- Classement en ligne du défi du jour (appliquer `002_daily_challenge.sql`), rejouer le journal côté serveur pour valider les scores.
 
 ## BUGS CONNUS / LIMITES
 - Si l'hôte met le jeu en arrière-plan, la simulation se met en pause pour les deux.
 - Les sauvegardes v0.3 en cours ne sont pas reprises (format changé, ignorées proprement).
 - Combats encore bloqués jusqu'à 80 s dans 8–13 % des parties sur certaines vagues de boss (v0.3 : jusqu'à 41 %).
 - Non testé : vraie partie en ligne entre deux téléphones sur la version publique.
+- Partie rapide : apparie uniquement des joueurs de la même version du jeu (un joueur sur une version en cache ne voit pas les nouveaux salons avant de recharger).
+- Duo en ligne entre deux langues : les noms d'unités insérés par l'hôte dans certains messages restent dans la langue de l'hôte.
 
 ## SÉCURITÉ — ACTION UTILISATEUR
 - Une clé secrète Supabase (`sb_secret_…`) a été collée dans le chat : à **révoquer** dans Supabase → Project Settings → API Keys → Secret keys. Le jeu ne l'utilise pas.
 
 ## PROCHAINE ÉTAPE
-Retour du joueur sur la v0.7 (bénédictions, sceaux, HUD) ; puis pièges consommables et test de performance sur la carte dédiée du joueur (`?bench`).
+Activer la v0.8 côté Supabase (migrations + fonction Edge), puis la v0.9 « Progression » (XP, débloquables cosmétiques, hauts faits, campagne) selon les suggestions du 2026-10-09.

@@ -2,6 +2,7 @@
 //  - the host (lobby creator) runs the simulation, validates every command, broadcasts compact snapshots;
 //  - the guest sends commands and renders interpolated snapshots.
 // Postgres is touched only for lobby creation/join and one save per wave (never per frame).
+import { tr } from '../i18n';
 import { applyCommand, Command, createGame, drainEvents, step } from '../sim/game';
 import type { Difficulty, FactionChoice, GameEvent, GameMode, GameSettings, GameState } from '../sim/state';
 import { DT, STATE_VERSION, humanPid } from '../sim/state';
@@ -9,9 +10,15 @@ import { ViewState, metaOf, packEnts, unpackEnts, EntView, entView } from './sna
 import { DEF_IDS } from './snapshot';
 import { LocalTransport, SupabaseTransport, Transport, Msg, ConnStatus } from './transport';
 import { ONLINE, log } from '../config';
-import { setLobbyStatus, loadLobbyState } from './backend';
+import { setLobbyStatus, loadLobbyState, setLobbyPublic, touchLobby, freeSlot } from './backend';
 import { save } from '../save/SaveSystem';
 import { validateCompany } from '../data/roster';
+import type { LoggedCmd } from '../sim/replay';
+
+/** Commands that never touch the simulation (not replayed, not logged). */
+const UNLOGGED = new Set(['speed', 'pause', 'ping', 'debug']);
+/** Host heartbeat period while a public lobby waits for a partner (the list hides lobbies silent for 2 minutes). */
+const PUBLIC_HEARTBEAT = 40000;
 
 export interface LobbySettings { mode: GameMode; totalWaves: number; difficulty: Difficulty }
 export interface LobbyPlayer { uid: string; name: string; avatar: string; ready: boolean; faction: FactionChoice; /** v0.7.3 mixed company (validated) */ roster?: string[] | null }
@@ -63,6 +70,11 @@ export class Session {
   private cmdTimes = new Map<string, number[]>();
   private lastPhaseKey = '';
   private gameShown = false;
+  /** v0.8 Partie rapide: this lobby is listed publicly while it waits for a partner (host only) */
+  isPublic = false;
+  private hbTimer: number | null = null;
+  /** v0.8: every accepted command with the tick it was applied at (deterministic replay: daily leaderboard) */
+  log: LoggedCmd[] = [];
 
   constructor(role: 'host' | 'guest' | 'solo', code: string, uid: string, private ev: SessionEvents) {
     this.role = role; this.code = code; this.uid = uid;
@@ -70,7 +82,7 @@ export class Session {
     this.lobby = { code, hostUid: role === 'guest' ? '' : uid, players: [], settings: { mode: 'vsai', totalWaves: 10, difficulty: 'normal' }, started: false };
   }
 
-  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, ready: false, faction: (save.profile.faction || 'random') as FactionChoice, roster: validateCompany(save.profile.roster) }; }
+  me(): LobbyPlayer { return { uid: this.uid, name: save.profile.name || tr('Joueur'), avatar: save.profile.avatar, ready: false, faction: (save.profile.faction || 'random') as FactionChoice, roster: validateCompany(save.profile.roster) }; }
 
   /** pid of the lobby player at index i (co-op: 0/1, duel: 0/2). */
   pidOf(i: number) { return humanPid(this.state?.settings.mode ?? this.lobby.settings.mode, i); }
@@ -94,6 +106,7 @@ export class Session {
       if (!this.lobby.players.length) this.lobby.players.push(this.me());
       this.broadcastLobby();
       this.lobbyTimer = window.setInterval(() => { if (!this.lobby.started) this.broadcastLobby(); }, 2000);
+      this.hbTimer = window.setInterval(() => { if (this.isPublic && !this.lobby.started && this.lobby.players.length < 2) touchLobby(this.code); }, PUBLIC_HEARTBEAT);
     } else {
       this.sendJoin();
       this.lobbyTimer = window.setInterval(() => {
@@ -102,10 +115,27 @@ export class Session {
     }
   }
 
-  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || 'Joueur', avatar: save.profile.avatar, faction: save.profile.faction || 'random', roster: validateCompany(save.profile.roster) }); }
+  private sendJoin() { this.transport?.send({ k: 'join', uid: this.uid, name: save.profile.name || tr('Joueur'), avatar: save.profile.avatar, faction: save.profile.faction || 'random', roster: validateCompany(save.profile.roster) }); }
+
+  /** Host: list (or unlist) the lobby for "Partie rapide". */
+  setPublic(v: boolean) {
+    if (this.role !== 'host' || this.lobby.started) return;
+    this.isPublic = v;
+    setLobbyPublic(this.code, v && this.lobby.players.length < 2);
+    this.broadcastLobby();
+  }
+
+  /** Host: the guest slot is free again (the partner left before the start). */
+  private guestLeft(uid: string) {
+    this.lobby.players = this.lobby.players.filter(p => p.uid !== uid);
+    this.broadcastLobby();
+    freeSlot(this.code);
+    if (this.isPublic) setLobbyPublic(this.code, true);
+  }
 
   close() {
     if (this.lobbyTimer) clearInterval(this.lobbyTimer);
+    if (this.hbTimer) clearInterval(this.hbTimer);
     if (this.role === 'host' && this.transport) this.transport.send({ k: 'closed' });
     this.transport?.close();
     this.transport = null;
@@ -156,6 +186,7 @@ export class Session {
     };
     const seed = (Math.random() * 2 ** 31) | 0;
     this.state = createGame(settings, seed);
+    this.log = [];
     this.lobby.started = true;
     this.guestUid = this.lobby.players[1]?.uid ?? '';
     this.broadcastLobby();
@@ -212,11 +243,12 @@ export class Session {
           const uid = m.uid as string;
           let p = this.lobby.players.find(x => x.uid === uid);
           if (!p) {
-            if (this.lobby.started || this.lobby.players.length >= 2) { this.transport?.send({ k: 'reject', to: uid, msg: this.lobby.started ? 'Cette partie a déjà commencé.' : 'Cette partie est déjà complète.' }); return; }
-            p = { uid, name: String(m.name).slice(0, 16) || 'Joueur', avatar: String(m.avatar ?? '🙂'), ready: false, faction: validFaction(m.faction), roster: validateCompany(m.roster) };
+            if (this.lobby.started || this.lobby.players.length >= 2) { this.transport?.send({ k: 'reject', to: uid, msg: this.lobby.started ? tr('Cette partie a déjà commencé.') : tr('Cette partie est déjà complète.') }); return; }
+            p = { uid, name: String(m.name).slice(0, 16) || tr('Joueur'), avatar: String(m.avatar ?? '🙂'), ready: false, faction: validFaction(m.faction), roster: validateCompany(m.roster) };
             this.lobby.players.push(p);
             log('Player joined', p.name);
-            this.ev.toast(`${p.name} a rejoint la partie !`, 'info');
+            this.ev.toast(tr('{0} a rejoint la partie !', p.name), 'info');
+            if (this.isPublic) setLobbyPublic(this.code, false); // full: out of the quick-match list
           }
           this.broadcastLobby();
           if (this.lobby.started) this.sendStart();
@@ -240,10 +272,7 @@ export class Session {
           break;
         }
         case 'leave': {
-          if (!this.lobby.started) {
-            this.lobby.players = this.lobby.players.filter(p => p.uid !== m.uid);
-            this.broadcastLobby();
-          }
+          if (!this.lobby.started && this.lobby.players.some(p => p.uid === m.uid)) this.guestLeft(String(m.uid));
           break;
         }
         case 'cmd': {
@@ -262,8 +291,11 @@ export class Session {
           // debug commands (gold, kill all, …) are for local testing only: never accepted from the network (anti-cheat)
           if ((m.cmd as Command | undefined)?.c === 'debug') { this.transport?.send({ k: 'err', to: m.uid, msg: 'Commande réservée aux tests locaux.' }); return; }
           const pid = this.pidOf(idx);
-          const err = applyCommand(this.state, pid, m.cmd as Command);
+          const cmd = m.cmd as Command;
+          const tick = this.state.tick;
+          const err = applyCommand(this.state, pid, cmd);
           if (err) this.transport?.send({ k: 'err', to: m.uid, msg: err });
+          else if (!UNLOGGED.has(cmd.c)) this.log.push({ t: tick, p: pid, c: cmd });
           this.sendMeta(true);
           break;
         }
@@ -277,7 +309,7 @@ export class Session {
           break;
         }
         case 'reject': if (m.to === this.uid) this.ev.kicked(String(m.msg)); break;
-        case 'closed': this.ev.kicked('L\'hôte a quitté la partie.'); break;
+        case 'closed': this.ev.kicked(tr('L\'hôte a quitté la partie.')); break;
         case 'rematch': this.lobby.started = false; this.gameShown = false; this.view.meta = null; this.view.clearFrames(); this.ev.rematch(); break;
         case 'start': {
           const pids = m.pids as Record<string, number>;
@@ -305,11 +337,7 @@ export class Session {
     if (this.role === 'host') {
       const g = this.guestUid || this.lobby.players[1]?.uid;
       const online = !g || uids.includes(g);
-      if (!this.lobby.started && !online && g) {
-        // guest left the lobby
-        this.lobby.players = this.lobby.players.filter(p => p.uid !== g);
-        this.broadcastLobby();
-      }
+      if (!this.lobby.started && !online && g) this.guestLeft(g); // guest left the lobby
       this.setPartner(online);
     } else {
       this.setPartner(!this.lobby.hostUid || uids.includes(this.lobby.hostUid));
@@ -325,7 +353,7 @@ export class Session {
     else if (this.aiTakeover && this.state) {
       this.state.players[this.pidOf(1)].isAI = false;
       this.aiTakeover = false;
-      this.ev.toast('Ton partenaire a repris le contrôle.', 'info');
+      this.ev.toast(tr('Ton partenaire a repris le contrôle.'), 'info');
     }
     this.ev.conn(this.transport?.status ?? 'online', online);
   }
@@ -338,7 +366,11 @@ export class Session {
       return null;
     }
     if (!this.state) return null;
+    // daily challenge: no test commands (the server replays the game to validate the score)
+    if (cmd.c === 'debug' && this.state.settings.challenge) return tr('Commandes de test désactivées dans le défi du jour.');
+    const tick = this.state.tick;
     const err = applyCommand(this.state, this.myPid, cmd);
+    if (!err && !UNLOGGED.has(cmd.c)) this.log.push({ t: tick, p: this.myPid, c: cmd });
     this.publishLocal(true);
     this.sendMeta(true);
     return err;
@@ -355,7 +387,7 @@ export class Session {
     if (waitingPartner && performance.now() - this.partnerGoneAt > 45000) {
       this.aiTakeover = true;
       s.players[this.pidOf(1)].isAI = true;
-      this.ev.toast('Partenaire absent : l\'IA garde sa voie en attendant son retour.', 'info');
+      this.ev.toast(tr('Partenaire absent : l\'IA garde sa voie en attendant son retour.'), 'info');
     }
     if (!waitingPartner) {
       // the end-of-game sequence plays in slow motion

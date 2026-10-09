@@ -1,5 +1,6 @@
 // CODEX (v0.7.3): every unit by category and by army — stats, types, abilities, strengths / weaknesses,
 // specialisations — and the COMPANY BUILDER: compose a mixed company of 6 units (one per category) from every army.
+import { tr } from '../i18n';
 import { h, clear, fmt } from './dom';
 import { icon, categoryIcon } from './icons';
 import { UNITS, FACTIONS, FACTION_IDS, CATEGORY_NAMES, CATEGORY_COLORS, unitStats, BRANCH_LEVEL, MAX_LEVEL } from '../data/units';
@@ -12,7 +13,7 @@ import { audio } from '../audio/AudioSystem';
 
 import { show } from './screenHost';
 
-const range = (x: number) => (x < 2 ? 'mêlée' : `${x.toFixed(1)} m`);
+const range = (x: number) => (x < 2 ? tr('mêlée') : `${x.toFixed(1)} m`);
 const nodes = (...xs: (HTMLElement | null)[]) => xs.filter((x): x is HTMLElement => !!x);
 
 /** One unit entry (codex card). */
@@ -23,11 +24,11 @@ export function unitEntry(id: string, opts: { compact?: boolean; selected?: bool
   const eff = (Object.keys(DEFENSE_NAMES) as DefenseType[]).map(d => `${DEFENSE_ICONS[d]}${matrixArrow(DAMAGE_MATRIX[s1.attack][d])}`).join(' ');
   const head = h('div', { class: 'cx-head' },
     h('span', { class: 'cx-cat', style: `--cat:${CATEGORY_COLORS[u.category]}`, html: icon(categoryIcon(u.category), 14, '#14112A', 3) }),
-    h('div', { class: 'cx-title' }, h('b', {}, u.name), h('small', { style: `color:${f.color}` }, `${f.name} · ${CATEGORY_NAMES[u.category]}${u.tower ? ' · tour' : ''}`)),
+    h('div', { class: 'cx-title' }, h('b', {}, u.name), h('small', { style: `color:${f.color}` }, `${f.name} · ${CATEGORY_NAMES[u.category]}${u.tower ? tr(' · tour') : ''}`)),
     h('span', { class: 'cx-cost' }, `${u.cost} 🪙`));
   const stats = h('div', { class: 'cx-stats' },
     h('span', {}, `❤️ ${fmt(s1.hp)}`), h('span', {}, `🛡 ${Math.round(s1.armor * 100)} %`), h('span', {}, `⚔️ ${fmt(s1.dmg)} × ${s1.atkSpeed.toFixed(1)}/s`),
-    h('span', {}, `🔥 DPS ${fmt(s1.dmg * s1.atkSpeed)}`), h('span', {}, `🎯 ${range(s1.range)}`),
+    h('span', {}, tr('🔥 DPS {0}', fmt(s1.dmg * s1.atkSpeed))), h('span', {}, `🎯 ${range(s1.range)}`),
     h('span', {}, `${ATTACK_ICONS[s1.attack]} ${ATTACK_NAMES[s1.attack]} → ${eff}`), h('span', {}, `${DEFENSE_ICONS[s1.defense]} ${DEFENSE_NAMES[s1.defense]}`));
   const el = h(opts.onClick ? 'button' : 'div', { class: `cx-unit${opts.compact ? ' compact' : ''}${opts.selected ? ' on' : ''}`, style: `--fc:${f.color}`, disabled: !!opts.disabled, onclick: opts.onClick }, head, stats);
   if (!opts.compact) {
@@ -35,10 +36,10 @@ export function unitEntry(id: string, opts: { compact?: boolean; selected?: bool
       h('p', { class: 'cx-desc' }, u.description),
       h('div', { class: 'cx-text' }, u.skillText !== '—' ? h('div', {}, '✦ ', u.skillText) : null, h('div', {}, '◆ ', u.passiveText), abilitiesText(s1.abilities) ? h('div', { class: 'muted' }, abilitiesText(s1.abilities)) : null),
       h('div', { class: 'cx-pc' }, h('span', { class: 'pros' }, '✔ ', u.pros), h('span', { class: 'cons' }, '✖ ', u.cons)),
-      h('div', { class: 'muted small' }, `Niveau ${MAX_LEVEL} : ${fmt(s5.hp)} PV · DPS ${fmt(s5.dmg * s5.atkSpeed)}`),
+      h('div', { class: 'muted small' }, tr('Niveau {0} : {1} PV · DPS {2}', MAX_LEVEL, fmt(s5.hp), fmt(s5.dmg * s5.atkSpeed))),
       u.branches ? h('div', { class: 'cx-br' }, ...u.branches.map((b, i) => h('div', {}, h('b', {}, `${i ? 'B' : 'A'} · ${b.name}`), h('small', {}, b.text)))) : null,
     ));
-    if (u.branches) el.querySelector('.cx-br')!.prepend(h('small', { class: 'muted' }, `Spécialisation au niveau ${BRANCH_LEVEL} (définitive) :`));
+    if (u.branches) el.querySelector('.cx-br')!.prepend(h('small', { class: 'muted' }, tr('Spécialisation au niveau {0} (définitive) :', BRANCH_LEVEL)));
   }
   return el;
 }
@@ -52,11 +53,11 @@ export function codexScreen(back: () => void, initialTab: 'cat' | 'army' = 'cat'
   const render = () => {
     clear(tabs);
     tabs.append(
-      h('button', { class: tab === 'cat' ? 'on' : '', onclick: () => { tab = 'cat'; audio.play('click'); render(); } }, 'Par catégorie'),
-      h('button', { class: tab === 'army' ? 'on' : '', onclick: () => { tab = 'army'; audio.play('click'); render(); } }, 'Par armée'));
+      h('button', { class: tab === 'cat' ? 'on' : '', onclick: () => { tab = 'cat'; audio.play('click'); render(); } }, tr('Par catégorie')),
+      h('button', { class: tab === 'army' ? 'on' : '', onclick: () => { tab = 'army'; audio.play('click'); render(); } }, tr('Par armée')));
     clear(body);
     if (tab === 'cat') {
-      const filter = h('div', { class: 'cx-filter' }, h('button', { class: `cx-chip${armyFilter === 'all' ? ' on' : ''}`, onclick: () => { armyFilter = 'all'; render(); } }, 'Toutes les armées'),
+      const filter = h('div', { class: 'cx-filter' }, h('button', { class: `cx-chip${armyFilter === 'all' ? ' on' : ''}`, onclick: () => { armyFilter = 'all'; render(); } }, tr('Toutes les armées')),
         ...FACTION_IDS.map(f => h('button', { class: `cx-chip${armyFilter === f ? ' on' : ''}`, style: `--fc:${FACTIONS[f].color}`, onclick: () => { armyFilter = f; render(); } }, FACTIONS[f].title)));
       body.append(filter);
       for (const cat of CATEGORY_ORDER) {
@@ -72,22 +73,22 @@ export function codexScreen(back: () => void, initialTab: 'cat' | 'army' = 'cat'
         body.append(h('div', { class: 'cx-section army', style: `--cat:${d.color}` },
           h('div', { class: 'cx-sh' }, h('b', { style: `color:${d.color}` }, d.name), h('small', {}, `${d.title} — ${d.style}`)),
           h('div', { class: 'cx-army' },
-            h('div', {}, h('b', {}, `Doctrine — ${d.doctrine.name}`), h('small', {}, d.doctrine.text)),
-            h('div', {}, h('b', {}, `Entraide — ${d.help.name}`), h('small', {}, d.help.text)),
-            h('div', {}, h('b', {}, 'Forces'), h('small', { class: 'pros' }, d.strengths.join(' · '))),
-            h('div', {}, h('b', {}, 'Faiblesses'), h('small', { class: 'cons' }, d.weaknesses.join(' · '))),
-            h('div', {}, h('b', {}, 'Pouvoirs de commandant'), h('small', {}, FACTION_POWERS[f].map(p => `${p.name} (${p.cooldown} s) : ${p.text}`).join(' · ')))),
+            h('div', {}, h('b', {}, tr('Doctrine — {0}', d.doctrine.name)), h('small', {}, d.doctrine.text)),
+            h('div', {}, h('b', {}, tr('Entraide — {0}', d.help.name)), h('small', {}, d.help.text)),
+            h('div', {}, h('b', {}, tr('Forces')), h('small', { class: 'pros' }, d.strengths.join(' · '))),
+            h('div', {}, h('b', {}, tr('Faiblesses')), h('small', { class: 'cons' }, d.weaknesses.join(' · '))),
+            h('div', {}, h('b', {}, tr('Pouvoirs de commandant')), h('small', {}, FACTION_POWERS[f].map(p => `${p.name} (${p.cooldown} s) : ${p.text}`).join(' · ')))),
           h('div', { class: 'cx-grid' }, ...d.units.map(id => unitEntry(id)))));
       }
-      body.append(h('div', { class: 'cx-section' }, h('div', { class: 'cx-sh' }, h('b', {}, 'Matrice attaque / défense'), h('small', {}, '↑ = +10 à +20 % de dégâts, ↓ = −10 à −20 %. Lisez le type de défense de la vague et adaptez vos unités.')), matrixTable()));
+      body.append(h('div', { class: 'cx-section' }, h('div', { class: 'cx-sh' }, h('b', {}, tr('Matrice attaque / défense')), h('small', {}, tr('↑ = +10 à +20 % de dégâts, ↓ = −10 à −20 %. Lisez le type de défense de la vague et adaptez vos unités.'))), matrixTable()));
     }
   };
   render();
   const scr = h('div', { class: 'screen codex' },
-    h('h2', {}, '📖 Codex des unités'),
-    h('p', { class: 'muted center small', style: 'margin:0 0 6px' }, `${CATEGORY_ORDER.length} catégories, 6 armées, ${FACTION_IDS.length * 6} unités. Niveaux 1 → 5, spécialisation définitive au niveau ${BRANCH_LEVEL}.`),
+    h('h2', {}, tr('📖 Codex des unités')),
+    h('p', { class: 'muted center small', style: 'margin:0 0 6px' }, tr('{0} catégories, 6 armées, {1} unités. Niveaux 1 → 5, spécialisation définitive au niveau {2}.', CATEGORY_ORDER.length, FACTION_IDS.length * 6, BRANCH_LEVEL)),
     tabs, body,
-    h('button', { class: 'btn ghost', onclick: back }, '← Retour'));
+    h('button', { class: 'btn ghost', onclick: back }, tr('← Retour')));
   show(scr);
   return scr;
 }
@@ -109,14 +110,14 @@ export function companyScreen(initial: string[] | null, initialCommander: string
   let commander: string | null = initialCommander;
   const body = h('div', { class: 'cx-body company' });
   const status = h('div', { class: 'cp-status' });
-  const okBtn = h('button', { class: 'btn primary', onclick: () => { const v = validateCompany(picked); if (!v) return; audio.play('ready'); onPick(v, companyCommander(v, commander ?? undefined)); } }, 'Valider la compagnie');
+  const okBtn = h('button', { class: 'btn primary', onclick: () => { const v = validateCompany(picked); if (!v) return; audio.play('ready'); onPick(v, companyCommander(v, commander ?? undefined)); } }, tr('Valider la compagnie'));
   const render = () => {
     clear(body);
     for (const cat of CATEGORY_ORDER) {
       const ids = unitsOfCategory(cat);
       const chosen = picked.find(id => UNITS[id].category === cat);
       body.append(h('div', { class: `cx-section cp-row${chosen ? ' has' : ''}`, style: `--cat:${CATEGORY_COLORS[cat]}` },
-        h('div', { class: 'cx-sh' }, h('span', { class: 'cx-cat', html: icon(categoryIcon(cat), 16, '#14112A', 3) }), h('b', {}, CATEGORY_NAMES[cat]), chosen ? h('span', { class: 'badge ok' }, UNITS[chosen].name) : h('span', { class: 'badge wait' }, 'libre'), h('small', {}, CATEGORY_HELP[cat])),
+        h('div', { class: 'cx-sh' }, h('span', { class: 'cx-cat', html: icon(categoryIcon(cat), 16, '#14112A', 3) }), h('b', {}, CATEGORY_NAMES[cat]), chosen ? h('span', { class: 'badge ok' }, UNITS[chosen].name) : h('span', { class: 'badge wait' }, tr('libre')), h('small', {}, CATEGORY_HELP[cat])),
         h('div', { class: 'cx-grid cp-grid' }, ...ids.map(id => unitEntry(id, {
           compact: true, selected: picked.includes(id),
           disabled: !picked.includes(id) && !chosen && picked.length >= COMPANY_SIZE,
@@ -133,18 +134,18 @@ export function companyScreen(initial: string[] | null, initialCommander: string
     const cmd = armies.length ? companyCommander(picked, commander ?? undefined) : null;
     clear(status);
     status.append(...nodes(
-      h('div', { class: 'cp-count' }, h('b', {}, `${picked.length} / ${COMPANY_SIZE}`), h('small', {}, picked.length < COMPANY_SIZE ? ` — choisis encore ${COMPANY_SIZE - picked.length} unité${COMPANY_SIZE - picked.length > 1 ? 's' : ''} (une par catégorie)` : ' — compagnie complète')),
-      h('div', { class: 'cp-cmd' }, h('small', { class: 'muted' }, 'Commandant (doctrine, pouvoirs, entraide, Résonance) : '),
-        ...(armies.length ? armies.map(f => h('button', { class: `cx-chip${cmd === f ? ' on' : ''}`, style: `--fc:${FACTIONS[f].color}`, onclick: () => { commander = f; audio.play('click'); render(); } }, FACTIONS[f].title)) : [h('small', { class: 'muted' }, '— une armée présente dans la compagnie')])),
+      h('div', { class: 'cp-count' }, h('b', {}, `${picked.length} / ${COMPANY_SIZE}`), h('small', {}, picked.length < COMPANY_SIZE ? tr(' — choisis encore {0} unité{1} (une par catégorie)', COMPANY_SIZE - picked.length, COMPANY_SIZE - picked.length > 1 ? 's' : '') : tr(' — compagnie complète'))),
+      h('div', { class: 'cp-cmd' }, h('small', { class: 'muted' }, tr('Commandant (doctrine, pouvoirs, entraide, Résonance) : ')),
+        ...(armies.length ? armies.map(f => h('button', { class: `cx-chip${cmd === f ? ' on' : ''}`, style: `--fc:${FACTIONS[f].color}`, onclick: () => { commander = f; audio.play('click'); render(); } }, FACTIONS[f].title)) : [h('small', { class: 'muted' }, tr('— une armée présente dans la compagnie'))])),
       cmd ? h('div', { class: 'small' }, h('b', {}, `${FACTIONS[cmd].doctrine.name} : `), FACTIONS[cmd].doctrine.text) : null));
     (okBtn as HTMLButtonElement).disabled = !validateCompany(picked);
   };
   render();
   const scr = h('div', { class: 'screen codex' },
-    h('h2', {}, '🧩 Compagnie mixte'),
-    h('p', { class: 'muted center small', style: 'margin:0 0 6px' }, `Compose ton armée : ${COMPANY_SIZE} unités piochées dans les 6 armées, une par catégorie. Le commandant donne sa doctrine, ses pouvoirs et son entraide à toute la compagnie.`),
+    h('h2', {}, tr('🧩 Compagnie mixte')),
+    h('p', { class: 'muted center small', style: 'margin:0 0 6px' }, tr('Compose ton armée : {0} unités piochées dans les 6 armées, une par catégorie. Le commandant donne sa doctrine, ses pouvoirs et son entraide à toute la compagnie.', COMPANY_SIZE)),
     status, body,
-    h('div', { class: 'row', style: 'margin-top:8px;justify-content:center' }, okBtn, h('button', { class: 'btn ghost', onclick: onBack }, '← Retour')));
+    h('div', { class: 'row', style: 'margin-top:8px;justify-content:center' }, okBtn, h('button', { class: 'btn ghost', onclick: onBack }, tr('← Retour'))));
   show(scr);
   return scr;
 }

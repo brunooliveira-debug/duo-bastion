@@ -796,3 +796,13 @@ button.cx-unit:not(:disabled):active { transform: scale(0.985); }
 .cp-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 @media (max-width: 700px) { .cx-grid, .cp-grid { grid-template-columns: 1fr 1fr; } .cx-stats { font-size: 10px; } }
 @media (max-width: 480px) { .cx-grid, .cp-grid { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- v0.8: partie rapide, classement du jour, langue */
+.pub { justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; width: 100%; }
+.pub > span { display: flex; flex-direction: column; min-width: 0; }
+.board { width: 100%; }
+.board-table { font-size: clamp(12px, 1.6vh, 14px); }
+.board-table tr.me td { color: var(--gold); font-weight: 800; }
+.daily-status { margin: 4px 0; font-size: clamp(12px, 1.8vh, 15px); color: var(--gold); text-align: center; min-height: 1.4em; }
+.daily-status.err { color: var(--warn); }
+.daily-status.ok { color: #7DFFB0; }

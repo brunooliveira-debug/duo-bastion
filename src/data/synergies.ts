@@ -1,5 +1,6 @@
 // Synergies between ADJACENT units on the grid (8-neighbourhood), placement zones and rune tiles.
 // Everything is visible in the UI before combat, so composition and placement are real decisions.
+import { tr } from '../i18n';
 import { UNITS } from './units';
 
 export type SynergyId =
@@ -8,35 +9,35 @@ export type SynergyId =
 
 export interface SynergyDef { id: SynergyId; name: string; icon: string; text: string }
 export const SYNERGIES: Record<SynergyId, SynergyDef> = {
-  reparation: { id: 'reparation', name: 'Réparation', icon: 'heart', text: 'Défenseur + Soutien voisins : le défenseur régénère 1,5 % PV/s.' },
-  commandement: { id: 'commandement', name: 'Commandement', icon: 'sword', text: 'Soutien + Mêlée voisins : la mêlée gagne +15 % de cadence.' },
-  conduction: { id: 'conduction', name: 'Conduction', icon: 'bolt', text: 'Électrique + Aquatique voisins : l\'électrique gagne +25 % de dégâts.' },
-  guetteur: { id: 'guetteur', name: 'Guetteur', icon: 'eye', text: 'Tireur + Défenseur voisins : le tireur gagne +0,8 m de portée.' },
-  coordonnees: { id: 'coordonnees', name: 'Coordonnées', icon: 'target', text: 'Zone + Rapide voisins : la zone gagne +20 % de dégâts.' },
-  phalange: { id: 'phalange', name: 'Phalange', icon: 'shield', text: 'Deux défenseurs voisins : -10 % dégâts subis chacun.' },
-  escouade: { id: 'escouade', name: 'Escouade', icon: 'users', text: 'Deux unités identiques voisines : +10 % dégâts chacune.' },
-  embrasement: { id: 'embrasement', name: 'Embrasement', icon: 'flame', text: 'Deux unités de feu voisines : brûlures +30 %.' },
-  ombres: { id: 'ombres', name: 'Ombres jumelles', icon: 'dagger', text: 'Deux unités d\'ombre voisines : +12 % de chances de critique.' },
-  constellation: { id: 'constellation', name: 'Constellation', icon: 'star', text: 'Deux unités stellaires voisines : +10 % de cadence.' },
-  seve: { id: 'seve', name: 'Sève partagée', icon: 'leafheal', text: 'Deux unités végétales voisines : régénèrent 1 % PV/s.' },
+  reparation: { id: 'reparation', name: tr('Réparation'), icon: 'heart', text: tr('Défenseur + Soutien voisins : le défenseur régénère 1,5 % PV/s.') },
+  commandement: { id: 'commandement', name: tr('Commandement'), icon: 'sword', text: tr('Soutien + Mêlée voisins : la mêlée gagne +15 % de cadence.') },
+  conduction: { id: 'conduction', name: tr('Conduction'), icon: 'bolt', text: tr('Électrique + Aquatique voisins : l\'électrique gagne +25 % de dégâts.') },
+  guetteur: { id: 'guetteur', name: tr('Guetteur'), icon: 'eye', text: tr('Tireur + Défenseur voisins : le tireur gagne +0,8 m de portée.') },
+  coordonnees: { id: 'coordonnees', name: tr('Coordonnées'), icon: 'target', text: tr('Zone + Rapide voisins : la zone gagne +20 % de dégâts.') },
+  phalange: { id: 'phalange', name: tr('Phalange'), icon: 'shield', text: tr('Deux défenseurs voisins : -10 % dégâts subis chacun.') },
+  escouade: { id: 'escouade', name: tr('Escouade'), icon: 'users', text: tr('Deux unités identiques voisines : +10 % dégâts chacune.') },
+  embrasement: { id: 'embrasement', name: tr('Embrasement'), icon: 'flame', text: tr('Deux unités de feu voisines : brûlures +30 %.') },
+  ombres: { id: 'ombres', name: tr('Ombres jumelles'), icon: 'dagger', text: tr('Deux unités d\'ombre voisines : +12 % de chances de critique.') },
+  constellation: { id: 'constellation', name: tr('Constellation'), icon: 'star', text: tr('Deux unités stellaires voisines : +10 % de cadence.') },
+  seve: { id: 'seve', name: tr('Sève partagée'), icon: 'leafheal', text: tr('Deux unités végétales voisines : régénèrent 1 % PV/s.') },
 };
 
 export type Zone = 'front' | 'mid' | 'back';
 /** cols 0–3 (spawn side) = front line, 8–11 = back line. */
 export function zoneOf(col: number): Zone { return col <= 3 ? 'front' : col >= 8 ? 'back' : 'mid'; }
 export const ZONE_TEXT: Record<Zone, string> = {
-  front: 'Première ligne : défenseurs +15 % PV.',
-  mid: 'Centre : idéal pour les soutiens et la zone.',
-  back: 'Arrière : unités à distance +0,6 m de portée.',
+  front: tr('Première ligne : défenseurs +15 % PV.'),
+  mid: tr('Centre : idéal pour les soutiens et la zone.'),
+  back: tr('Arrière : unités à distance +0,6 m de portée.'),
 };
 
 export type RuneKind = 'force' | 'vigueur' | 'celerite' | 'instable' | 'faille';
 export const RUNES: Record<RuneKind, { name: string; text: string; color: number }> = {
-  force: { name: 'Rune de Force', text: '+20 % dégâts', color: 0xff6a4a },
-  vigueur: { name: 'Rune de Vigueur', text: '+25 % PV', color: 0x6aff8a },
-  celerite: { name: 'Rune de Célérité', text: '+20 % cadence', color: 0x6ad8ff },
-  instable: { name: 'Rune Instable', text: '+50 % dégâts, +30 % cadence', color: 0xff4aff },
-  faille: { name: 'Rune de Faille', text: '+35 % dégâts, +20 % cadence', color: 0xc07aff },
+  force: { name: tr('Rune de Force'), text: tr('+20 % dégâts'), color: 0xff6a4a },
+  vigueur: { name: tr('Rune de Vigueur'), text: tr('+25 % PV'), color: 0x6aff8a },
+  celerite: { name: tr('Rune de Célérité'), text: tr('+20 % cadence'), color: 0x6ad8ff },
+  instable: { name: tr('Rune Instable'), text: tr('+50 % dégâts, +30 % cadence'), color: 0xff4aff },
+  faille: { name: tr('Rune de Faille'), text: tr('+35 % dégâts, +20 % cadence'), color: 0xc07aff },
 };
 /** until: last wave of a temporary rune (anomaly / rift reward). */
 export interface RuneTile { col: number; row: number; kind: RuneKind; until?: number }

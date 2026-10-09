@@ -1,6 +1,6 @@
 // Minimal service worker: app shell cache; network-first for pages so updates arrive fast.
 // Paths are relative to the SW scope (works at / and at /duo-bastion/).
-const CACHE = 'duobastion-v11';
+const CACHE = 'duobastion-v12';
 const BASE = new URL('./', self.location).pathname;
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll([BASE, BASE + 'manifest.webmanifest', BASE + 'icons/icon-192.png'])).then(() => self.skipWaiting()));

@@ -2,6 +2,7 @@
 // from every army, one per category (6 of the 8 categories), led by a commander army (doctrine, powers, help
 // effect, Résonance pair). The host validates the company when the game is created; anything invalid falls back
 // to the native roster. Pure data helpers shared by the UI, the simulation and the network layer.
+import { tr } from '../i18n';
 import { UNITS, BASE_UNIT_IDS, FACTIONS, FACTION_IDS } from './units';
 import type { FactionId, UnitCategory } from './types';
 
@@ -11,14 +12,14 @@ export const CATEGORY_ORDER: UnitCategory[] = ['defense', 'lourde', 'portee', 'a
 
 /** What each category is for (codex + company builder). */
 export const CATEGORY_HELP: Record<UnitCategory, string> = {
-  defense: 'Première ligne : encaisse, bloque et provoque. Posez-les devant, sur les cases « première ligne ».',
-  lourde: 'Gros dégâts au contact et beaucoup de PV, mais lents : le mur qui frappe.',
-  portee: 'Tirent de loin depuis leur tour (immobiles en combat). Placez-les derrière la ligne de front.',
-  antiblindage: 'Percent l\'armure : la réponse aux Blindés, aux mini-boss et aux boss.',
-  zone: 'Touchent plusieurs ennemis à la fois : indispensables contre les nuées.',
-  soutien: 'Soins, boucliers, cadence pour les voisins : à placer au milieu du groupe.',
-  rapide: 'Vifs : interceptent les fuyards, chassent les tireurs et les brécheurs.',
-  speciale: 'Mécaniques uniques — invocations, camouflage, exécution, machines — qui changent une partie.',
+  defense: tr('Première ligne : encaisse, bloque et provoque. Posez-les devant, sur les cases « première ligne ».'),
+  lourde: tr('Gros dégâts au contact et beaucoup de PV, mais lents : le mur qui frappe.'),
+  portee: tr('Tirent de loin depuis leur tour (immobiles en combat). Placez-les derrière la ligne de front.'),
+  antiblindage: tr('Percent l\'armure : la réponse aux Blindés, aux mini-boss et aux boss.'),
+  zone: tr('Touchent plusieurs ennemis à la fois : indispensables contre les nuées.'),
+  soutien: tr('Soins, boucliers, cadence pour les voisins : à placer au milieu du groupe.'),
+  rapide: tr('Vifs : interceptent les fuyards, chassent les tireurs et les brécheurs.'),
+  speciale: tr('Mécaniques uniques — invocations, camouflage, exécution, machines — qui changent une partie.'),
 };
 
 /** Base (non-token) units of a category, army order. */

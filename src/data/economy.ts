@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import type { AttackType, DefenseType, RaiderDef, PowerDef, RaiderCategory } from './types';
 
 export const ECONOMY = {
@@ -73,8 +74,8 @@ export const DAMAGE_MATRIX: Record<AttackType, Record<DefenseType, number>> = {
   ener: { leg: 0.9, org: 0.8, bli: 1.2, mys: 1.1 },
   arca: { leg: 0.8, org: 0.9, bli: 1.1, mys: 1.2 },
 };
-export const ATTACK_NAMES: Record<AttackType, string> = { phys: 'Physique', perf: 'Perforant', ener: 'Énergétique', arca: 'Arcanique' };
-export const DEFENSE_NAMES: Record<DefenseType, string> = { leg: 'Légère', org: 'Organique', bli: 'Blindée', mys: 'Mystique' };
+export const ATTACK_NAMES: Record<AttackType, string> = { phys: tr('Physique'), perf: tr('Perforant'), ener: tr('Énergétique'), arca: tr('Arcanique') };
+export const DEFENSE_NAMES: Record<DefenseType, string> = { leg: tr('Légère'), org: tr('Organique'), bli: tr('Blindée'), mys: tr('Mystique') };
 export const ATTACK_ICONS: Record<AttackType, string> = { phys: '🗡️', perf: '🏹', ener: '⚡', arca: '🔮' };
 export const DEFENSE_ICONS: Record<DefenseType, string> = { leg: '🪶', org: '🌿', bli: '🔩', mys: '✨' };
 
@@ -85,31 +86,31 @@ export function matrixArrow(m: number) { return m >= 1.1 ? '↑' : m <= 0.9 ? '�
 // Anti-spam: per-wave send cap, +30 % price for each copy of the same pack in the same wave,
 // per-pack max per wave, and cooldowns (in waves) for champions.
 export const RAIDERS: RaiderDef[] = [
-  { id: 'grignoteur', name: 'Grignoteurs', category: 'eco', ether: 10, gold: 0, income: 3, unlockWave: 1, units: [{ enemy: 'grignoteur', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 6,
-    description: 'Envoi économique : surtout du revenu.', counter: 'N\'importe quelle défense.' },
-  { id: 'nuee', name: 'Nuée de Zéphyrs', category: 'rapide', ether: 25, gold: 0, income: 4, unlockWave: 2, units: [{ enemy: 'zephyr', count: 4 }], hpMul: 1, cooldown: 0, maxPerWave: 3,
-    description: '4 griffes très rapides qui filent vers le Core.', counter: 'Ralentissements, intercepteurs, zone.' },
-  { id: 'mur_coquille', name: 'Mur-Coquille', category: 'blinde', ether: 40, gold: 0, income: 6, unlockWave: 4, units: [{ enemy: 'mur_coquille', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 3,
-    description: 'Un tank qui occupe la défense adverse.', counter: 'Énergie, perce-armure.' },
-  { id: 'spectres', name: 'Spectres Fêlés', category: 'resistant', ether: 50, gold: 0, income: 6, unlockWave: 6, units: [{ enemy: 'spectre_fele', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
-    description: '3 spectres : ignorent la provocation, -40 % dégâts Physiques.', counter: 'Arcane, Énergie, unités à distance.' },
-  { id: 'phalange', name: 'Phalange de Basalte', category: 'blinde', ether: 60, gold: 0, income: 7, unlockWave: 7, units: [{ enemy: 'basalte_garde', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
-    description: '3 gardes très blindés (30 % d\'armure).', counter: 'Anti-blindage, poison, Énergie.' },
-  { id: 'chaman', name: 'Chaman Dissonant', category: 'special', ether: 55, gold: 0, income: 6, unlockWave: 8, units: [{ enemy: 'chaman', count: 1 }, { enemy: 'grignoteur', count: 2 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
-    description: 'Soigne et protège toute la vague adverse.', counter: 'Assassins, longue portée, exécution.' },
-  { id: 'sapeurs', name: 'Sapeurs Kamikazes', category: 'special', ether: 45, gold: 30, income: 4, unlockWave: 9, units: [{ enemy: 'sapeur', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
-    description: '3 kamikazes qui explosent sur les unités groupées.', counter: 'Espacer ses unités, tuer à distance.' },
-  { id: 'scindeur', name: 'Scindeur', category: 'special', ether: 65, gold: 0, income: 7, unlockWave: 10, units: [{ enemy: 'scindeur', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
-    description: 'Se divise en 3 rejetons à sa mort.', counter: 'Dégâts de zone.' },
-  { id: 'behemoth', name: 'Béhémoth Fendeur', category: 'puissant', ether: 90, gold: 40, income: 8, unlockWave: 11, units: [{ enemy: 'behemoth', count: 1 }], hpMul: 1, cooldown: 1, maxPerWave: 1,
-    description: 'Colosse aux dégâts de zone massifs.', counter: 'Tanks solides + anti-gros.' },
-  { id: 'champion', name: 'Seigneur de Faille', category: 'champion', ether: 140, gold: 100, income: 10, unlockWave: 13, units: [{ enemy: 'seigneur_faille', count: 1 }], hpMul: 1, cooldown: 3, maxPerWave: 1,
-    description: 'Champion blindé : son aura protège les ennemis autour de lui.', counter: 'Énergie, anti-gros, étourdissements.' },
-  { id: 'titan', name: 'Titan Dissonant', category: 'champion', ether: 240, gold: 200, income: 12, unlockWave: 17, units: [{ enemy: 'titan_dissonant', count: 1 }], hpMul: 1, cooldown: 4, maxPerWave: 1,
-    description: 'Un boss complet envoyé sur la voie adverse.', counter: 'Arcane, anti-gros, Core amélioré.' },
+  { id: 'grignoteur', name: tr('Grignoteurs'), category: 'eco', ether: 10, gold: 0, income: 3, unlockWave: 1, units: [{ enemy: 'grignoteur', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 6,
+    description: tr('Envoi économique : surtout du revenu.'), counter: tr('N\'importe quelle défense.') },
+  { id: 'nuee', name: tr('Nuée de Zéphyrs'), category: 'rapide', ether: 25, gold: 0, income: 4, unlockWave: 2, units: [{ enemy: 'zephyr', count: 4 }], hpMul: 1, cooldown: 0, maxPerWave: 3,
+    description: tr('4 griffes très rapides qui filent vers le Core.'), counter: tr('Ralentissements, intercepteurs, zone.') },
+  { id: 'mur_coquille', name: tr('Mur-Coquille'), category: 'blinde', ether: 40, gold: 0, income: 6, unlockWave: 4, units: [{ enemy: 'mur_coquille', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 3,
+    description: tr('Un tank qui occupe la défense adverse.'), counter: tr('Énergie, perce-armure.') },
+  { id: 'spectres', name: tr('Spectres Fêlés'), category: 'resistant', ether: 50, gold: 0, income: 6, unlockWave: 6, units: [{ enemy: 'spectre_fele', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
+    description: tr('3 spectres : ignorent la provocation, -40 % dégâts Physiques.'), counter: tr('Arcane, Énergie, unités à distance.') },
+  { id: 'phalange', name: tr('Phalange de Basalte'), category: 'blinde', ether: 60, gold: 0, income: 7, unlockWave: 7, units: [{ enemy: 'basalte_garde', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
+    description: tr('3 gardes très blindés (30 % d\'armure).'), counter: tr('Anti-blindage, poison, Énergie.') },
+  { id: 'chaman', name: tr('Chaman Dissonant'), category: 'special', ether: 55, gold: 0, income: 6, unlockWave: 8, units: [{ enemy: 'chaman', count: 1 }, { enemy: 'grignoteur', count: 2 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
+    description: tr('Soigne et protège toute la vague adverse.'), counter: tr('Assassins, longue portée, exécution.') },
+  { id: 'sapeurs', name: tr('Sapeurs Kamikazes'), category: 'special', ether: 45, gold: 30, income: 4, unlockWave: 9, units: [{ enemy: 'sapeur', count: 3 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
+    description: tr('3 kamikazes qui explosent sur les unités groupées.'), counter: tr('Espacer ses unités, tuer à distance.') },
+  { id: 'scindeur', name: tr('Scindeur'), category: 'special', ether: 65, gold: 0, income: 7, unlockWave: 10, units: [{ enemy: 'scindeur', count: 1 }], hpMul: 1, cooldown: 0, maxPerWave: 2,
+    description: tr('Se divise en 3 rejetons à sa mort.'), counter: tr('Dégâts de zone.') },
+  { id: 'behemoth', name: tr('Béhémoth Fendeur'), category: 'puissant', ether: 90, gold: 40, income: 8, unlockWave: 11, units: [{ enemy: 'behemoth', count: 1 }], hpMul: 1, cooldown: 1, maxPerWave: 1,
+    description: tr('Colosse aux dégâts de zone massifs.'), counter: tr('Tanks solides + anti-gros.') },
+  { id: 'champion', name: tr('Seigneur de Faille'), category: 'champion', ether: 140, gold: 100, income: 10, unlockWave: 13, units: [{ enemy: 'seigneur_faille', count: 1 }], hpMul: 1, cooldown: 3, maxPerWave: 1,
+    description: tr('Champion blindé : son aura protège les ennemis autour de lui.'), counter: tr('Énergie, anti-gros, étourdissements.') },
+  { id: 'titan', name: tr('Titan Dissonant'), category: 'champion', ether: 240, gold: 200, income: 12, unlockWave: 17, units: [{ enemy: 'titan_dissonant', count: 1 }], hpMul: 1, cooldown: 4, maxPerWave: 1,
+    description: tr('Un boss complet envoyé sur la voie adverse.'), counter: tr('Arcane, anti-gros, Core amélioré.') },
 ];
 export const RAIDER_CATEGORY_NAMES: Record<RaiderCategory, string> = {
-  eco: 'Éco', rapide: 'Rapide', blinde: 'Blindé', resistant: 'Résistant', special: 'Spécial', puissant: 'Puissant', champion: 'Champion',
+  eco: tr('Éco'), rapide: tr('Rapide'), blinde: tr('Blindé'), resistant: tr('Résistant'), special: tr('Spécial'), puissant: tr('Puissant'), champion: tr('Champion'),
 };
 /**
  * Raider stats grow with the wave they are sent on. v0.3 used 1 + 0.09·(w−1): late sends had 3–4× less HP than
@@ -132,36 +133,36 @@ export function raiderPrice(r: RaiderDef, sameThisWave: number) {
 // each type has a cooldown in waves. Timed effects never last more than 10 s of combat.
 export interface CurseDef { id: string; name: string; icon: string; ether: number; gold: number; unlockWave: number; cooldown: number; text: string; counter: string }
 export const CURSES: CurseDef[] = [
-  { id: 'vitalite', name: 'Sang Fêlé', icon: 'heart', ether: 35, gold: 0, unlockWave: 4, cooldown: 2, text: 'Les ennemis de la prochaine vague adverse ont +20 % PV.', counter: 'Plus de dégâts bruts.' },
-  { id: 'carapace', name: 'Carapace Fêlée', icon: 'shield', ether: 30, gold: 0, unlockWave: 5, cooldown: 2, text: 'Bouclier de 15 % des PV pour les prochains ennemis adverses.', counter: 'IEM, attaques rapides.' },
-  { id: 'hate', name: 'Hâte Fêlée', icon: 'ff', ether: 30, gold: 0, unlockWave: 6, cooldown: 2, text: 'Ennemis adverses +20 % vitesse de déplacement.', counter: 'Ralentissements, intercepteurs.' },
-  { id: 'brouillard', name: 'Brouillard', icon: 'fog', ether: 40, gold: 0, unlockWave: 8, cooldown: 3, text: 'Brouillard sur l\'arrière adverse : portée -35 % pendant 10 s.', counter: 'Unités au contact.' },
-  { id: 'brouillage', name: 'Brouillage', icon: 'emp', ether: 45, gold: 20, unlockWave: 9, cooldown: 3, text: 'Pouvoirs adverses bloqués pendant les 10 premières secondes.', counter: 'Garder ses pouvoirs pour la suite.' },
+  { id: 'vitalite', name: tr('Sang Fêlé'), icon: 'heart', ether: 35, gold: 0, unlockWave: 4, cooldown: 2, text: tr('Les ennemis de la prochaine vague adverse ont +20 % PV.'), counter: tr('Plus de dégâts bruts.') },
+  { id: 'carapace', name: tr('Carapace Fêlée'), icon: 'shield', ether: 30, gold: 0, unlockWave: 5, cooldown: 2, text: tr('Bouclier de 15 % des PV pour les prochains ennemis adverses.'), counter: tr('IEM, attaques rapides.') },
+  { id: 'hate', name: tr('Hâte Fêlée'), icon: 'ff', ether: 30, gold: 0, unlockWave: 6, cooldown: 2, text: tr('Ennemis adverses +20 % vitesse de déplacement.'), counter: tr('Ralentissements, intercepteurs.') },
+  { id: 'brouillard', name: tr('Brouillard'), icon: 'fog', ether: 40, gold: 0, unlockWave: 8, cooldown: 3, text: tr('Brouillard sur l\'arrière adverse : portée -35 % pendant 10 s.'), counter: tr('Unités au contact.') },
+  { id: 'brouillage', name: tr('Brouillage'), icon: 'emp', ether: 45, gold: 20, unlockWave: 9, cooldown: 3, text: tr('Pouvoirs adverses bloqués pendant les 10 premières secondes.'), counter: tr('Garder ses pouvoirs pour la suite.') },
 ];
 export function curseUnlock(c: CurseDef, totalWaves: number) { return totalWaves <= 10 ? Math.ceil(c.unlockWave * 0.55) : c.unlockWave; }
 
 export const POWERS: PowerDef[] = [
-  { id: 'surcharge', name: 'Surcharge', icon: '⚡', description: '+25 % vitesse d\'attaque pour toutes vos unités.' },
-  { id: 'investissement', name: 'Investissement', icon: '📈', description: 'Votre revenu est multiplié par 1,25.' },
-  { id: 'bouclier_core', name: 'Bouclier du Core', icon: '🛡️', description: 'Le Core gagne +30 % PV max et se soigne de 30 %.' },
-  { id: 'resonance', name: 'Résonance', icon: '🎵', description: 'Auras, soins et boucliers +50 %.' },
-  { id: 'mutation', name: 'Mutation', icon: '🧬', description: 'Vos unités ont +20 % PV.' },
-  { id: 'fureur', name: 'Fureur', icon: '🔥', description: '+15 % dégâts, +30 % sous 50 % PV.' },
-  { id: 'regeneration', name: 'Régénération', icon: '💚', description: 'Vos unités régénèrent 2 % PV/s en combat.' },
-  { id: 'fortune', name: 'Fortune', icon: '💰', description: 'Primes d\'élimination +50 %.' },
-  { id: 'ouvriers', name: 'Contremaître', icon: '⛏️', description: 'Vos travailleurs produisent +50 % d\'Éther.' },
-  { id: 'rempart', name: 'Rempart', icon: '🧱', description: 'Vos unités subissent -12 % de dégâts.' },
-  { id: 'precision', name: 'Précision', icon: '🎯', description: 'Unités à distance : +20 % dégâts et +0,5 portée.' },
-  { id: 'eclat', name: 'Éclat', icon: '💠', description: 'Zone, rebonds, poisons et ondes +40 %.' },
+  { id: 'surcharge', name: tr('Surcharge'), icon: '⚡', description: tr('+25 % vitesse d\'attaque pour toutes vos unités.') },
+  { id: 'investissement', name: tr('Investissement'), icon: '📈', description: tr('Votre revenu est multiplié par 1,25.') },
+  { id: 'bouclier_core', name: tr('Bouclier du Core'), icon: '🛡️', description: tr('Le Core gagne +30 % PV max et se soigne de 30 %.') },
+  { id: 'resonance', name: tr('Résonance'), icon: '🎵', description: tr('Auras, soins et boucliers +50 %.') },
+  { id: 'mutation', name: tr('Mutation'), icon: '🧬', description: tr('Vos unités ont +20 % PV.') },
+  { id: 'fureur', name: tr('Fureur'), icon: '🔥', description: tr('+15 % dégâts, +30 % sous 50 % PV.') },
+  { id: 'regeneration', name: tr('Régénération'), icon: '💚', description: tr('Vos unités régénèrent 2 % PV/s en combat.') },
+  { id: 'fortune', name: tr('Fortune'), icon: '💰', description: tr('Primes d\'élimination +50 %.') },
+  { id: 'ouvriers', name: tr('Contremaître'), icon: '⛏️', description: tr('Vos travailleurs produisent +50 % d\'Éther.') },
+  { id: 'rempart', name: tr('Rempart'), icon: '🧱', description: tr('Vos unités subissent -12 % de dégâts.') },
+  { id: 'precision', name: tr('Précision'), icon: '🎯', description: tr('Unités à distance : +20 % dégâts et +0,5 portée.') },
+  { id: 'eclat', name: tr('Éclat'), icon: '💠', description: tr('Zone, rebonds, poisons et ondes +40 %.') },
 ];
 
 export const PINGS = [
-  { id: 'ok', label: '👍 OK' },
-  { id: 'warn', label: '⚠️ ATTENTION' },
-  { id: 'eco', label: '💰 ÉCONOMISE' },
-  { id: 'atk', label: '⚔️ ATTAQUE' },
-  { id: 'def', label: '🛡️ DÉFENDS' },
-  { id: 'weak', label: '🆘 JE SUIS FAIBLE' },
-  { id: 'saveWave', label: '⏳ ÉCONOMISE CETTE VAGUE' },
-  { id: 'sendNext', label: '📨 ENVOIE À LA PROCHAINE' },
+  { id: 'ok', label: tr('👍 OK') },
+  { id: 'warn', label: tr('⚠️ ATTENTION') },
+  { id: 'eco', label: tr('💰 ÉCONOMISE') },
+  { id: 'atk', label: tr('⚔️ ATTAQUE') },
+  { id: 'def', label: tr('🛡️ DÉFENDS') },
+  { id: 'weak', label: tr('🆘 JE SUIS FAIBLE') },
+  { id: 'saveWave', label: tr('⏳ ÉCONOMISE CETTE VAGUE') },
+  { id: 'sendNext', label: tr('📨 ENVOIE À LA PROCHAINE') },
 ];

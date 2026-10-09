@@ -1,16 +1,21 @@
+import { tr } from './i18n';
 import './ui/styles.css';
 import { Renderer } from './render/Renderer';
 import { Session, SessionEvents } from './net/Session';
 import { Hud } from './ui/Hud';
 import { audio } from './audio/AudioSystem';
 import { save } from './save/SaveSystem';
-import { ensureAuth, createLobby, joinLobby, friendly, upsertProfile, recordMatch, setLobbyStatus } from './net/backend';
-import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions, dailyInfo } from './ui/screens';
-import { log, ONLINE, DEBUG } from './config';
+import { ensureAuth, createLobby, joinLobby, friendly, upsertProfile, recordMatch, setLobbyStatus, quickJoin, leaveLobbyRow } from './net/backend';
+import { show, menuScreen, duoScreen, lobbyScreen, loadingScreen, errorScreen, hideScreens, notify, MenuActions } from './ui/screens';
+import { dailySettings, dailyDay } from './sim/daily';
+import { log, ONLINE, DEBUG, VERSION } from './config';
 import { step, drainEvents } from './sim/game';
 import type { Difficulty, FactionChoice, GameMode } from './sim/state';
 import { h } from './ui/dom';
 import { benchHooks, runBenchmark } from './bench';
+import { LANG } from './i18n';
+
+document.documentElement.lang = LANG;
 
 let session: Session | null = null;
 let renderer: Renderer | null = null;
@@ -25,9 +30,9 @@ audio.setVolumes(save.prefs.sfx, save.prefs.music);
 const events: SessionEvents = {
   lobby: l => lobbyRender?.(l),
   start: () => enterGame(),
-  toast: (m, k) => { if (hud) hud.toast(m, k === 'error' ? 'error' : 'info'); else if (k === 'error') notify(m); },
+  toast: (m, k) => { if (hud) hud.toast(tr(m), k === 'error' ? 'error' : 'info'); else if (k === 'error') notify(tr(m)); },
   conn: () => { /* HUD reads session.partnerOnline each refresh */ },
-  kicked: msg => { teardown(); errorScreen(msg, goMenu); },
+  kicked: msg => { teardown(); errorScreen(tr(msg), goMenu); },
   rematch: () => {
     cancelFrame(raf);
     hud?.destroy(); hud = null;
@@ -52,39 +57,42 @@ function goMenu() {
   show(menuScreen(actions));
 }
 
+const duoActions = (mode: GameMode) => ({ onCreate: () => createDuo(mode), onJoin: (code: string) => joinDuo(code), onQuick: () => quickMatch(mode), back: goMenu });
+
 const actions: MenuActions = {
-  duo: (mode: GameMode) => duoScreen(mode, () => createDuo(mode), code => joinDuo(code), goMenu),
+  duo: (mode: GameMode) => duoScreen(mode, duoActions(mode)),
   solo: (mode: GameMode, waves: number, diff: Difficulty) => {
     teardown();
     // ?seed=123 replays a given world (same waves, events, rifts and anomalies)
     const seedParam = Number(new URLSearchParams(location.search).get('seed'));
-    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || 'Joueur', faction: (save.profile.faction || 'random') as FactionChoice, roster: save.profile.roster ?? null }] }, events, Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined);
+    session = Session.solo({ mode, totalWaves: waves, difficulty: diff, humans: [{ name: save.profile.name || tr('Joueur'), faction: (save.profile.faction || 'random') as FactionChoice, roster: save.profile.roster ?? null }] }, events, Number.isFinite(seedParam) && seedParam > 0 ? seedParam : undefined);
     enterGame();
   },
   daily: () => {
     teardown();
-    const d = dailyInfo();
-    session = Session.solo({ mode: 'survival', totalWaves: 9999, difficulty: 'normal', humans: [{ name: save.profile.name || 'Joueur', faction: d.faction }], challenge: `daily:${d.day}`, aiFactions: { 1: d.partner } }, events, d.seed);
+    const d = dailySettings(dailyDay(), save.profile.name || tr('Joueur'));
+    session = Session.solo(d.settings, events, d.seed);
     enterGame();
   },
   tutorial: () => {
     teardown();
-    session = Session.solo({ mode: 'vsai', totalWaves: 10, difficulty: 'initiation', humans: [{ name: save.profile.name || 'Recrue', faction: 'rouages' }], tutorial: true }, events);
+    session = Session.solo({ mode: 'vsai', totalWaves: 10, difficulty: 'initiation', humans: [{ name: save.profile.name || tr('Recrue'), faction: 'rouages' }], tutorial: true }, events);
     enterGame();
   },
   resume: () => resumeActive(),
 };
 
-async function createDuo(mode: GameMode) {
-  loadingScreen('Création de la partie…');
+async function createDuo(mode: GameMode, isPublic = false) {
+  loadingScreen(isPublic ? tr('Ouverture d\'une partie publique…') : tr('Création de la partie…'));
   try {
     const uid = await ensureAuth();
     upsertProfile();
-    const code = await createLobby(mode, { mode }, save.profile.name);
+    const code = await createLobby(mode, { mode }, save.profile.name, isPublic, VERSION);
     teardown();
     session = new Session('host', code, uid, events);
     session.lobby.settings.mode = mode;
     session.lobby.settings.totalWaves = mode === 'survival' ? 9999 : 10;
+    session.isPublic = isPublic;
     await session.open();
     history.replaceState(null, '', `${import.meta.env.BASE_URL}?join=${code}`);
     lobbyRender = lobbyScreen(session, leaveLobby);
@@ -94,8 +102,23 @@ async function createDuo(mode: GameMode) {
   }
 }
 
+/** v0.8 Partie rapide: join the oldest public lobby, or host a public one and wait (an AI can replace the partner any time). */
+async function quickMatch(mode: GameMode) {
+  loadingScreen(tr('Recherche d\'un partenaire…'));
+  try {
+    await ensureAuth();
+    const found = await quickJoin(save.profile.name, mode, VERSION);
+    if (found) { await joinDuo(found.code); return; }
+  } catch (e) {
+    log('Quick match error', e);
+    errorScreen(friendly(e), goMenu);
+    return;
+  }
+  await createDuo(mode, true);
+}
+
 async function joinDuo(code: string) {
-  loadingScreen('Connexion à la partie…');
+  loadingScreen(tr('Connexion à la partie…'));
   try {
     const uid = await ensureAuth();
     upsertProfile();
@@ -111,7 +134,7 @@ async function joinDuo(code: string) {
 }
 
 function leaveLobby() {
-  if (session?.role === 'guest') session.transport?.send({ k: 'leave', uid: session.uid });
+  if (session?.role === 'guest') { session.transport?.send({ k: 'leave', uid: session.uid }); leaveLobbyRow(session.code); }
   if (session?.role === 'host') setLobbyStatus(session.code, 'ended');
   save.setActive(null);
   goMenu();
@@ -120,19 +143,19 @@ function leaveLobby() {
 async function resumeActive() {
   const a = save.data.active;
   if (!a) return;
-  loadingScreen('Reconnexion à la partie…');
+  loadingScreen(tr('Reconnexion à la partie…'));
   try {
     const uid = await ensureAuth();
     teardown();
     session = new Session(a.role, a.code, uid, events);
     if (a.role === 'host') {
       const ok = await session.resume();
-      if (!ok) { save.setActive(null); errorScreen('Cette partie n\'existe plus.', goMenu); return; }
+      if (!ok) { save.setActive(null); errorScreen(tr('Cette partie n\'existe plus.'), goMenu); return; }
       await session.open();
       enterGame();
     } else {
       await session.open();
-      setTimeout(() => { if (!hud && session) { save.setActive(null); teardown(); errorScreen('Impossible de retrouver la partie (l\'hôte est peut-être absent).', goMenu); } }, 12000);
+      setTimeout(() => { if (!hud && session) { save.setActive(null); teardown(); errorScreen(tr('Impossible de retrouver la partie (l\'hôte est peut-être absent).'), goMenu); } }, 12000);
     }
   } catch (e) {
     errorScreen(friendly(e), goMenu);
@@ -216,7 +239,7 @@ function enterGame() {
 /** ?bench: built-in performance test on a fixed scene (see bench.ts) */
 function startBench() {
   teardown();
-  session = Session.solo({ mode: 'vsai', totalWaves: 21, difficulty: 'normal', humans: [{ name: save.profile.name || 'Bench', faction: 'astreens' }] }, events, 777);
+  session = Session.solo({ mode: 'vsai', totalWaves: 21, difficulty: 'normal', humans: [{ name: save.profile.name || tr('Bench'), faction: 'astreens' }] }, events, 777);
   enterGame();
   runBenchmark(() => session, () => renderer, save.prefs.quality, () => { history.replaceState(null, '', import.meta.env.BASE_URL); goMenu(); });
 }
@@ -237,7 +260,7 @@ function boot() {
     const code = joinMatch[1]!.toUpperCase();
     const active = save.data.active;
     if (active && active.code === code) { resumeActive(); return; }
-    duoScreen('vsai', () => createDuo('vsai'), c => joinDuo(c), goMenu, code);
+    duoScreen('vsai', duoActions('vsai'), code);
     return;
   }
   show(menuScreen(actions));

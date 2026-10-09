@@ -1,0 +1,47 @@
+# Deploys the score-validation edge function to the Supabase project (free plan).
+# Needs ONE repository secret: SUPABASE_ACCESS_TOKEN (Supabase → Account → Access Tokens → "Generate new token").
+# The token is a server-side secret: it never appears in the game bundle.
+name: Deploy Supabase edge function
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'edge/**'
+      - 'src/sim/**'
+      - 'src/data/**'
+      - 'src/config.ts'
+      - 'supabase/functions/**'
+      - '.github/workflows/supabase-edge.yml'
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the access token is configured
+        id: token
+        run: |
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then
+            echo "SUPABASE_ACCESS_TOKEN secret is missing: skipping the deployment (add it in Settings → Secrets → Actions)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.token.outputs.ok == 'true'
+      - run: node scripts/build-edge.mjs
+        if: steps.token.outputs.ok == 'true'
+      - uses: supabase/setup-cli@v1
+        if: steps.token.outputs.ok == 'true'
+        with:
+          version: latest
+      - name: Deploy submit-daily
+        if: steps.token.outputs.ok == 'true'
+        run: supabase functions deploy submit-daily --project-ref evadmavhnpabnckyddap --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

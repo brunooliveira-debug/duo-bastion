@@ -9,7 +9,10 @@
     "preview": "vite preview --host --port 4173",
     "test": "vitest run",
     "balance": "tsx scripts/balance.ts",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "build:edge": "node scripts/build-edge.mjs",
+    "i18n": "tsx scripts/i18n-extract.ts",
+    "i18n:check": "tsx scripts/i18n-wrap.ts check"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
